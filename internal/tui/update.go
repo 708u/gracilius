@@ -2,6 +2,7 @@ package tui
 
 import (
 	"log"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -79,6 +80,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case fileChangedMsg:
 		m.lines = msg.lines
+		m.highlightedLines = highlightFile(
+			m.filePath, strings.Join(msg.lines, "\n"),
+		)
 		m.previewLines = nil
 		if m.cursorLine >= len(m.lines) {
 			m.cursorLine = max(0, len(m.lines)-1)

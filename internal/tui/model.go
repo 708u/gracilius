@@ -39,20 +39,21 @@ type treeChangedMsg struct{}
 
 // Model holds the entire TUI state.
 type Model struct {
-	width        int
-	height       int
-	server       MCPServer
-	ctx          context.Context
-	filePath     string
-	lines        []string
-	previewLines []string // nil = no preview
-	cursorLine   int
-	cursorChar   int
-	anchorLine   int // selection start
-	anchorChar   int
-	selecting    bool
-	err          error
-	watcher      *fsnotify.Watcher
+	width            int
+	height           int
+	server           MCPServer
+	ctx              context.Context
+	filePath         string
+	lines            []string
+	highlightedLines []highlightedLine // nil = no highlighting
+	previewLines     []string          // nil = no preview
+	cursorLine       int
+	cursorChar       int
+	anchorLine       int // selection start
+	anchorChar       int
+	selecting        bool
+	err              error
+	watcher          *fsnotify.Watcher
 
 	// file tree
 	fileTree   []fileEntry

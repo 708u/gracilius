@@ -57,6 +57,7 @@ func (m *Model) loadFile(filePath string) error {
 
 	m.filePath = absPath
 	m.lines = strings.Split(string(content), "\n")
+	m.highlightedLines = highlightFile(absPath, string(content))
 	m.cursorLine = 0
 	m.cursorChar = 0
 	m.anchorLine = 0

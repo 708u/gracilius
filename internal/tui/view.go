@@ -190,47 +190,35 @@ func (m Model) renderEditor(width, height int) []string {
 			var sb strings.Builder
 			sb.WriteString(fmt.Sprintf("%3d ", i+1))
 
-			if m.focusPane == 1 && i == m.cursorLine {
-				if m.selecting && i >= startLine && i <= endLine {
-					var sc, ec int
-					if i == startLine {
-						sc = startChar
-					} else {
-						sc = 0
-					}
-					if i == endLine {
-						ec = endChar
-					} else {
-						ec = len(lineContent)
-					}
+			isCursorLine := m.focusPane == 1 && i == m.cursorLine
+			isSelected := m.focusPane == 1 && m.selecting && i >= startLine && i <= endLine
+
+			if isCursorLine && isSelected {
+				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
+				if hl := m.getHighlightedLine(i); hl != nil {
+					renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
+				} else {
 					m.renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
+				}
+			} else if isCursorLine {
+				if hl := m.getHighlightedLine(i); hl != nil {
+					renderStyledLineWithCursor(&sb, hl.runs, m.cursorChar)
 				} else {
 					m.renderLineWithCursor(&sb, lineContent)
 				}
-			} else if m.focusPane == 1 && m.selecting && i >= startLine && i <= endLine {
-				runes := []rune(lineContent)
-				var sc, ec int
-				if i == startLine {
-					sc = startChar
+			} else if isSelected {
+				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
+				if hl := m.getHighlightedLine(i); hl != nil {
+					renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
 				} else {
-					sc = 0
+					m.renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
 				}
-				if i == endLine {
-					ec = endChar
-				} else {
-					ec = len(runes)
-				}
-				if sc <= len(runes) && ec <= len(runes) && sc <= ec {
-					sb.WriteString(expandTabs(string(runes[:sc])))
-					sb.WriteString("\033[7m")
-					sb.WriteString(expandTabs(string(runes[sc:ec])))
-					sb.WriteString("\033[0m")
-					sb.WriteString(expandTabs(string(runes[ec:])))
+			} else {
+				if hl := m.getHighlightedLine(i); hl != nil {
+					sb.WriteString(hl.rendered)
 				} else {
 					sb.WriteString(expandTabs(lineContent))
 				}
-			} else {
-				sb.WriteString(expandTabs(lineContent))
 			}
 
 			if _, hasComment := m.comments[i]; hasComment {
@@ -246,6 +234,19 @@ func (m Model) renderEditor(width, height int) []string {
 	}
 
 	return lines
+}
+
+// selRange computes selection start/end character positions for a line.
+func selRange(line, startLine, endLine, startChar, endChar int, content string) (int, int) {
+	sc := 0
+	if line == startLine {
+		sc = startChar
+	}
+	ec := len([]rune(content))
+	if line == endLine {
+		ec = endChar
+	}
+	return sc, ec
 }
 
 // renderLineWithCursor renders a line with an inverted cursor.
