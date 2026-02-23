@@ -210,8 +210,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			switch msg.Type {
-			case tea.MouseLeft:
+			switch {
+			case msg.Button == tea.MouseButtonLeft:
 				m.focusPane = 1
 				if msg.Action == tea.MouseActionPress {
 					m.cursorLine = targetLine
@@ -229,7 +229,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.lastMouseChar = targetChar
 					}
 				}
-			case tea.MouseRelease:
+			case msg.Action == tea.MouseActionRelease:
 				if m.selecting {
 					m.cursorLine = targetLine
 					m.cursorChar = targetChar
@@ -238,13 +238,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.notifySelectionChanged()
 				}
-			case tea.MouseWheelUp:
+			case msg.Button == tea.MouseButtonWheelUp:
 				scrollAmount := 3
 				m.scrollOffset -= scrollAmount
 				if m.scrollOffset < 0 {
 					m.scrollOffset = 0
 				}
-			case tea.MouseWheelDown:
+			case msg.Button == tea.MouseButtonWheelDown:
 				scrollAmount := 3
 				contentHeight := m.getContentHeight()
 				maxOffset := len(m.lines) - contentHeight
