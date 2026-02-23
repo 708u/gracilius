@@ -3,6 +3,10 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/styles"
+	"github.com/muesli/termenv"
 )
 
 func TestHighlightFile(t *testing.T) {
@@ -118,6 +122,88 @@ func TestRenderStyledLineWithSelection(t *testing.T) {
 	selected := output[invIdx+len("\033[7m") : invIdx+resetIdx]
 	if selected != "llo w" {
 		t.Errorf("expected selected text 'llo w', got %q", selected)
+	}
+}
+
+func TestResolveANSI(t *testing.T) {
+	style := styles.Get("github-dark")
+
+	// Keyword should have color
+	ansi := resolveANSI(style, chroma.Keyword)
+	if ansi == "" {
+		t.Error("expected non-empty ANSI for Keyword token")
+	}
+	if !strings.Contains(ansi, termenv.CSI) {
+		t.Error("expected CSI prefix in ANSI string")
+	}
+	if !strings.HasSuffix(ansi, "m") {
+		t.Error("expected 'm' suffix in ANSI string")
+	}
+
+	// Bold token should contain bold sequence
+	ansiBold := resolveANSI(style, chroma.GenericStrong)
+	if ansiBold != "" && !strings.Contains(ansiBold, termenv.BoldSeq) {
+		t.Error("expected bold sequence for GenericStrong")
+	}
+
+	// Empty style should return empty for any token
+	emptyStyle := styles.Register(chroma.MustNewStyle("_test_empty", chroma.StyleEntries{}))
+	ansiEmpty := resolveANSI(emptyStyle, chroma.Keyword)
+	if ansiEmpty != "" {
+		t.Errorf("expected empty ANSI for empty style, got %q", ansiEmpty)
+	}
+}
+
+func TestSelRange(t *testing.T) {
+	tests := []struct {
+		name      string
+		line      int
+		startLine int
+		endLine   int
+		startChar int
+		endChar   int
+		content   string
+		wantSC    int
+		wantEC    int
+	}{
+		{
+			name: "first line of selection",
+			line: 5, startLine: 5, endLine: 8,
+			startChar: 3, endChar: 10,
+			content: "hello world",
+			wantSC:  3, wantEC: 11,
+		},
+		{
+			name: "last line of selection",
+			line: 8, startLine: 5, endLine: 8,
+			startChar: 3, endChar: 10,
+			content: "hello world",
+			wantSC:  0, wantEC: 10,
+		},
+		{
+			name: "middle line of selection",
+			line: 6, startLine: 5, endLine: 8,
+			startChar: 3, endChar: 10,
+			content: "hello",
+			wantSC:  0, wantEC: 5,
+		},
+		{
+			name: "single line selection",
+			line: 5, startLine: 5, endLine: 5,
+			startChar: 2, endChar: 7,
+			content: "hello world",
+			wantSC:  2, wantEC: 7,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc, ec := selRange(tt.line, tt.startLine, tt.endLine,
+				tt.startChar, tt.endChar, tt.content)
+			if sc != tt.wantSC || ec != tt.wantEC {
+				t.Errorf("selRange() = (%d, %d), want (%d, %d)",
+					sc, ec, tt.wantSC, tt.wantEC)
+			}
+		})
 	}
 }
 
