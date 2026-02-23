@@ -77,6 +77,56 @@ type Model struct {
 	help help.Model
 }
 
+// normalizedSelection returns the selection range with start <= end.
+func (m *Model) normalizedSelection() (startLine, startChar, endLine, endChar int) {
+	startLine, startChar = m.anchorLine, m.anchorChar
+	endLine, endChar = m.cursorLine, m.cursorChar
+	if startLine > endLine || (startLine == endLine && startChar > endChar) {
+		startLine, endLine = endLine, startLine
+		startChar, endChar = endChar, startChar
+	}
+	return
+}
+
+// startSelecting begins a selection if not already selecting.
+func (m *Model) startSelecting() {
+	if !m.selecting {
+		m.selecting = true
+		m.anchorLine = m.cursorLine
+		m.anchorChar = m.cursorChar
+	}
+}
+
+// syncAnchorToCursor synchronizes anchor to cursor when not selecting.
+func (m *Model) syncAnchorToCursor() {
+	if !m.selecting {
+		m.anchorLine = m.cursorLine
+		m.anchorChar = m.cursorChar
+	}
+}
+
+// toggleTreeEntry handles expanding/collapsing dirs or loading files.
+func (m *Model) toggleTreeEntry(idx int) {
+	if idx < 0 || idx >= len(m.fileTree) {
+		return
+	}
+	entry := m.fileTree[idx]
+	if entry.isDir {
+		if entry.expanded {
+			m.fileTree = collapseDir(m.fileTree, idx)
+		} else {
+			m.fileTree = expandDir(m.fileTree, idx)
+		}
+	} else {
+		if err := m.loadFile(entry.path); err != nil {
+			m.err = err
+		} else {
+			m.focusPane = 1
+			m.notifySelectionChanged()
+		}
+	}
+}
+
 // NewModel creates a new TUI Model.
 func NewModel(srv MCPServer, ctx context.Context, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher) *Model {
 	absRootDir, err := filepath.Abs(rootDir)

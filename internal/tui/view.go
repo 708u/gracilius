@@ -86,12 +86,7 @@ func (m *Model) renderFooter() string {
 
 		if m.focusPane == 1 {
 			if m.selecting {
-				sLine, sChar := m.anchorLine, m.anchorChar
-				eLine, eChar := m.cursorLine, m.cursorChar
-				if sLine > eLine || (sLine == eLine && sChar > eChar) {
-					sLine, eLine = eLine, sLine
-					sChar, eChar = eChar, sChar
-				}
+				sLine, sChar, eLine, eChar := m.normalizedSelection()
 				fmt.Fprintf(&sb, "Selection: %d:%d - %d:%d",
 					sLine+1, sChar+1, eLine+1, eChar+1)
 			} else if len(m.lines) > 0 {
@@ -160,12 +155,7 @@ func (m *Model) renderEditor(width, height int) []string {
 		return lines
 	}
 
-	startLine, startChar := m.anchorLine, m.anchorChar
-	endLine, endChar := m.cursorLine, m.cursorChar
-	if startLine > endLine || (startLine == endLine && startChar > endChar) {
-		startLine, endLine = endLine, startLine
-		startChar, endChar = endChar, startChar
-	}
+	startLine, startChar, endLine, endChar := m.normalizedSelection()
 
 	offset := m.getScrollOffset()
 
@@ -235,40 +225,12 @@ func selRange(line, startLine, endLine, startChar, endChar int, content string) 
 
 // renderLineWithCursor renders a line with an inverted cursor.
 func (m *Model) renderLineWithCursor(sb *strings.Builder, line string) {
-	runes := []rune(line)
-	if m.cursorChar >= len(runes) {
-		sb.WriteString(expandTabs(line))
-		sb.WriteString("\033[7m \033[0m")
-	} else {
-		sb.WriteString(expandTabs(string(runes[:m.cursorChar])))
-		sb.WriteString("\033[7m")
-		ch := runes[m.cursorChar]
-		if ch == '\t' {
-			sb.WriteString("    ")
-		} else {
-			sb.WriteString(string(ch))
-		}
-		sb.WriteString("\033[0m")
-		sb.WriteString(expandTabs(string(runes[m.cursorChar+1:])))
-	}
+	runs := []styledRun{{Text: line}}
+	renderStyledLineWithCursor(sb, runs, m.cursorChar)
 }
 
 // renderLineWithCursorAndSelection renders a line with selection highlight.
 func (m *Model) renderLineWithCursorAndSelection(sb *strings.Builder, line string, selStart, selEnd int) {
-	runes := []rune(line)
-	if selStart > len(runes) {
-		selStart = len(runes)
-	}
-	if selEnd > len(runes) {
-		selEnd = len(runes)
-	}
-	if selStart > selEnd {
-		selStart, selEnd = selEnd, selStart
-	}
-
-	sb.WriteString(expandTabs(string(runes[:selStart])))
-	sb.WriteString("\033[7m")
-	sb.WriteString(expandTabs(string(runes[selStart:selEnd])))
-	sb.WriteString("\033[0m")
-	sb.WriteString(expandTabs(string(runes[selEnd:])))
+	runs := []styledRun{{Text: line}}
+	renderStyledLineWithSelection(sb, runs, selStart, selEnd)
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -28,8 +29,11 @@ type LockFile struct {
 }
 
 // NewLockFile creates a new LockFile instance.
-func NewLockFile(port int, workspaceFolders []string, authToken string) *LockFile {
-	homeDir, _ := os.UserHomeDir()
+func NewLockFile(port int, workspaceFolders []string, authToken string) (*LockFile, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
 	filePath := filepath.Join(homeDir, ".claude", "ide", strconv.Itoa(port)+".lock")
 
 	return &LockFile{
@@ -43,7 +47,7 @@ func NewLockFile(port int, workspaceFolders []string, authToken string) *LockFil
 			RunningInWindows: runtime.GOOS == "windows",
 			AuthToken:        authToken,
 		},
-	}
+	}, nil
 }
 
 // Create creates the lock file atomically.
@@ -119,7 +123,7 @@ func CheckDuplicateWorkspace(workspaceFolders []string) error {
 		// Check if the process is still alive
 		if isProcessAlive(lockData.PID) {
 			return fmt.Errorf("another gracilius instance is already running for this directory (PID: %d, port: %s)",
-				lockData.PID, entry.Name()[:len(entry.Name())-5])
+				lockData.PID, strings.TrimSuffix(entry.Name(), ".lock"))
 		}
 
 		// Remove lock file if the process is dead

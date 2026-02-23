@@ -41,14 +41,11 @@ type Server struct {
 	clients          []*wsClient
 	mu               sync.Mutex
 	upgrader         websocket.Upgrader
+	stopOnce         sync.Once
 
 	// debounce fields
-	lastNotifyTime time.Time
-	pendingNotify  *selectionNotification
-	notifyTimer    *time.Timer
-
-	// separate debounce for clear notifications
-	clearTimer *time.Timer
+	pendingNotify *selectionNotification
+	notifyTimer   *time.Timer
 
 	// last sent selection for change detection
 	lastSentSelection *selectionState
@@ -121,21 +118,26 @@ func loadOrCreateToken() string {
 }
 
 // New creates a new Server instance.
-func New(port int, workspaceFolders []string) *Server {
+func New(port int, workspaceFolders []string) (*Server, error) {
 	authToken := loadOrCreateToken()
+
+	lockFile, err := NewLockFile(port, workspaceFolders, authToken)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Server{
 		port:             port,
 		authToken:        authToken,
 		workspaceFolders: workspaceFolders,
-		lockFile:         NewLockFile(port, workspaceFolders, authToken),
+		lockFile:         lockFile,
 		handler:          protocol.NewHandler(workspaceFolders),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
 			},
 		},
-	}
+	}, nil
 }
 
 // Start starts the WebSocket server (blocking).
@@ -164,7 +166,6 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	log.Printf("Lock file created: %s", s.lockFile.Path())
-	log.Printf("Auth token: %s", s.authToken)
 	log.Printf("Server starting on %s", addr)
 
 	srv := &http.Server{Handler: mux}
@@ -210,14 +211,18 @@ func (s *Server) StartAsync(ctx context.Context) error {
 	}
 
 	// Create lock file after port is determined
-	s.lockFile = NewLockFile(s.port, s.workspaceFolders, s.authToken)
+	lockFile, err := NewLockFile(s.port, s.workspaceFolders, s.authToken)
+	if err != nil {
+		listener.Close()
+		return err
+	}
+	s.lockFile = lockFile
 	if err := s.lockFile.Create(); err != nil {
 		listener.Close()
 		return err
 	}
 
 	log.Printf("Lock file created: %s", s.lockFile.Path())
-	log.Printf("Auth token: %s", s.authToken)
 	log.Printf("Server starting on %s", s.getAddr())
 
 	srv := &http.Server{Handler: mux}
@@ -238,18 +243,20 @@ func (s *Server) StartAsync(ctx context.Context) error {
 
 // Stop stops the server and removes the lock file.
 func (s *Server) Stop() {
-	s.mu.Lock()
-	for _, client := range s.clients {
-		client.conn.Close()
-	}
-	s.clients = nil
-	s.mu.Unlock()
+	s.stopOnce.Do(func() {
+		s.mu.Lock()
+		for _, client := range s.clients {
+			client.conn.Close()
+		}
+		s.clients = nil
+		s.mu.Unlock()
 
-	if err := s.lockFile.Remove(); err != nil {
-		log.Printf("Failed to remove lock file: %v", err)
-	} else {
-		log.Println("Lock file removed")
-	}
+		if err := s.lockFile.Remove(); err != nil {
+			log.Printf("Failed to remove lock file: %v", err)
+		} else {
+			log.Println("Lock file removed")
+		}
+	})
 }
 
 // Port returns the server port.
@@ -458,7 +465,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received WebSocket request from %s", r.RemoteAddr)
 	authHeader := r.Header.Get("x-claude-code-ide-authorization")
 	if authHeader != s.authToken {
-		log.Printf("Auth failed. Expected: %s, Got: %s", s.authToken, authHeader)
+		log.Printf("Auth failed: token mismatch from %s", r.RemoteAddr)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}

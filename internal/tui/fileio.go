@@ -18,6 +18,21 @@ func isBinary(content []byte) bool {
 	return false
 }
 
+// resetEditorState resets cursor, selection, highlight, comments, and input state.
+func (m *Model) resetEditorState() {
+	m.highlightedLines = nil
+	m.cursorLine = 0
+	m.cursorChar = 0
+	m.anchorLine = 0
+	m.anchorChar = 0
+	m.scrollOffset = 0
+	m.selecting = false
+	m.comments = make(map[int]string)
+	m.inputMode = false
+	m.commentInput.Reset()
+	m.commentInput.Blur()
+}
+
 // loadFile reads a file and updates the model state.
 func (m *Model) loadFile(filePath string) error {
 	absPath, err := filepath.Abs(filePath)
@@ -30,19 +45,19 @@ func (m *Model) loadFile(filePath string) error {
 		return err
 	}
 
-	if isBinary(content) {
-		m.filePath = absPath
-		m.lines = []string{"(Binary file)"}
-		m.cursorLine = 0
-		m.cursorChar = 0
-		m.selecting = false
-		return nil
-	}
-
+	// Remove watch on previous file
 	if m.filePath != "" && m.watcher != nil {
 		if err := m.watcher.Remove(m.filePath); err != nil {
 			log.Printf("Failed to remove watch: %v", err)
 		}
+	}
+
+	m.filePath = absPath
+	m.resetEditorState()
+
+	if isBinary(content) {
+		m.lines = []string{"(Binary file)"}
+		return nil
 	}
 
 	if m.watcher != nil {
@@ -51,19 +66,8 @@ func (m *Model) loadFile(filePath string) error {
 		}
 	}
 
-	m.filePath = absPath
 	m.lines = strings.Split(string(content), "\n")
 	m.highlightedLines = highlightFile(absPath, string(content))
-	m.cursorLine = 0
-	m.cursorChar = 0
-	m.anchorLine = 0
-	m.anchorChar = 0
-	m.scrollOffset = 0
-	m.selecting = false
-	m.comments = make(map[int]string)
-	m.inputMode = false
-	m.commentInput.Reset()
-	m.commentInput.Blur()
 
 	return nil
 }

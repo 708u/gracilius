@@ -19,7 +19,7 @@ type fileEntry struct {
 	expanded bool
 }
 
-// excludeDirs lists directories to exclude from the tree.
+// TODO: make configurable (e.g. .gitignore or config file)
 var excludeDirs = map[string]bool{
 	".git":         true,
 	"node_modules": true,
@@ -27,6 +27,16 @@ var excludeDirs = map[string]bool{
 	".idea":        true,
 	"vendor":       true,
 	"__pycache__":  true,
+}
+
+// isHiddenEntry returns true if the named entry should be excluded
+// based on naming conventions (dot-prefix or excludeDirs).
+func isHiddenEntry(name string) bool {
+	if excludeDirs[name] {
+		return true
+	}
+	// TODO: make configurable instead of hardcoding ".claude"
+	return strings.HasPrefix(name, ".") && name != ".claude"
 }
 
 // WatchDirRecursive recursively adds directories to the watcher.
@@ -38,11 +48,7 @@ func WatchDirRecursive(watcher *fsnotify.Watcher, dir string) error {
 		if !info.IsDir() {
 			return nil
 		}
-		name := info.Name()
-		if excludeDirs[name] {
-			return filepath.SkipDir
-		}
-		if strings.HasPrefix(name, ".") && name != ".claude" && path != dir {
+		if isHiddenEntry(info.Name()) && path != dir {
 			return filepath.SkipDir
 		}
 		if err := watcher.Add(path); err != nil {
@@ -68,14 +74,11 @@ func scanDir(rootDir, dir string, depth int, entries []fileEntry) []fileEntry {
 
 	var dirs, regularFiles []os.DirEntry
 	for _, f := range files {
-		name := f.Name()
-		if strings.HasPrefix(name, ".") && name != ".claude" {
+		if isHiddenEntry(f.Name()) {
 			continue
 		}
 		if f.IsDir() {
-			if !excludeDirs[name] {
-				dirs = append(dirs, f)
-			}
+			dirs = append(dirs, f)
 		} else {
 			regularFiles = append(regularFiles, f)
 		}

@@ -7,13 +7,7 @@ import (
 
 // notifySelectionChanged sends the current selection to the MCP server.
 func (m *Model) notifySelectionChanged() {
-	startLine, startChar := m.anchorLine, m.anchorChar
-	endLine, endChar := m.cursorLine, m.cursorChar
-
-	if startLine > endLine || (startLine == endLine && startChar > endChar) {
-		startLine, endLine = endLine, startLine
-		startChar, endChar = endChar, startChar
-	}
+	startLine, startChar, endLine, endChar := m.normalizedSelection()
 
 	var text string
 	if startLine == endLine {

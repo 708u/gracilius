@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -144,26 +143,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if msg.X < treeWidth && msg.Y >= headerHeight && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
 			treeIdx := msg.Y - headerHeight + m.treeScrollOffset
-			log.Printf("Tree click: treeIdx=%d, len(fileTree)=%d", treeIdx, len(m.fileTree))
 			if treeIdx >= 0 && treeIdx < len(m.fileTree) {
 				m.treeCursor = treeIdx
-				entry := m.fileTree[treeIdx]
-				log.Printf("Selected entry: name=%s, path=%s, isDir=%v", entry.name, entry.path, entry.isDir)
-				if entry.isDir {
-					if entry.expanded {
-						m.fileTree = collapseDir(m.fileTree, treeIdx)
-					} else {
-						m.fileTree = expandDir(m.fileTree, treeIdx)
-					}
-				} else {
-					if err := m.loadFile(entry.path); err == nil {
-						log.Printf("loadFile success: lines=%d, scrollOffset=%d", len(m.lines), m.scrollOffset)
-						m.focusPane = 1
-						m.notifySelectionChanged()
-					} else {
-						log.Printf("loadFile error: %v", err)
-					}
-				}
+				m.toggleTreeEntry(treeIdx)
 			}
 			return m, nil
 		}
@@ -276,21 +258,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.Enter):
 			if m.focusPane == 0 && len(m.fileTree) > 0 {
-				entry := m.fileTree[m.treeCursor]
-				if entry.isDir {
-					if entry.expanded {
-						m.fileTree = collapseDir(m.fileTree, m.treeCursor)
-					} else {
-						m.fileTree = expandDir(m.fileTree, m.treeCursor)
-					}
-				} else {
-					if err := m.loadFile(entry.path); err != nil {
-						m.err = err
-					} else {
-						m.focusPane = 1
-						m.notifySelectionChanged()
-					}
-				}
+				m.toggleTreeEntry(m.treeCursor)
 			}
 		case key.Matches(msg, m.keys.Left):
 			if m.focusPane == 0 {
@@ -307,10 +275,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursorLine--
 					m.cursorChar = m.lineLen(m.cursorLine)
 				}
-				if !m.selecting {
-					m.anchorLine = m.cursorLine
-					m.anchorChar = m.cursorChar
-				}
+				m.syncAnchorToCursor()
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.Right):
@@ -328,10 +293,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursorLine++
 					m.cursorChar = 0
 				}
-				if !m.selecting {
-					m.anchorLine = m.cursorLine
-					m.anchorChar = m.cursorChar
-				}
+				m.syncAnchorToCursor()
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.Up):
@@ -343,10 +305,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.cursorLine > 0 {
 					m.cursorLine--
 					m.cursorChar = min(m.cursorChar, m.lineLen(m.cursorLine))
-					if !m.selecting {
-						m.anchorLine = m.cursorLine
-						m.anchorChar = m.cursorChar
-					}
+					m.syncAnchorToCursor()
 					m.notifySelectionChanged()
 				}
 			}
@@ -359,41 +318,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.cursorLine < len(m.lines)-1 {
 					m.cursorLine++
 					m.cursorChar = min(m.cursorChar, m.lineLen(m.cursorLine))
-					if !m.selecting {
-						m.anchorLine = m.cursorLine
-						m.anchorChar = m.cursorChar
-					}
+					m.syncAnchorToCursor()
 					m.notifySelectionChanged()
 				}
 			}
 		case key.Matches(msg, m.keys.ShiftUp):
 			if m.cursorLine > 0 {
-				if !m.selecting {
-					m.selecting = true
-					m.anchorLine = m.cursorLine
-					m.anchorChar = m.cursorChar
-				}
+				m.startSelecting()
 				m.cursorLine--
 				m.cursorChar = min(m.cursorChar, m.lineLen(m.cursorLine))
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.ShiftDown):
 			if m.cursorLine < len(m.lines)-1 {
-				if !m.selecting {
-					m.selecting = true
-					m.anchorLine = m.cursorLine
-					m.anchorChar = m.cursorChar
-				}
+				m.startSelecting()
 				m.cursorLine++
 				m.cursorChar = min(m.cursorChar, m.lineLen(m.cursorLine))
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.ShiftLeft):
-			if !m.selecting {
-				m.selecting = true
-				m.anchorLine = m.cursorLine
-				m.anchorChar = m.cursorChar
-			}
+			m.startSelecting()
 			if m.cursorChar > 0 {
 				m.cursorChar--
 			} else if m.cursorLine > 0 {
@@ -402,11 +346,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.notifySelectionChanged()
 		case key.Matches(msg, m.keys.ShiftRight):
-			if !m.selecting {
-				m.selecting = true
-				m.anchorLine = m.cursorLine
-				m.anchorChar = m.cursorChar
-			}
+			m.startSelecting()
 			if m.cursorChar < m.lineLen(m.cursorLine) {
 				m.cursorChar++
 			} else if m.cursorLine < len(m.lines)-1 {

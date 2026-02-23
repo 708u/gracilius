@@ -56,8 +56,7 @@ func (m *Model) watchDir() tea.Cmd {
 					log.Printf("Directory changed: %s (%s)", event.Name, event.Op)
 					if event.Op&fsnotify.Create != 0 {
 						if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-							name := info.Name()
-							if !excludeDirs[name] && !strings.HasPrefix(name, ".") {
+							if !isHiddenEntry(info.Name()) {
 								if err := WatchDirRecursive(m.dirWatcher, event.Name); err != nil {
 									log.Printf("Failed to watch new dir: %v", err)
 								}
