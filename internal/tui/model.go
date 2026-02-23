@@ -78,10 +78,10 @@ type Model struct {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, ctx context.Context, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher) Model {
+func NewModel(srv MCPServer, ctx context.Context, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher) *Model {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
-		return Model{server: srv, ctx: ctx, err: err}
+		return &Model{server: srv, ctx: ctx, err: err}
 	}
 
 	ft := buildFileTree(absRootDir)
@@ -90,7 +90,7 @@ func NewModel(srv MCPServer, ctx context.Context, rootDir string, watcher *fsnot
 	ti.Placeholder = "Enter comment..."
 	ti.CharLimit = 500
 
-	return Model{
+	return &Model{
 		server:       srv,
 		ctx:          ctx,
 		rootDir:      absRootDir,

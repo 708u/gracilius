@@ -9,12 +9,12 @@ import (
 )
 
 // Init implements tea.Model.
-func (m Model) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
 	return tea.Batch(m.watchFile(), m.watchDir())
 }
 
 // lineLen returns the rune-length of the given line.
-func (m Model) lineLen(line int) int {
+func (m *Model) lineLen(line int) int {
 	if line < 0 || line >= len(m.lines) {
 		return 0
 	}
@@ -22,7 +22,7 @@ func (m Model) lineLen(line int) int {
 }
 
 // getTreeWidth returns the tree pane width.
-func (m Model) getTreeWidth() int {
+func (m *Model) getTreeWidth() int {
 	if m.treeWidth > 0 {
 		tw := m.treeWidth
 		if tw < 15 {
@@ -38,7 +38,7 @@ func (m Model) getTreeWidth() int {
 }
 
 // getContentHeight returns the content area height.
-func (m Model) getContentHeight() int {
+func (m *Model) getContentHeight() int {
 	contentHeight := m.height - 5
 	if contentHeight < 5 {
 		contentHeight = 5
@@ -47,7 +47,7 @@ func (m Model) getContentHeight() int {
 }
 
 // getScrollOffset returns the current scroll offset.
-func (m Model) getScrollOffset() int {
+func (m *Model) getScrollOffset() int {
 	return m.scrollOffset
 }
 
@@ -96,7 +96,7 @@ func (m *Model) adjustScrollForCursor() {
 }
 
 // Update implements tea.Model.
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case fileChangedMsg:
 		m.lines = msg.lines
