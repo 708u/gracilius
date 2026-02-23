@@ -39,7 +39,6 @@ func (m *Model) loadFile(filePath string) error {
 		m.cursorLine = 0
 		m.cursorChar = 0
 		m.selecting = false
-		m.previewLines = nil
 		return nil
 	}
 
@@ -64,7 +63,6 @@ func (m *Model) loadFile(filePath string) error {
 	m.anchorChar = 0
 	m.scrollOffset = 0
 	m.selecting = false
-	m.previewLines = nil
 	m.comments = make(map[int]string)
 	m.inputMode = false
 	m.commentInput.Reset()

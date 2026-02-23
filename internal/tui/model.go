@@ -19,15 +19,6 @@ type MCPServer interface {
 	)
 }
 
-// FilePreviewMsg notifies the TUI of an MCP preview request.
-type FilePreviewMsg struct {
-	FilePath string
-	Lines    []string
-}
-
-// ClearPreviewMsg clears the current preview.
-type ClearPreviewMsg struct{}
-
 // IdeConnectedMsg notifies the TUI that Claude Code has connected.
 type IdeConnectedMsg struct{}
 
@@ -48,7 +39,6 @@ type Model struct {
 	filePath         string
 	lines            []string
 	highlightedLines []highlightedLine // nil = no highlighting
-	previewLines     []string          // nil = no preview
 	cursorLine       int
 	cursorChar       int
 	anchorLine       int // selection start

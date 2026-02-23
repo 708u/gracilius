@@ -13,14 +13,11 @@ var separatorBorder = lipgloss.Border{
 }
 
 var (
-	stylePreview     = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	styleDiffAdded   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	styleDiffRemoved = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	styleComment     = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	styleTreeCursor  = lipgloss.NewStyle().Reverse(true)
-	styleFooter      = lipgloss.NewStyle().
-				BorderTop(true).
-				BorderStyle(separatorBorder)
+	styleComment    = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	styleTreeCursor = lipgloss.NewStyle().Reverse(true)
+	styleFooter     = lipgloss.NewStyle().
+			BorderTop(true).
+			BorderStyle(separatorBorder)
 )
 
 // View implements tea.Model.
@@ -38,10 +35,6 @@ func (m Model) View() string {
 	if m.filePath != "" {
 		header += fmt.Sprintf(" | %s", m.filePath)
 	}
-	if m.previewLines != nil {
-		header += " " + stylePreview.Render("[PREVIEW]")
-	}
-
 	// content
 	treeWidth := m.getTreeWidth()
 	editorWidth := m.width - treeWidth - 3
@@ -92,9 +85,7 @@ func (m Model) renderFooter() string {
 		sb.WriteString("\n")
 
 		if m.focusPane == 1 {
-			if m.previewLines != nil {
-				sb.WriteString("Preview mode - waiting for accept/reject")
-			} else if m.selecting {
+			if m.selecting {
 				sLine, sChar := m.anchorLine, m.anchorChar
 				eLine, eChar := m.cursorLine, m.cursorChar
 				if sLine > eLine || (sLine == eLine && sChar > eChar) {
@@ -169,79 +160,57 @@ func (m Model) renderEditor(width, height int) []string {
 		return lines
 	}
 
-	if m.previewLines != nil {
-		diffLines := computeLineDiff(m.lines, m.previewLines)
-		lineNum := 0
-		for _, dl := range diffLines {
-			if len(lines) >= height {
-				break
-			}
-			var line string
-			switch dl.op {
-			case '+':
-				lineNum++
-				line = styleDiffAdded.Render(fmt.Sprintf("%3d + %s", lineNum, expandTabs(dl.text)))
-			case '-':
-				line = styleDiffRemoved.Render(fmt.Sprintf("    - %s", expandTabs(dl.text)))
-			default:
-				lineNum++
-				line = fmt.Sprintf("%3d   %s", lineNum, expandTabs(dl.text))
-			}
-			lines = append(lines, line)
-		}
-	} else {
-		startLine, startChar := m.anchorLine, m.anchorChar
-		endLine, endChar := m.cursorLine, m.cursorChar
-		if startLine > endLine || (startLine == endLine && startChar > endChar) {
-			startLine, endLine = endLine, startLine
-			startChar, endChar = endChar, startChar
-		}
+	startLine, startChar := m.anchorLine, m.anchorChar
+	endLine, endChar := m.cursorLine, m.cursorChar
+	if startLine > endLine || (startLine == endLine && startChar > endChar) {
+		startLine, endLine = endLine, startLine
+		startChar, endChar = endChar, startChar
+	}
 
-		offset := m.getScrollOffset()
+	offset := m.getScrollOffset()
 
-		for i := offset; i < len(m.lines) && len(lines) < height; i++ {
-			lineContent := m.lines[i]
+	for i := offset; i < len(m.lines) && len(lines) < height; i++ {
+		lineContent := m.lines[i]
 
-			var sb strings.Builder
-			sb.WriteString(fmt.Sprintf("%3d ", i+1))
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("%3d ", i+1))
 
-			isCursorLine := m.focusPane == 1 && i == m.cursorLine
-			isSelected := m.focusPane == 1 && m.selecting && i >= startLine && i <= endLine
+		isCursorLine := m.focusPane == 1 && i == m.cursorLine
+		isSelected := m.focusPane == 1 && m.selecting && i >= startLine && i <= endLine
 
-			if isCursorLine && isSelected {
-				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
-				if hl := m.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
-				} else {
-					m.renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
-				}
-			} else if isCursorLine {
-				if hl := m.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithCursor(&sb, hl.runs, m.cursorChar)
-				} else {
-					m.renderLineWithCursor(&sb, lineContent)
-				}
-			} else if isSelected {
-				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
-				if hl := m.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
-				} else {
-					m.renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
-				}
+		if isCursorLine && isSelected {
+			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
+			if hl := m.getHighlightedLine(i); hl != nil {
+				renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
 			} else {
-				if hl := m.getHighlightedLine(i); hl != nil {
-					sb.WriteString(hl.rendered)
-				} else {
-					sb.WriteString(expandTabs(lineContent))
-				}
+				m.renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
 			}
-
-			if _, hasComment := m.comments[i]; hasComment {
-				sb.WriteString(" " + styleComment.Render("[C]"))
+		} else if isCursorLine {
+			if hl := m.getHighlightedLine(i); hl != nil {
+				renderStyledLineWithCursor(&sb, hl.runs, m.cursorChar)
+			} else {
+				m.renderLineWithCursor(&sb, lineContent)
 			}
-
-			lines = append(lines, sb.String())
+		} else if isSelected {
+			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
+			if hl := m.getHighlightedLine(i); hl != nil {
+				renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
+			} else {
+				m.renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
+			}
+		} else {
+			if hl := m.getHighlightedLine(i); hl != nil {
+				sb.WriteString(hl.rendered)
+			} else {
+				sb.WriteString(expandTabs(lineContent))
+			}
 		}
+
+		if _, hasComment := m.comments[i]; hasComment {
+			sb.WriteString(" " + styleComment.Render("[C]"))
+		}
+
+		lines = append(lines, sb.String())
 	}
 
 	for len(lines) < height {

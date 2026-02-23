@@ -103,7 +103,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.highlightedLines = highlightFile(
 			m.filePath, strings.Join(msg.lines, "\n"),
 		)
-		m.previewLines = nil
 		if m.cursorLine >= len(m.lines) {
 			m.cursorLine = max(0, len(m.lines)-1)
 		}
@@ -120,32 +119,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.treeCursor = max(0, len(m.fileTree)-1)
 		}
 		return m, m.watchDir()
-	case FilePreviewMsg:
-		if m.filePath != msg.FilePath {
-			if err := m.loadFile(msg.FilePath); err != nil {
-				m.err = err
-				return m, nil
-			}
-			m.focusPane = 1
-		}
-		m.previewLines = msg.Lines
-
-		diffLines := computeLineDiff(m.lines, m.previewLines)
-		diffLineNum := 0
-		for _, dl := range diffLines {
-			if dl.op == '+' || dl.op == '-' {
-				break
-			}
-			if dl.op == ' ' {
-				diffLineNum++
-			}
-		}
-		m.cursorLine = diffLineNum
-
-		return m, nil
-	case ClearPreviewMsg:
-		m.previewLines = nil
-		return m, nil
 	case IdeConnectedMsg:
 		if m.filePath != "" && len(m.lines) > 0 {
 			m.notifySelectionChanged()

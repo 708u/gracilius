@@ -99,11 +99,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 // based on the current TUI state.
 func (m Model) contextKeyMap() help.KeyMap {
 	km := m.keys
-	km.Comment.SetEnabled(
-		m.focusPane == 1 && m.previewLines == nil,
-	)
-	km.ClearAll.SetEnabled(
-		m.focusPane == 1 && m.previewLines == nil,
-	)
+	km.Comment.SetEnabled(m.focusPane == 1)
+	km.ClearAll.SetEnabled(m.focusPane == 1)
 	return km
 }
