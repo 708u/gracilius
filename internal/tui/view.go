@@ -5,6 +5,22 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+)
+
+var separatorBorder = lipgloss.Border{
+	Top: "\u2500",
+}
+
+var (
+	stylePreview     = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	styleDiffAdded   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	styleDiffRemoved = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	styleComment     = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	styleTreeCursor  = lipgloss.NewStyle().Reverse(true)
+	styleFooter      = lipgloss.NewStyle().
+				BorderTop(true).
+				BorderStyle(separatorBorder)
 )
 
 // View implements tea.Model.
@@ -23,9 +39,8 @@ func (m Model) View() string {
 		header += fmt.Sprintf(" | %s", m.filePath)
 	}
 	if m.previewLines != nil {
-		header += " \033[33m[PREVIEW]\033[0m"
+		header += " " + stylePreview.Render("[PREVIEW]")
 	}
-	headerSep := strings.Repeat("\u2500", min(m.width, len(header)+10))
 
 	// content
 	treeWidth := m.getTreeWidth()
@@ -48,16 +63,18 @@ func (m Model) View() string {
 	)
 
 	// footer
-	footerSep := strings.Repeat("\u2500", min(m.width, 80))
 	footer := m.renderFooter()
+
+	headerRendered := header
+	footerRendered := styleFooter.
+		Width(m.width).
+		Render(footer)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		header,
-		headerSep,
+		headerRendered,
 		content,
-		footerSep,
-		footer,
+		footerRendered,
 	)
 }
 
@@ -107,11 +124,8 @@ func (m Model) renderFooter() string {
 func (m Model) renderTree(width, height int) []string {
 	lines := make([]string, 0, height)
 
-	for i, entry := range m.fileTree {
-		if len(lines) >= height {
-			break
-		}
-
+	for i := m.treeScrollOffset; i < len(m.fileTree) && len(lines) < height; i++ {
+		entry := m.fileTree[i]
 		indent := strings.Repeat("  ", entry.depth)
 
 		icon := "  "
@@ -123,14 +137,13 @@ func (m Model) renderTree(width, height int) []string {
 			}
 		}
 
-		name := entry.name
-		line := indent + icon + name
+		line := indent + icon + entry.name
 
-		displayLine := truncateString(line, width)
+		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)
 
 		if i == m.treeCursor && m.focusPane == 0 {
-			displayLine = "\033[7m" + displayLine + "\033[0m"
+			displayLine = styleTreeCursor.Render(displayLine)
 		}
 
 		lines = append(lines, displayLine)
@@ -167,9 +180,9 @@ func (m Model) renderEditor(width, height int) []string {
 			switch dl.op {
 			case '+':
 				lineNum++
-				line = fmt.Sprintf("\033[32m%3d + %s\033[0m", lineNum, expandTabs(dl.text))
+				line = styleDiffAdded.Render(fmt.Sprintf("%3d + %s", lineNum, expandTabs(dl.text)))
 			case '-':
-				line = fmt.Sprintf("\033[31m    - %s\033[0m", expandTabs(dl.text))
+				line = styleDiffRemoved.Render(fmt.Sprintf("    - %s", expandTabs(dl.text)))
 			default:
 				lineNum++
 				line = fmt.Sprintf("%3d   %s", lineNum, expandTabs(dl.text))
@@ -224,7 +237,7 @@ func (m Model) renderEditor(width, height int) []string {
 			}
 
 			if _, hasComment := m.comments[i]; hasComment {
-				sb.WriteString(" \033[33m[C]\033[0m")
+				sb.WriteString(" " + styleComment.Render("[C]"))
 			}
 
 			lines = append(lines, sb.String())

@@ -39,7 +39,7 @@ func (m Model) getTreeWidth() int {
 
 // getContentHeight returns the content area height.
 func (m Model) getContentHeight() int {
-	contentHeight := m.height - 6
+	contentHeight := m.height - 5
 	if contentHeight < 5 {
 		contentHeight = 5
 	}
@@ -49,6 +49,25 @@ func (m Model) getContentHeight() int {
 // getScrollOffset returns the current scroll offset.
 func (m Model) getScrollOffset() int {
 	return m.scrollOffset
+}
+
+// adjustTreeScroll adjusts the tree scroll so the tree cursor
+// stays visible.
+func (m *Model) adjustTreeScroll() {
+	contentHeight := m.getContentHeight()
+	if m.treeScrollOffset > m.treeCursor {
+		m.treeScrollOffset = m.treeCursor
+	}
+	if m.treeCursor >= m.treeScrollOffset+contentHeight {
+		m.treeScrollOffset = m.treeCursor - contentHeight + 1
+	}
+	maxOffset := len(m.fileTree) - contentHeight
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.treeScrollOffset > maxOffset {
+		m.treeScrollOffset = maxOffset
+	}
 }
 
 // adjustScrollForCursor adjusts the scroll so the cursor stays visible.
@@ -144,7 +163,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.MouseMsg:
 		treeWidth := m.getTreeWidth()
-		headerHeight := 2
+		headerHeight := 1
 
 		borderX := treeWidth
 		isBorderArea := msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= headerHeight
@@ -163,17 +182,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if msg.X < treeWidth && msg.Y >= headerHeight && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
-			treeY := msg.Y - headerHeight
-			log.Printf("Tree click: treeY=%d, len(fileTree)=%d", treeY, len(m.fileTree))
-			if treeY < len(m.fileTree) {
-				m.treeCursor = treeY
-				entry := m.fileTree[treeY]
+			treeIdx := msg.Y - headerHeight + m.treeScrollOffset
+			log.Printf("Tree click: treeIdx=%d, len(fileTree)=%d", treeIdx, len(m.fileTree))
+			if treeIdx >= 0 && treeIdx < len(m.fileTree) {
+				m.treeCursor = treeIdx
+				entry := m.fileTree[treeIdx]
 				log.Printf("Selected entry: name=%s, path=%s, isDir=%v", entry.name, entry.path, entry.isDir)
 				if entry.isDir {
 					if entry.expanded {
-						m.fileTree = collapseDir(m.fileTree, treeY)
+						m.fileTree = collapseDir(m.fileTree, treeIdx)
 					} else {
-						m.fileTree = expandDir(m.fileTree, treeY)
+						m.fileTree = expandDir(m.fileTree, treeIdx)
 					}
 				} else {
 					if err := m.loadFile(entry.path); err == nil {
@@ -457,7 +476,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if m.focusPane == 1 && len(m.lines) > 0 {
+	if m.focusPane == 0 {
+		m.adjustTreeScroll()
+	} else if len(m.lines) > 0 {
 		m.adjustScrollForCursor()
 	}
 

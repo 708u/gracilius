@@ -76,7 +76,8 @@ type Model struct {
 	treeWidth     int
 
 	// scroll
-	scrollOffset int
+	scrollOffset     int
+	treeScrollOffset int
 
 	// directory watcher
 	dirWatcher *fsnotify.Watcher
