@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // View implements tea.Model.
@@ -15,8 +17,6 @@ func (m Model) View() string {
 		return ""
 	}
 
-	var sb strings.Builder
-
 	// header
 	header := fmt.Sprintf("gracilius - Port %d", m.server.Port())
 	if m.filePath != "" {
@@ -25,55 +25,58 @@ func (m Model) View() string {
 	if m.previewLines != nil {
 		header += " \033[33m[PREVIEW]\033[0m"
 	}
-	sb.WriteString(header)
-	sb.WriteString("\n")
-	sb.WriteString(strings.Repeat("\u2500", min(m.width, len(header)+10)))
-	sb.WriteString("\n")
+	headerSep := strings.Repeat("\u2500", min(m.width, len(header)+10))
 
+	// content
 	treeWidth := m.getTreeWidth()
 	editorWidth := m.width - treeWidth - 3
-
-	contentHeight := m.height - 6
-	if contentHeight < 5 {
-		contentHeight = 5
-	}
+	contentHeight := m.getContentHeight()
 
 	treeLines := m.renderTree(treeWidth, contentHeight)
 	editorLines := m.renderEditor(editorWidth, contentHeight)
 
-	for i := 0; i < contentHeight; i++ {
-		treeLine := ""
-		if i < len(treeLines) {
-			treeLine = treeLines[i]
-		}
-		editorLine := ""
-		if i < len(editorLines) {
-			editorLine = editorLines[i]
-		}
-
-		sb.WriteString(treeLine)
-		sb.WriteString(" \u2502 ")
-		sb.WriteString(editorLine)
-		sb.WriteString("\n")
+	sepLines := make([]string, contentHeight)
+	for i := range sepLines {
+		sepLines[i] = " \u2502 "
 	}
 
+	content := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		strings.Join(treeLines, "\n"),
+		strings.Join(sepLines, "\n"),
+		strings.Join(editorLines, "\n"),
+	)
+
 	// footer
-	sb.WriteString(strings.Repeat("\u2500", min(m.width, 80)))
-	sb.WriteString("\n")
+	footerSep := strings.Repeat("\u2500", min(m.width, 80))
+	footer := m.renderFooter()
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		header,
+		headerSep,
+		content,
+		footerSep,
+		footer,
+	)
+}
+
+// renderFooter generates the footer area (help hints + status).
+func (m Model) renderFooter() string {
+	var sb strings.Builder
 
 	if m.inputMode {
 		sb.WriteString("[Editor] Comment (Enter: confirm, Esc: cancel)\n")
-		fmt.Fprintf(&sb, "Line %d: %s_\n", m.inputLine+1, m.commentInput)
+		fmt.Fprintf(&sb, "Line %d: %s",
+			m.inputLine+1, m.commentInput.View())
 	} else {
-		focusIndicator := "[Tree]"
-		if m.focusPane == 1 {
-			focusIndicator = "[Editor]"
-		}
-		fmt.Fprintf(&sb, "%s Tab: Switch | \u2191/\u2193: Move | i: Comment | D: Clear | Esc: Quit\n", focusIndicator)
+		m.help.Width = m.width
+		sb.WriteString(m.help.View(m.contextKeyMap()))
+		sb.WriteString("\n")
 
 		if m.focusPane == 1 {
 			if m.previewLines != nil {
-				sb.WriteString("Preview mode - waiting for accept/reject\n")
+				sb.WriteString("Preview mode - waiting for accept/reject")
 			} else if m.selecting {
 				sLine, sChar := m.anchorLine, m.anchorChar
 				eLine, eChar := m.cursorLine, m.cursorChar
@@ -81,19 +84,18 @@ func (m Model) View() string {
 					sLine, eLine = eLine, sLine
 					sChar, eChar = eChar, sChar
 				}
-				fmt.Fprintf(&sb, "Selection: %d:%d - %d:%d\n", sLine+1, sChar+1, eLine+1, eChar+1)
+				fmt.Fprintf(&sb, "Selection: %d:%d - %d:%d",
+					sLine+1, sChar+1, eLine+1, eChar+1)
 			} else if len(m.lines) > 0 {
-				fmt.Fprintf(&sb, "Cursor: %d:%d\n", m.cursorLine+1, m.cursorChar+1)
+				fmt.Fprintf(&sb, "Cursor: %d:%d",
+					m.cursorLine+1, m.cursorChar+1)
 			} else {
-				sb.WriteString("Select a file to view\n")
+				sb.WriteString("Select a file to view")
 			}
 		} else {
 			if m.treeCursor < len(m.fileTree) {
 				entry := m.fileTree[m.treeCursor]
 				sb.WriteString(entry.path)
-				sb.WriteString("\n")
-			} else {
-				sb.WriteString("\n")
 			}
 		}
 	}

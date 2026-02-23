@@ -4,6 +4,8 @@ import (
 	"context"
 	"path/filepath"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -63,7 +65,7 @@ type Model struct {
 
 	// comments
 	comments     map[int]string
-	commentInput string
+	commentInput textinput.Model
 	inputMode    bool
 	inputLine    int
 
@@ -78,6 +80,10 @@ type Model struct {
 
 	// directory watcher
 	dirWatcher *fsnotify.Watcher
+
+	// keybindings
+	keys keyMap
+	help help.Model
 }
 
 // NewModel creates a new TUI Model.
@@ -89,16 +95,23 @@ func NewModel(srv MCPServer, ctx context.Context, rootDir string, watcher *fsnot
 
 	ft := buildFileTree(absRootDir)
 
+	ti := textinput.New()
+	ti.Placeholder = "Enter comment..."
+	ti.CharLimit = 500
+
 	return Model{
-		server:     srv,
-		ctx:        ctx,
-		rootDir:    absRootDir,
-		fileTree:   ft,
-		treeCursor: 0,
-		focusPane:  0,
-		watcher:    watcher,
-		dirWatcher: dirWatcher,
-		comments:   make(map[int]string),
-		treeWidth:  30,
+		server:       srv,
+		ctx:          ctx,
+		rootDir:      absRootDir,
+		fileTree:     ft,
+		treeCursor:   0,
+		focusPane:    0,
+		watcher:      watcher,
+		dirWatcher:   dirWatcher,
+		comments:     make(map[int]string),
+		commentInput: ti,
+		treeWidth:    30,
+		keys:         newKeyMap(),
+		help:         help.New(),
 	}
 }

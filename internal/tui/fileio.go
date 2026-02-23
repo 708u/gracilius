@@ -67,7 +67,8 @@ func (m *Model) loadFile(filePath string) error {
 	m.previewLines = nil
 	m.comments = make(map[int]string)
 	m.inputMode = false
-	m.commentInput = ""
+	m.commentInput.Reset()
+	m.commentInput.Blur()
 
 	return nil
 }

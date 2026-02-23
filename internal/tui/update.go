@@ -4,6 +4,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -266,40 +267,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
+		var cmd tea.Cmd
 		if m.inputMode {
-			switch msg.Type {
-			case tea.KeyEsc:
+			switch {
+			case key.Matches(msg, m.keys.Quit):
 				m.inputMode = false
-				m.commentInput = ""
-			case tea.KeyEnter:
-				if m.commentInput != "" {
-					m.comments[m.inputLine] = m.commentInput
-					m.notifyComment(m.inputLine, m.commentInput)
+				m.commentInput.Reset()
+				m.commentInput.Blur()
+			case msg.Type == tea.KeyEnter:
+				val := m.commentInput.Value()
+				if val != "" {
+					m.comments[m.inputLine] = val
+					m.notifyComment(m.inputLine, val)
 				}
 				m.inputMode = false
-				m.commentInput = ""
-			case tea.KeyBackspace:
-				if len(m.commentInput) > 0 {
-					runes := []rune(m.commentInput)
-					m.commentInput = string(runes[:len(runes)-1])
-				}
-			case tea.KeyRunes, tea.KeySpace:
-				m.commentInput += msg.String()
+				m.commentInput.Reset()
+				m.commentInput.Blur()
+			default:
+				m.commentInput, cmd = m.commentInput.Update(msg)
+				return m, cmd
 			}
 			return m, nil
 		}
 
-		switch msg.Type {
-		case tea.KeyEsc, tea.KeyCtrlC:
+		switch {
+		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
-		case tea.KeyTab:
+		case key.Matches(msg, m.keys.SwitchPane):
 			if len(m.lines) > 0 {
 				if m.focusPane == 1 {
 					m.notifyClearSelection()
 				}
 				m.focusPane = (m.focusPane + 1) % 2
 			}
-		case tea.KeyEnter:
+		case key.Matches(msg, m.keys.Enter):
 			if m.focusPane == 0 && len(m.fileTree) > 0 {
 				entry := m.fileTree[m.treeCursor]
 				if entry.isDir {
@@ -317,7 +318,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
-		case tea.KeyLeft:
+		case key.Matches(msg, m.keys.Left):
 			if m.focusPane == 0 {
 				if len(m.fileTree) > 0 {
 					entry := m.fileTree[m.treeCursor]
@@ -338,7 +339,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.notifySelectionChanged()
 			}
-		case tea.KeyRight:
+		case key.Matches(msg, m.keys.Right):
 			if m.focusPane == 0 {
 				if len(m.fileTree) > 0 {
 					entry := m.fileTree[m.treeCursor]
@@ -359,7 +360,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.notifySelectionChanged()
 			}
-		case tea.KeyUp:
+		case key.Matches(msg, m.keys.Up):
 			if m.focusPane == 0 {
 				if m.treeCursor > 0 {
 					m.treeCursor--
@@ -375,7 +376,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.notifySelectionChanged()
 				}
 			}
-		case tea.KeyDown:
+		case key.Matches(msg, m.keys.Down):
 			if m.focusPane == 0 {
 				if m.treeCursor < len(m.fileTree)-1 {
 					m.treeCursor++
@@ -391,7 +392,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.notifySelectionChanged()
 				}
 			}
-		case tea.KeyShiftUp:
+		case key.Matches(msg, m.keys.ShiftUp):
 			if m.cursorLine > 0 {
 				if !m.selecting {
 					m.selecting = true
@@ -402,7 +403,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursorChar = min(m.cursorChar, m.lineLen(m.cursorLine))
 				m.notifySelectionChanged()
 			}
-		case tea.KeyShiftDown:
+		case key.Matches(msg, m.keys.ShiftDown):
 			if m.cursorLine < len(m.lines)-1 {
 				if !m.selecting {
 					m.selecting = true
@@ -413,7 +414,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursorChar = min(m.cursorChar, m.lineLen(m.cursorLine))
 				m.notifySelectionChanged()
 			}
-		case tea.KeyShiftLeft:
+		case key.Matches(msg, m.keys.ShiftLeft):
 			if !m.selecting {
 				m.selecting = true
 				m.anchorLine = m.cursorLine
@@ -426,7 +427,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursorChar = m.lineLen(m.cursorLine)
 			}
 			m.notifySelectionChanged()
-		case tea.KeyShiftRight:
+		case key.Matches(msg, m.keys.ShiftRight):
 			if !m.selecting {
 				m.selecting = true
 				m.anchorLine = m.cursorLine
@@ -439,16 +440,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursorChar = 0
 			}
 			m.notifySelectionChanged()
-		default:
-			if msg.String() == "i" && m.focusPane == 1 && len(m.lines) > 0 {
+		case key.Matches(msg, m.keys.Comment):
+			if m.focusPane == 1 && len(m.lines) > 0 {
 				m.inputMode = true
 				m.inputLine = m.cursorLine
-				m.commentInput = ""
+				m.commentInput.Reset()
 				if existing, ok := m.comments[m.cursorLine]; ok {
-					m.commentInput = existing
+					m.commentInput.SetValue(existing)
 				}
+				m.commentInput.Focus()
 			}
-			if msg.String() == "D" && m.focusPane == 1 {
+		case key.Matches(msg, m.keys.ClearAll):
+			if m.focusPane == 1 {
 				m.comments = make(map[int]string)
 			}
 		}
