@@ -24,10 +24,7 @@ func (m *Model) lineLen(line int) int {
 // getTreeWidth returns the tree pane width.
 func (m *Model) getTreeWidth() int {
 	if m.treeWidth > 0 {
-		tw := m.treeWidth
-		if tw < 15 {
-			tw = 15
-		}
+		tw := max(m.treeWidth, 15)
 		maxWidth := m.width * 70 / 100
 		if tw > maxWidth {
 			tw = maxWidth
@@ -39,10 +36,7 @@ func (m *Model) getTreeWidth() int {
 
 // getContentHeight returns the content area height.
 func (m *Model) getContentHeight() int {
-	contentHeight := m.height - 5
-	if contentHeight < 5 {
-		contentHeight = 5
-	}
+	contentHeight := max(m.height-5, 5)
 	return contentHeight
 }
 
@@ -61,10 +55,7 @@ func (m *Model) adjustTreeScroll() {
 	if m.treeCursor >= m.treeScrollOffset+contentHeight {
 		m.treeScrollOffset = m.treeCursor - contentHeight + 1
 	}
-	maxOffset := len(m.fileTree) - contentHeight
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
+	maxOffset := max(len(m.fileTree)-contentHeight, 0)
 	if m.treeScrollOffset > maxOffset {
 		m.treeScrollOffset = maxOffset
 	}
@@ -83,10 +74,7 @@ func (m *Model) adjustScrollForCursor() {
 		m.scrollOffset = m.cursorLine - contentHeight + margin + 1
 	}
 
-	maxOffset := len(m.lines) - contentHeight
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
+	maxOffset := max(len(m.lines)-contentHeight, 0)
 	if m.scrollOffset > maxOffset {
 		m.scrollOffset = maxOffset
 	}
@@ -199,10 +187,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				targetLine = 0
 			}
 
-			targetChar := editorX
-			if targetChar < 0 {
-				targetChar = 0
-			}
+			targetChar := max(editorX, 0)
 			if targetLine < len(m.lines) {
 				runeLen := len([]rune(m.lines[targetLine]))
 				if targetChar > runeLen {
@@ -247,10 +232,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case msg.Button == tea.MouseButtonWheelDown:
 				scrollAmount := 3
 				contentHeight := m.getContentHeight()
-				maxOffset := len(m.lines) - contentHeight
-				if maxOffset < 0 {
-					maxOffset = 0
-				}
+				maxOffset := max(len(m.lines)-contentHeight, 0)
 				m.scrollOffset += scrollAmount
 				if m.scrollOffset > maxOffset {
 					m.scrollOffset = maxOffset

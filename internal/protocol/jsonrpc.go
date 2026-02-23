@@ -67,7 +67,7 @@ type SelectionChangedParams struct {
 	Text      string    `json:"text,omitempty"`
 	FilePath  string    `json:"filePath,omitempty"`
 	FileURL   string    `json:"fileUrl,omitempty"`
-	Selection Selection `json:"selection,omitempty"`
+	Selection Selection `json:"selection"`
 }
 
 // Selection represents a text selection range.

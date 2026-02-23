@@ -193,7 +193,7 @@ func (s *Server) StartAsync(ctx context.Context) error {
 	var err error
 	startPort := s.port
 
-	for i := 0; i < maxPortRetries; i++ {
+	for i := range maxPortRetries {
 		tryPort := startPort + i
 		addr := "127.0.0.1:" + strconv.Itoa(tryPort)
 		listener, err = net.Listen("tcp", addr)

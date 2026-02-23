@@ -9,11 +9,8 @@ import (
 
 // isBinary returns true if the content appears to be binary.
 func isBinary(content []byte) bool {
-	checkSize := 8192
-	if len(content) < checkSize {
-		checkSize = len(content)
-	}
-	for i := 0; i < checkSize; i++ {
+	checkSize := min(len(content), 8192)
+	for i := range checkSize {
 		if content[i] == 0 {
 			return true
 		}
