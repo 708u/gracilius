@@ -197,7 +197,7 @@ func writeStyledText(sb *strings.Builder, ansi, text string) {
 	}
 }
 
-func (m Model) getHighlightedLine(lineIdx int) *highlightedLine {
+func (m *Model) getHighlightedLine(lineIdx int) *highlightedLine {
 	if m.highlightedLines != nil && lineIdx >= 0 && lineIdx < len(m.highlightedLines) {
 		return &m.highlightedLines[lineIdx]
 	}

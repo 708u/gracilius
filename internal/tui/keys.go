@@ -97,7 +97,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 
 // contextKeyMap returns a help.KeyMap with bindings enabled/disabled
 // based on the current TUI state.
-func (m Model) contextKeyMap() help.KeyMap {
+func (m *Model) contextKeyMap() help.KeyMap {
 	km := m.keys
 	km.Comment.SetEnabled(m.focusPane == 1)
 	km.ClearAll.SetEnabled(m.focusPane == 1)

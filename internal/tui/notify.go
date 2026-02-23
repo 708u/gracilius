@@ -6,7 +6,7 @@ import (
 )
 
 // notifySelectionChanged sends the current selection to the MCP server.
-func (m Model) notifySelectionChanged() {
+func (m *Model) notifySelectionChanged() {
 	startLine, startChar := m.anchorLine, m.anchorChar
 	endLine, endChar := m.cursorLine, m.cursorChar
 
@@ -56,7 +56,7 @@ func (m Model) notifySelectionChanged() {
 }
 
 // notifyClearSelection sends a clear-selection notification.
-func (m Model) notifyClearSelection() {
+func (m *Model) notifyClearSelection() {
 	m.server.NotifySelectionChanged(
 		m.filePath,
 		"",
@@ -68,7 +68,7 @@ func (m Model) notifyClearSelection() {
 }
 
 // notifyComment sends a comment as a selection_changed notification.
-func (m Model) notifyComment(line int, comment string) {
+func (m *Model) notifyComment(line int, comment string) {
 	text := fmt.Sprintf("[Comment] %s:%d\n%s", m.filePath, line+1, comment)
 
 	m.server.NotifySelectionChanged(

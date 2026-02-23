@@ -10,7 +10,7 @@ import (
 )
 
 // watchFile returns a tea.Cmd that watches the current file for changes.
-func (m Model) watchFile() tea.Cmd {
+func (m *Model) watchFile() tea.Cmd {
 	return func() tea.Msg {
 		if m.watcher == nil {
 			return nil
@@ -41,7 +41,7 @@ func (m Model) watchFile() tea.Cmd {
 }
 
 // watchDir returns a tea.Cmd that watches directories for changes.
-func (m Model) watchDir() tea.Cmd {
+func (m *Model) watchDir() tea.Cmd {
 	return func() tea.Msg {
 		if m.dirWatcher == nil {
 			return nil

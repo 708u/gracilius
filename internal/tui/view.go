@@ -21,7 +21,7 @@ var (
 )
 
 // View implements tea.Model.
-func (m Model) View() string {
+func (m *Model) View() string {
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n\nPress Esc to quit.", m.err)
 	}
@@ -72,7 +72,7 @@ func (m Model) View() string {
 }
 
 // renderFooter generates the footer area (help hints + status).
-func (m Model) renderFooter() string {
+func (m *Model) renderFooter() string {
 	var sb strings.Builder
 
 	if m.inputMode {
@@ -112,7 +112,7 @@ func (m Model) renderFooter() string {
 }
 
 // renderTree generates the tree pane lines.
-func (m Model) renderTree(width, height int) []string {
+func (m *Model) renderTree(width, height int) []string {
 	lines := make([]string, 0, height)
 
 	for i := m.treeScrollOffset; i < len(m.fileTree) && len(lines) < height; i++ {
@@ -148,7 +148,7 @@ func (m Model) renderTree(width, height int) []string {
 }
 
 // renderEditor generates the editor pane lines.
-func (m Model) renderEditor(width, height int) []string {
+func (m *Model) renderEditor(width, height int) []string {
 	lines := make([]string, 0, height)
 
 	if len(m.lines) == 0 {
@@ -234,7 +234,7 @@ func selRange(line, startLine, endLine, startChar, endChar int, content string) 
 }
 
 // renderLineWithCursor renders a line with an inverted cursor.
-func (m Model) renderLineWithCursor(sb *strings.Builder, line string) {
+func (m *Model) renderLineWithCursor(sb *strings.Builder, line string) {
 	runes := []rune(line)
 	if m.cursorChar >= len(runes) {
 		sb.WriteString(expandTabs(line))
@@ -254,7 +254,7 @@ func (m Model) renderLineWithCursor(sb *strings.Builder, line string) {
 }
 
 // renderLineWithCursorAndSelection renders a line with selection highlight.
-func (m Model) renderLineWithCursorAndSelection(sb *strings.Builder, line string, selStart, selEnd int) {
+func (m *Model) renderLineWithCursorAndSelection(sb *strings.Builder, line string, selStart, selEnd int) {
 	runes := []rune(line)
 	if selStart > len(runes) {
 		selStart = len(runes)
