@@ -86,11 +86,18 @@ func TestRenderStyledLineWithCursor(t *testing.T) {
 	renderStyledLineWithCursor(&sb, runs, 2) // cursor on 'l'
 	output := sb.String()
 
-	if !strings.Contains(output, "\033[7m") {
-		t.Error("expected inverse video for cursor")
+	// Check that the cursor character is exactly "l"
+	invIdx := strings.Index(output, "\033[7m")
+	if invIdx < 0 {
+		t.Fatal("expected inverse video for cursor")
 	}
-	if !strings.Contains(output, "l") {
-		t.Error("expected cursor character 'l'")
+	resetIdx := strings.Index(output[invIdx:], "\033[0m")
+	if resetIdx < 0 {
+		t.Fatal("expected reset after inverse")
+	}
+	cursorText := output[invIdx+len("\033[7m") : invIdx+resetIdx]
+	if cursorText != "l" {
+		t.Errorf("expected cursor on 'l', got %q", cursorText)
 	}
 
 	// Cursor past end of line

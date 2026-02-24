@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -116,7 +117,7 @@ func CheckDuplicateWorkspace(workspaceFolders []string) error {
 		}
 
 		// Check if workspaceFolders match
-		if !workspaceFoldersMatch(workspaceFolders, lockData.WorkspaceFolders) {
+		if !slices.Equal(workspaceFolders, lockData.WorkspaceFolders) {
 			continue
 		}
 
@@ -133,20 +134,9 @@ func CheckDuplicateWorkspace(workspaceFolders []string) error {
 	return nil
 }
 
-// workspaceFoldersMatch checks if two workspaceFolders slices match.
-func workspaceFoldersMatch(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // isProcessAlive checks if a process with the given PID is still running.
+// This implementation uses POSIX signal(0) and is only valid on
+// Unix-like systems (macOS, Linux).
 func isProcessAlive(pid int) bool {
 	process, err := os.FindProcess(pid)
 	if err != nil {

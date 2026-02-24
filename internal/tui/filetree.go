@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/fsnotify/fsnotify"
@@ -61,12 +61,12 @@ func WatchDirRecursive(watcher *fsnotify.Watcher, dir string) error {
 // buildFileTree scans rootDir recursively and returns a flat list of entries.
 func buildFileTree(rootDir string) []fileEntry {
 	var entries []fileEntry
-	entries = scanDir(rootDir, rootDir, 0, entries)
+	entries = scanDir(rootDir, 0, entries)
 	return entries
 }
 
 // scanDir recursively scans a directory.
-func scanDir(rootDir, dir string, depth int, entries []fileEntry) []fileEntry {
+func scanDir(dir string, depth int, entries []fileEntry) []fileEntry {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return entries
@@ -84,11 +84,11 @@ func scanDir(rootDir, dir string, depth int, entries []fileEntry) []fileEntry {
 		}
 	}
 
-	sort.Slice(dirs, func(i, j int) bool {
-		return dirs[i].Name() < dirs[j].Name()
+	slices.SortFunc(dirs, func(a, b os.DirEntry) int {
+		return strings.Compare(a.Name(), b.Name())
 	})
-	sort.Slice(regularFiles, func(i, j int) bool {
-		return regularFiles[i].Name() < regularFiles[j].Name()
+	slices.SortFunc(regularFiles, func(a, b os.DirEntry) int {
+		return strings.Compare(a.Name(), b.Name())
 	})
 
 	for _, d := range dirs {
@@ -125,7 +125,7 @@ func expandDir(entries []fileEntry, index int) []fileEntry {
 	entry.expanded = true
 
 	var children []fileEntry
-	children = scanDir(entry.path, entry.path, entry.depth+1, children)
+	children = scanDir(entry.path, entry.depth+1, children)
 
 	result := make([]fileEntry, 0, len(entries)+len(children))
 	result = append(result, entries[:index+1]...)

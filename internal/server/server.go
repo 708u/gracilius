@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -20,9 +21,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const (
-	maxPortRetries = 10 // maximum number of ports to try
-)
+const maxPortRetries = 10 // maximum number of ports to try
+
+const commentPrefix = "[Comment]"
+
+const debounceInterval = 100 * time.Millisecond
 
 // wsClient represents a WebSocket client with keepalive tracking.
 type wsClient struct {
@@ -43,12 +46,17 @@ type Server struct {
 	upgrader         websocket.Upgrader
 	stopOnce         sync.Once
 
+	// set by Listen, used by Serve/Stop
+	mux      *http.ServeMux
+	listener net.Listener
+	httpSrv  *http.Server
+
 	// debounce fields
-	pendingNotify *selectionNotification
+	pendingNotify *selectionChange
 	notifyTimer   *time.Timer
 
 	// last sent selection for change detection
-	lastSentSelection *selectionState
+	lastSentSelection *selectionChange
 }
 
 // Keepalive constants
@@ -58,17 +66,7 @@ const (
 	sleepThreshold   = 45 * time.Second // sleep wake detection (pingInterval * 1.5)
 )
 
-type selectionNotification struct {
-	filePath  string
-	text      string
-	startLine int
-	startChar int
-	endLine   int
-	endChar   int
-}
-
-// selectionState holds the last sent selection for change detection
-type selectionState struct {
+type selectionChange struct {
 	filePath  string
 	text      string
 	startLine int
@@ -140,64 +138,25 @@ func New(port int, workspaceFolders []string) (*Server, error) {
 	}, nil
 }
 
-// Start starts the WebSocket server (blocking).
-func (s *Server) Start(ctx context.Context) error {
-	// Check if gra is already running for the same directory
-	if err := CheckDuplicateWorkspace(s.workspaceFolders); err != nil {
-		return err
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleWebSocket)
-
-	addr := s.getAddr()
-
-	// Bind the port first, then create the lock file
-	// (prevents stale lock files when binding fails)
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("failed to listen on %s: %w", addr, err)
-	}
-
-	// Create lock file after successful port binding
-	if err := s.lockFile.Create(); err != nil {
-		listener.Close()
-		return err
-	}
-
-	log.Printf("Lock file created: %s", s.lockFile.Path())
-	log.Printf("Server starting on %s", addr)
-
-	srv := &http.Server{Handler: mux}
-
-	go func() {
-		<-ctx.Done()
-		srv.Shutdown(context.Background())
-	}()
-
-	return srv.Serve(listener)
-}
-
-// StartAsync starts the server in a goroutine.
+// Listen binds a port and creates the lock file.
 // If the configured port is in use, it tries subsequent ports up to maxPortRetries.
-func (s *Server) StartAsync(ctx context.Context) error {
-	// Check if gra is already running for the same directory
+// Call Serve after Listen to start accepting connections.
+func (s *Server) Listen() error {
 	if err := CheckDuplicateWorkspace(s.workspaceFolders); err != nil {
 		return err
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleWebSocket)
+	s.mux = http.NewServeMux()
+	s.mux.HandleFunc("/", s.handleWebSocket)
 
 	// Find an available port and listen
-	var listener net.Listener
 	var err error
 	startPort := s.port
 
 	for i := range maxPortRetries {
 		tryPort := startPort + i
 		addr := "127.0.0.1:" + strconv.Itoa(tryPort)
-		listener, err = net.Listen("tcp", addr)
+		s.listener, err = net.Listen("tcp", addr)
 		if err == nil {
 			s.port = tryPort
 			break
@@ -205,7 +164,7 @@ func (s *Server) StartAsync(ctx context.Context) error {
 		log.Printf("Port %d in use, trying next...", tryPort)
 	}
 
-	if listener == nil {
+	if s.listener == nil {
 		return fmt.Errorf("failed to find available port in range %d-%d: %w",
 			startPort, startPort+maxPortRetries-1, err)
 	}
@@ -213,37 +172,37 @@ func (s *Server) StartAsync(ctx context.Context) error {
 	// Create lock file after port is determined
 	lockFile, err := NewLockFile(s.port, s.workspaceFolders, s.authToken)
 	if err != nil {
-		listener.Close()
+		s.listener.Close()
 		return err
 	}
 	s.lockFile = lockFile
 	if err := s.lockFile.Create(); err != nil {
-		listener.Close()
+		s.listener.Close()
 		return err
 	}
 
 	log.Printf("Lock file created: %s", s.lockFile.Path())
-	log.Printf("Server starting on %s", s.getAddr())
-
-	srv := &http.Server{Handler: mux}
-
-	go func() {
-		<-ctx.Done()
-		srv.Shutdown(context.Background())
-	}()
-
-	go func() {
-		if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
-			log.Printf("Server error: %v", err)
-		}
-	}()
-
+	log.Printf("Listening on %s", s.getAddr())
 	return nil
 }
 
-// Stop stops the server and removes the lock file.
+// Serve starts accepting connections (blocking).
+// Listen must be called before Serve.
+// Call Stop from another goroutine to shut down.
+func (s *Server) Serve() {
+	s.httpSrv = &http.Server{Handler: s.mux}
+	if err := s.httpSrv.Serve(s.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Printf("Server error: %v", err)
+	}
+}
+
+// Stop gracefully shuts down the server and removes the lock file.
 func (s *Server) Stop() {
 	s.stopOnce.Do(func() {
+		if s.httpSrv != nil {
+			s.httpSrv.Shutdown(context.Background())
+		}
+
 		s.mu.Lock()
 		for _, client := range s.clients {
 			client.conn.Close()
@@ -310,30 +269,7 @@ func (s *Server) hasSelectionChanged(filePath, text string, startLine, startChar
 // Only sends if the selection has actually changed.
 // Comment notifications (text starts with "[Comment]") are sent immediately.
 func (s *Server) NotifySelectionChanged(filePath, text string, startLine, startChar, endLine, endChar int) {
-	// Comment notifications are sent immediately
-	if strings.HasPrefix(text, "[Comment]") {
-		s.mu.Lock()
-		// Cancel pending notification
-		if s.notifyTimer != nil {
-			s.notifyTimer.Stop()
-		}
-		s.pendingNotify = nil
-		s.mu.Unlock()
-
-		s.sendNotificationNow(filePath, text, startLine, startChar, endLine, endChar)
-		return
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Do nothing if selection hasn't changed
-	if !s.hasSelectionChanged(filePath, text, startLine, startChar, endLine, endChar) {
-		return
-	}
-
-	// Update pending notification
-	s.pendingNotify = &selectionNotification{
+	sel := &selectionChange{
 		filePath:  filePath,
 		text:      text,
 		startLine: startLine,
@@ -342,38 +278,62 @@ func (s *Server) NotifySelectionChanged(filePath, text string, startLine, startC
 		endChar:   endChar,
 	}
 
-	// Cancel existing timer if any
+	// Comment notifications are sent immediately
+	if strings.HasPrefix(text, commentPrefix) {
+		s.mu.Lock()
+		if s.notifyTimer != nil {
+			s.notifyTimer.Stop()
+		}
+		s.pendingNotify = nil
+		s.broadcastSelection(sel)
+		s.mu.Unlock()
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.hasSelectionChanged(filePath, text, startLine, startChar, endLine, endChar) {
+		return
+	}
+
+	s.pendingNotify = sel
+
 	if s.notifyTimer != nil {
 		s.notifyTimer.Stop()
 	}
 
-	// Send after 100ms debounce
-	s.notifyTimer = time.AfterFunc(100*time.Millisecond, func() {
-		s.sendPendingNotification()
+	s.notifyTimer = time.AfterFunc(debounceInterval, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		if s.pendingNotify == nil {
+			return
+		}
+		n := s.pendingNotify
+		s.pendingNotify = nil
+		s.broadcastSelection(n)
+		s.lastSentSelection = n
 	})
 }
 
-// sendNotificationNow sends a notification immediately without debounce.
-func (s *Server) sendNotificationNow(filePath, text string, startLine, startChar, endLine, endChar int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	log.Printf("Sending notification immediately: file=%s, text=%q, clients=%d", filePath, text, len(s.clients))
-
+// broadcastSelection sends a selection_changed notification to all connected clients.
+// The caller must hold s.mu.
+func (s *Server) broadcastSelection(sel *selectionChange) {
 	params := protocol.SelectionChangedParams{
-		Text:     text,
-		FilePath: filePath,
-		FileURL:  (&url.URL{Scheme: "file", Path: filePath}).String(),
+		Text:     sel.text,
+		FilePath: sel.filePath,
+		FileURL:  (&url.URL{Scheme: "file", Path: sel.filePath}).String(),
 		Selection: protocol.Selection{
 			Start: protocol.Position{
-				Line:      startLine,
-				Character: startChar,
+				Line:      sel.startLine,
+				Character: sel.startChar,
 			},
 			End: protocol.Position{
-				Line:      endLine,
-				Character: endChar,
+				Line:      sel.endLine,
+				Character: sel.endChar,
 			},
-			IsEmpty: startLine == endLine && startChar == endChar,
+			IsEmpty: sel.startLine == sel.endLine && sel.startChar == sel.endChar,
 		},
 	}
 
@@ -393,67 +353,6 @@ func (s *Server) sendNotificationNow(filePath, text string, startLine, startChar
 		} else {
 			log.Printf("Sent selection_changed to client %d", i)
 		}
-	}
-}
-
-// sendPendingNotification sends the pending notification.
-func (s *Server) sendPendingNotification() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.pendingNotify == nil {
-		return
-	}
-
-	n := s.pendingNotify
-	s.pendingNotify = nil
-
-	log.Printf("Sending selection_changed: file=%s, clients=%d", n.filePath, len(s.clients))
-
-	params := protocol.SelectionChangedParams{
-		Text:     n.text,
-		FilePath: n.filePath,
-		FileURL:  (&url.URL{Scheme: "file", Path: n.filePath}).String(),
-		Selection: protocol.Selection{
-			Start: protocol.Position{
-				Line:      n.startLine,
-				Character: n.startChar,
-			},
-			End: protocol.Position{
-				Line:      n.endLine,
-				Character: n.endChar,
-			},
-			IsEmpty: n.startLine == n.endLine && n.startChar == n.endChar,
-		},
-	}
-
-	notification := protocol.NewNotification("selection_changed", params)
-	data, err := json.Marshal(notification)
-	if err != nil {
-		log.Printf("Error marshaling selection_changed: %v", err)
-		return
-	}
-	log.Printf("selection_changed JSON: %s", string(data))
-
-	for i, client := range s.clients {
-		client.mu.Lock()
-		err := client.conn.WriteMessage(websocket.TextMessage, data)
-		client.mu.Unlock()
-		if err != nil {
-			log.Printf("Error sending selection_changed to client %d: %v", i, err)
-		} else {
-			log.Printf("Sent selection_changed to client %d", i)
-		}
-	}
-
-	// After successful send, record the last sent selection
-	s.lastSentSelection = &selectionState{
-		filePath:  n.filePath,
-		text:      n.text,
-		startLine: n.startLine,
-		startChar: n.startChar,
-		endLine:   n.endLine,
-		endChar:   n.endChar,
 	}
 }
 
@@ -597,7 +496,7 @@ func (s *Server) handleMessage(client *wsClient, message []byte) {
 
 	log.Printf("Received: %s", string(message))
 
-	resp, _ := s.handler.HandleMessage(&req)
+	resp := s.handler.HandleMessage(&req)
 
 	if resp != nil {
 		data, err := json.Marshal(resp)

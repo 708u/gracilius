@@ -3,7 +3,6 @@ package tui
 import (
 	"log"
 	"os"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fsnotify/fsnotify"
@@ -11,13 +10,14 @@ import (
 
 // watchFile returns a tea.Cmd that watches the current file for changes.
 func (m *Model) watchFile() tea.Cmd {
+	w := m.watcher
 	return func() tea.Msg {
-		if m.watcher == nil {
+		if w == nil {
 			return nil
 		}
 		for {
 			select {
-			case event, ok := <-m.watcher.Events:
+			case event, ok := <-w.Events:
 				if !ok {
 					return nil
 				}
@@ -28,9 +28,9 @@ func (m *Model) watchFile() tea.Cmd {
 						log.Printf("Error reading file: %v", err)
 						continue
 					}
-					return fileChangedMsg{lines: strings.Split(string(content), "\n")}
+					return fileChangedMsg{lines: splitLines(content)}
 				}
-			case err, ok := <-m.watcher.Errors:
+			case err, ok := <-w.Errors:
 				if !ok {
 					return nil
 				}
@@ -42,13 +42,14 @@ func (m *Model) watchFile() tea.Cmd {
 
 // watchDir returns a tea.Cmd that watches directories for changes.
 func (m *Model) watchDir() tea.Cmd {
+	w := m.dirWatcher
 	return func() tea.Msg {
-		if m.dirWatcher == nil {
+		if w == nil {
 			return nil
 		}
 		for {
 			select {
-			case event, ok := <-m.dirWatcher.Events:
+			case event, ok := <-w.Events:
 				if !ok {
 					return nil
 				}
@@ -57,7 +58,7 @@ func (m *Model) watchDir() tea.Cmd {
 					if event.Op&fsnotify.Create != 0 {
 						if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
 							if !isHiddenEntry(info.Name()) {
-								if err := WatchDirRecursive(m.dirWatcher, event.Name); err != nil {
+								if err := WatchDirRecursive(w, event.Name); err != nil {
 									log.Printf("Failed to watch new dir: %v", err)
 								}
 							}
@@ -65,7 +66,7 @@ func (m *Model) watchDir() tea.Cmd {
 					}
 					return treeChangedMsg{}
 				}
-			case err, ok := <-m.dirWatcher.Errors:
+			case err, ok := <-w.Errors:
 				if !ok {
 					return nil
 				}

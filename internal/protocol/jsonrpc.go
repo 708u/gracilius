@@ -2,6 +2,15 @@ package protocol
 
 import "encoding/json"
 
+const (
+	jsonrpcVersion = "2.0"
+
+	// JSON-RPC 2.0 defined error codes.
+	// See: https://www.jsonrpc.org/specification#error_object
+	codeMethodNotFound = -32601
+	codeInvalidParams  = -32602
+)
+
 // Request represents a JSON-RPC 2.0 request.
 type Request struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -35,7 +44,7 @@ type Error struct {
 // NewResponse creates a success response.
 func NewResponse(id json.RawMessage, result any) *Response {
 	return &Response{
-		JSONRPC: "2.0",
+		JSONRPC: jsonrpcVersion,
 		ID:      id,
 		Result:  result,
 	}
@@ -44,7 +53,7 @@ func NewResponse(id json.RawMessage, result any) *Response {
 // NewErrorResponse creates an error response.
 func NewErrorResponse(id json.RawMessage, code int, message string) *Response {
 	return &Response{
-		JSONRPC: "2.0",
+		JSONRPC: jsonrpcVersion,
 		ID:      id,
 		Error: &Error{
 			Code:    code,
@@ -56,7 +65,7 @@ func NewErrorResponse(id json.RawMessage, code int, message string) *Response {
 // NewNotification creates a notification.
 func NewNotification(method string, params any) *Notification {
 	return &Notification{
-		JSONRPC: "2.0",
+		JSONRPC: jsonrpcVersion,
 		Method:  method,
 		Params:  params,
 	}

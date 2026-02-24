@@ -37,7 +37,7 @@ func (m *Model) View() string {
 	}
 	// content
 	treeWidth := m.getTreeWidth()
-	editorWidth := m.width - treeWidth - 3
+	editorWidth := m.width - treeWidth - separatorWidth
 	contentHeight := m.getContentHeight()
 
 	treeLines := m.renderTree(treeWidth, contentHeight)
@@ -58,14 +58,13 @@ func (m *Model) View() string {
 	// footer
 	footer := m.renderFooter()
 
-	headerRendered := header
 	footerRendered := styleFooter.
 		Width(m.width).
 		Render(footer)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		headerRendered,
+		header,
 		content,
 		footerRendered,
 	)
@@ -84,7 +83,7 @@ func (m *Model) renderFooter() string {
 		sb.WriteString(m.help.View(m.contextKeyMap()))
 		sb.WriteString("\n")
 
-		if m.focusPane == 1 {
+		if m.focusPane == paneEditor {
 			if m.selecting {
 				sLine, sChar, eLine, eChar := m.normalizedSelection()
 				fmt.Fprintf(&sb, "Selection: %d:%d - %d:%d",
@@ -128,7 +127,7 @@ func (m *Model) renderTree(width, height int) []string {
 		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)
 
-		if i == m.treeCursor && m.focusPane == 0 {
+		if i == m.treeCursor && m.focusPane == paneTree {
 			displayLine = styleTreeCursor.Render(displayLine)
 		}
 
@@ -157,7 +156,7 @@ func (m *Model) renderEditor(width, height int) []string {
 
 	startLine, startChar, endLine, endChar := m.normalizedSelection()
 
-	offset := m.getScrollOffset()
+	offset := m.scrollOffset
 
 	for i := offset; i < len(m.lines) && len(lines) < height; i++ {
 		lineContent := m.lines[i]
@@ -165,8 +164,8 @@ func (m *Model) renderEditor(width, height int) []string {
 		var sb strings.Builder
 		sb.WriteString(fmt.Sprintf("%3d ", i+1))
 
-		isCursorLine := m.focusPane == 1 && i == m.cursorLine
-		isSelected := m.focusPane == 1 && m.selecting && i >= startLine && i <= endLine
+		isCursorLine := m.focusPane == paneEditor && i == m.cursorLine
+		isSelected := m.focusPane == paneEditor && m.selecting && i >= startLine && i <= endLine
 
 		if isCursorLine && isSelected {
 			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)

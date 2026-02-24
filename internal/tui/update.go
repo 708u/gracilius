@@ -7,6 +7,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const (
+	scrollAmount        = 3
+	headerHeight        = 1
+	separatorWidth      = 3
+	lineNumberWidth     = 4
+	maxTreeWidthPercent = 70
+)
+
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(m.watchFile(), m.watchDir())
@@ -24,7 +32,7 @@ func (m *Model) lineLen(line int) int {
 func (m *Model) getTreeWidth() int {
 	if m.treeWidth > 0 {
 		tw := max(m.treeWidth, 15)
-		maxWidth := m.width * 70 / 100
+		maxWidth := m.width * maxTreeWidthPercent / 100
 		if tw > maxWidth {
 			tw = maxWidth
 		}
@@ -35,13 +43,7 @@ func (m *Model) getTreeWidth() int {
 
 // getContentHeight returns the content area height.
 func (m *Model) getContentHeight() int {
-	contentHeight := max(m.height-5, 5)
-	return contentHeight
-}
-
-// getScrollOffset returns the current scroll offset.
-func (m *Model) getScrollOffset() int {
-	return m.scrollOffset
+	return max(m.height-5, 5)
 }
 
 // adjustTreeScroll adjusts the tree scroll so the tree cursor
@@ -114,16 +116,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		maxWidth := m.width * 70 / 100
+		maxWidth := m.width * maxTreeWidthPercent / 100
 		if m.treeWidth > maxWidth {
 			m.treeWidth = maxWidth
 		}
-		if m.filePath != "" && len(m.lines) > 0 && m.focusPane == 1 {
+		if m.filePath != "" && len(m.lines) > 0 && m.focusPane == paneEditor {
 			m.notifySelectionChanged()
 		}
 	case tea.MouseMsg:
 		treeWidth := m.getTreeWidth()
-		headerHeight := 1
 
 		borderX := treeWidth
 		isBorderArea := msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= headerHeight
@@ -154,12 +155,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		editorStartX := treeWidth + 3
+		editorStartX := treeWidth + separatorWidth
 
 		if msg.X >= editorStartX && msg.Y >= headerHeight {
-			editorX := msg.X - editorStartX - 4
+			editorX := msg.X - editorStartX - lineNumberWidth
 			editorY := msg.Y - headerHeight
-			offset := m.getScrollOffset()
+			offset := m.scrollOffset
 			targetLine := offset + editorY
 
 			if targetLine >= len(m.lines) {
@@ -179,8 +180,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			switch {
 			case msg.Button == tea.MouseButtonLeft:
-				m.focusPane = 1
-				if msg.Action == tea.MouseActionPress {
+				m.focusPane = paneEditor
+				switch msg.Action {
+				case tea.MouseActionPress:
 					m.cursorLine = targetLine
 					m.cursorChar = targetChar
 					m.anchorLine = targetLine
@@ -188,7 +190,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selecting = true
 					m.lastMouseLine = targetLine
 					m.lastMouseChar = targetChar
-				} else if msg.Action == tea.MouseActionMotion {
+				case tea.MouseActionMotion:
 					if targetLine != m.lastMouseLine || targetChar != m.lastMouseChar {
 						m.cursorLine = targetLine
 						m.cursorChar = targetChar
@@ -206,13 +208,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.notifySelectionChanged()
 				}
 			case msg.Button == tea.MouseButtonWheelUp:
-				scrollAmount := 3
 				m.scrollOffset -= scrollAmount
 				if m.scrollOffset < 0 {
 					m.scrollOffset = 0
 				}
 			case msg.Button == tea.MouseButtonWheelDown:
-				scrollAmount := 3
 				contentHeight := m.getContentHeight()
 				maxOffset := max(len(m.lines)-contentHeight, 0)
 				m.scrollOffset += scrollAmount
@@ -251,17 +251,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.SwitchPane):
 			if len(m.lines) > 0 {
-				if m.focusPane == 1 {
+				if m.focusPane == paneEditor {
 					m.notifyClearSelection()
 				}
-				m.focusPane = (m.focusPane + 1) % 2
+				if m.focusPane == paneTree {
+					m.focusPane = paneEditor
+				} else {
+					m.focusPane = paneTree
+				}
 			}
 		case key.Matches(msg, m.keys.Enter):
-			if m.focusPane == 0 && len(m.fileTree) > 0 {
+			if m.focusPane == paneTree && len(m.fileTree) > 0 {
 				m.toggleTreeEntry(m.treeCursor)
 			}
 		case key.Matches(msg, m.keys.Left):
-			if m.focusPane == 0 {
+			if m.focusPane == paneTree {
 				if len(m.fileTree) > 0 {
 					entry := m.fileTree[m.treeCursor]
 					if entry.isDir && entry.expanded {
@@ -279,7 +283,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.Right):
-			if m.focusPane == 0 {
+			if m.focusPane == paneTree {
 				if len(m.fileTree) > 0 {
 					entry := m.fileTree[m.treeCursor]
 					if entry.isDir && !entry.expanded {
@@ -297,7 +301,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.Up):
-			if m.focusPane == 0 {
+			if m.focusPane == paneTree {
 				if m.treeCursor > 0 {
 					m.treeCursor--
 				}
@@ -310,7 +314,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.Down):
-			if m.focusPane == 0 {
+			if m.focusPane == paneTree {
 				if m.treeCursor < len(m.fileTree)-1 {
 					m.treeCursor++
 				}
@@ -355,7 +359,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.notifySelectionChanged()
 		case key.Matches(msg, m.keys.Comment):
-			if m.focusPane == 1 && len(m.lines) > 0 {
+			if m.focusPane == paneEditor && len(m.lines) > 0 {
 				m.inputMode = true
 				m.inputLine = m.cursorLine
 				m.commentInput.Reset()
@@ -365,13 +369,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.commentInput.Focus()
 			}
 		case key.Matches(msg, m.keys.ClearAll):
-			if m.focusPane == 1 {
+			if m.focusPane == paneEditor {
 				m.comments = make(map[int]string)
 			}
 		}
 	}
 
-	if m.focusPane == 0 {
+	if m.focusPane == paneTree {
 		m.adjustTreeScroll()
 	} else if len(m.lines) > 0 {
 		m.adjustScrollForCursor()
