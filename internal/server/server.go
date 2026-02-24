@@ -142,10 +142,6 @@ func New(port int, workspaceFolders []string) (*Server, error) {
 // If the configured port is in use, it tries subsequent ports up to maxPortRetries.
 // Call Serve after Listen to start accepting connections.
 func (s *Server) Listen() error {
-	if err := CheckDuplicateWorkspace(s.workspaceFolders); err != nil {
-		return err
-	}
-
 	s.mux = http.NewServeMux()
 	s.mux.HandleFunc("/", s.handleWebSocket)
 
