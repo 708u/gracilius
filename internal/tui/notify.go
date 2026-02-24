@@ -24,15 +24,16 @@ func (m *Model) notifySelectionChanged() {
 				continue
 			}
 			runes := []rune(m.lines[i])
-			if i == startLine {
+			switch {
+			case i == startLine:
 				if startChar <= len(runes) {
 					parts = append(parts, string(runes[startChar:]))
 				}
-			} else if i == endLine {
+			case i == endLine:
 				if endChar <= len(runes) {
 					parts = append(parts, string(runes[:endChar]))
 				}
-			} else {
+			default:
 				parts = append(parts, m.lines[i])
 			}
 		}

@@ -9,6 +9,14 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+// pane identifies which pane has focus.
+type pane int
+
+const (
+	paneTree pane = iota
+	paneEditor
+)
+
 // MCPServer is the interface that the TUI uses to communicate with
 // the WebSocket server. server.Server satisfies this implicitly.
 type MCPServer interface {
@@ -50,7 +58,7 @@ type Model struct {
 	// file tree
 	fileTree   []fileEntry
 	treeCursor int
-	focusPane  int // 0: tree, 1: editor
+	focusPane  pane // 0: tree, 1: editor
 	rootDir    string
 
 	// comments
@@ -121,7 +129,7 @@ func (m *Model) toggleTreeEntry(idx int) {
 		if err := m.loadFile(entry.path); err != nil {
 			m.err = err
 		} else {
-			m.focusPane = 1
+			m.focusPane = paneEditor
 			m.notifySelectionChanged()
 		}
 	}
@@ -146,7 +154,7 @@ func NewModel(srv MCPServer, ctx context.Context, rootDir string, watcher *fsnot
 		rootDir:      absRootDir,
 		fileTree:     ft,
 		treeCursor:   0,
-		focusPane:    0,
+		focusPane:    paneTree,
 		watcher:      watcher,
 		dirWatcher:   dirWatcher,
 		comments:     make(map[int]string),

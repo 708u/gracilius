@@ -2,9 +2,26 @@ package protocol
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/url"
 )
+
+const defaultProtocolVersion = "2025-11-25"
+
+type toolDefinition struct {
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	InputSchema inputSchema `json:"inputSchema"`
+}
+
+type inputSchema struct {
+	Type       string                    `json:"type"`
+	Properties map[string]propertySchema `json:"properties"`
+	Required   []string                  `json:"required,omitempty"`
+}
+
+type propertySchema struct {
+	Type string `json:"type"`
+}
 
 // ClientInfo describes the connecting client.
 type ClientInfo struct {
@@ -101,12 +118,10 @@ func NewMCPResultEmpty() MCPResult {
 
 // Handler processes JSON-RPC messages.
 type Handler struct {
-	workspaceFolders   []string
-	clientCapabilities json.RawMessage
-	clientInfo         *ClientInfo
-	onOpenDiff         OpenDiffCallback
-	onCloseTab         CloseTabCallback
-	onIdeConnected     IdeConnectedCallback
+	workspaceFolders []string
+	onOpenDiff       OpenDiffCallback
+	onCloseTab       CloseTabCallback
+	onIdeConnected   IdeConnectedCallback
 }
 
 // NewHandler creates a new Handler.
@@ -132,34 +147,34 @@ func (h *Handler) SetIdeConnectedCallback(cb IdeConnectedCallback) {
 }
 
 // HandleMessage processes a JSON-RPC request and returns a response.
-func (h *Handler) HandleMessage(req *Request) (*Response, *Notification) {
+func (h *Handler) HandleMessage(req *Request) *Response {
 	switch req.Method {
 	case "initialize":
-		return h.handleInitialize(req), nil
+		return h.handleInitialize(req)
 	case "tools/call":
-		return h.handleToolsCall(req), nil
+		return h.handleToolsCall(req)
 	case "notifications/initialized":
 		// Received initialized notification from client (no response needed)
-		return nil, nil
+		return nil
 	case "prompts/list":
 		// MCP prompts/list - return an empty list
-		return NewResponse(req.ID, map[string][]any{"prompts": {}}), nil
+		return NewResponse(req.ID, map[string][]any{"prompts": {}})
 	case "tools/list":
 		// MCP tools/list - return tool list
-		return h.handleToolsList(req), nil
+		return h.handleToolsList(req)
 	case "ide_connected":
 		// Claude Code notified that connection is established
 		if h.onIdeConnected != nil {
 			h.onIdeConnected()
 		}
-		return nil, nil
+		return nil
 	default:
 		// If id is present, return a "method not found" error
 		// If id is absent, it is a notification so no response is needed
 		if len(req.ID) > 0 {
-			return NewErrorResponse(req.ID, -32601, "Method not found: "+req.Method), nil
+			return NewErrorResponse(req.ID, codeMethodNotFound, "Method not found: "+req.Method)
 		}
-		return nil, nil
+		return nil
 	}
 }
 
@@ -169,14 +184,10 @@ func (h *Handler) handleInitialize(req *Request) *Response {
 		json.Unmarshal(req.Params, &params) //nolint:errcheck // use default values on parse failure
 	}
 
-	// Store client capabilities and info for future use
-	h.clientCapabilities = params.Capabilities
-	h.clientInfo = params.ClientInfo
-
 	// Default protocol version if not provided
 	protocolVersion := params.ProtocolVersion
 	if protocolVersion == "" {
-		protocolVersion = "2025-11-25"
+		protocolVersion = defaultProtocolVersion
 	}
 
 	result := InitializeResult{
@@ -192,35 +203,35 @@ func (h *Handler) handleInitialize(req *Request) *Response {
 
 func (h *Handler) handleToolsList(req *Request) *Response {
 	// MCP-compliant tool list
-	tools := []map[string]any{
+	tools := []toolDefinition{
 		{
-			"name":        "getWorkspaceFolders",
-			"description": "Get the workspace folders",
-			"inputSchema": map[string]any{
-				"type":       "object",
-				"properties": map[string]any{},
+			Name:        "getWorkspaceFolders",
+			Description: "Get the workspace folders",
+			InputSchema: inputSchema{
+				Type:       "object",
+				Properties: map[string]propertySchema{},
 			},
 		},
 		{
-			"name":        "openDiff",
-			"description": "Open a diff view",
-			"inputSchema": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"old_file_path":     map[string]string{"type": "string"},
-					"new_file_path":     map[string]string{"type": "string"},
-					"new_file_contents": map[string]string{"type": "string"},
-					"tab_name":          map[string]string{"type": "string"},
+			Name:        "openDiff",
+			Description: "Open a diff view",
+			InputSchema: inputSchema{
+				Type: "object",
+				Properties: map[string]propertySchema{
+					"old_file_path":     {Type: "string"},
+					"new_file_path":     {Type: "string"},
+					"new_file_contents": {Type: "string"},
+					"tab_name":          {Type: "string"},
 				},
-				"required": []string{"old_file_path", "new_file_path", "new_file_contents"},
+				Required: []string{"old_file_path", "new_file_path", "new_file_contents"},
 			},
 		},
 		{
-			"name":        "getDiagnostics",
-			"description": "Get diagnostics for the workspace",
-			"inputSchema": map[string]any{
-				"type":       "object",
-				"properties": map[string]any{},
+			Name:        "getDiagnostics",
+			Description: "Get diagnostics for the workspace",
+			InputSchema: inputSchema{
+				Type:       "object",
+				Properties: map[string]propertySchema{},
 			},
 		},
 	}
@@ -235,7 +246,7 @@ func fileURI(path string) string {
 func (h *Handler) handleToolsCall(req *Request) *Response {
 	var params ToolCallParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return NewErrorResponse(req.ID, -32602, "Invalid params")
+		return NewErrorResponse(req.ID, codeInvalidParams, "Invalid params")
 	}
 
 	switch params.Name {
@@ -263,7 +274,7 @@ func (h *Handler) handleToolsCall(req *Request) *Response {
 	case "openDiff":
 		var args OpenDiffArgs
 		if err := json.Unmarshal(params.Arguments, &args); err != nil {
-			return NewErrorResponse(req.ID, -32602, "Invalid openDiff arguments")
+			return NewErrorResponse(req.ID, codeInvalidParams, "Invalid openDiff arguments")
 		}
 		if h.onOpenDiff != nil {
 			h.onOpenDiff(args.NewFilePath, args.NewFileContents)
@@ -273,12 +284,10 @@ func (h *Handler) handleToolsCall(req *Request) *Response {
 		// MCP-compliant: return an empty content array
 		return NewResponse(req.ID, NewMCPResultEmpty())
 	case "closeAllDiffTabs":
-		closedCount := 0
 		if h.onCloseTab != nil {
 			h.onCloseTab()
-			// TODO: get the number of closed tabs from the callback
 		}
-		return NewResponse(req.ID, NewMCPResult(fmt.Sprintf("CLOSED_%d_DIFF_TABS", closedCount)))
+		return NewResponse(req.ID, NewMCPResult("CLOSED_DIFF_TABS"))
 	case "close_tab":
 		// close_tab is called on cancel, so clear the preview
 		if h.onCloseTab != nil {
@@ -286,6 +295,6 @@ func (h *Handler) handleToolsCall(req *Request) *Response {
 		}
 		return NewResponse(req.ID, NewMCPResult("TAB_CLOSED"))
 	default:
-		return NewErrorResponse(req.ID, -32601, "Method not found: "+params.Name)
+		return NewErrorResponse(req.ID, codeMethodNotFound, "Method not found: "+params.Name)
 	}
 }

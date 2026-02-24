@@ -1,10 +1,11 @@
 package tui
 
 import (
+	"bufio"
+	"bytes"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // isBinary returns true if the content appears to be binary.
@@ -66,8 +67,19 @@ func (m *Model) loadFile(filePath string) error {
 		}
 	}
 
-	m.lines = strings.Split(string(content), "\n")
+	m.lines = splitLines(content)
 	m.highlightedLines = highlightFile(absPath, string(content))
 
 	return nil
+}
+
+// splitLines splits content into lines.
+// Uses bufio.Scanner to handle \n, \r\n, and \r transparently.
+func splitLines(content []byte) []string {
+	scanner := bufio.NewScanner(bytes.NewReader(content))
+	var lines []string
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines
 }

@@ -10,6 +10,8 @@ import (
 	"github.com/muesli/termenv"
 )
 
+const defaultThemeName = "github-dark"
+
 var (
 	ansiInverse = termenv.CSI + termenv.ReverseSeq + "m"
 	ansiReset   = termenv.CSI + termenv.ResetSeq + "m"
@@ -32,7 +34,7 @@ func highlightFile(filePath, source string) []highlightedLine {
 	}
 	lexer = chroma.Coalesce(lexer)
 
-	style := styles.Get("github-dark")
+	style := styles.Get(defaultThemeName)
 
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {
