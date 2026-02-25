@@ -30,10 +30,12 @@ func (m *Model) View() string {
 		return ""
 	}
 
+	t := m.activeTabState()
+
 	// header
 	header := fmt.Sprintf("gracilius - Port %d", m.server.Port())
-	if m.filePath != "" {
-		header += fmt.Sprintf(" | %s", m.filePath)
+	if t.filePath != "" {
+		header += fmt.Sprintf(" | %s", t.filePath)
 	}
 	// content
 	treeWidth := m.getTreeWidth()
@@ -72,25 +74,27 @@ func (m *Model) View() string {
 
 // renderFooter generates the footer area (help hints + status).
 func (m *Model) renderFooter() string {
+	t := m.activeTabState()
+
 	var sb strings.Builder
 
-	if m.inputMode {
+	if t.inputMode {
 		sb.WriteString("[Editor] Comment (Enter: confirm, Esc: cancel)\n")
 		fmt.Fprintf(&sb, "Line %d: %s",
-			m.inputLine+1, m.commentInput.View())
+			t.inputLine+1, t.commentInput.View())
 	} else {
 		m.help.Width = m.width
 		sb.WriteString(m.help.View(m.contextKeyMap()))
 		sb.WriteString("\n")
 
 		if m.focusPane == paneEditor {
-			if m.selecting {
-				sLine, sChar, eLine, eChar := m.normalizedSelection()
+			if t.selecting {
+				sLine, sChar, eLine, eChar := t.normalizedSelection()
 				fmt.Fprintf(&sb, "Selection: %d:%d - %d:%d",
 					sLine+1, sChar+1, eLine+1, eChar+1)
-			} else if len(m.lines) > 0 {
+			} else if len(t.lines) > 0 {
 				fmt.Fprintf(&sb, "Cursor: %d:%d",
-					m.cursorLine+1, m.cursorChar+1)
+					t.cursorLine+1, t.cursorChar+1)
 			} else {
 				sb.WriteString("Select a file to view")
 			}
@@ -143,9 +147,11 @@ func (m *Model) renderTree(width, height int) []string {
 
 // renderEditor generates the editor pane lines.
 func (m *Model) renderEditor(width, height int) []string {
+	t := m.activeTabState()
+
 	lines := make([]string, 0, height)
 
-	if len(m.lines) == 0 {
+	if len(t.lines) == 0 {
 		emptyMsg := "No file selected"
 		lines = append(lines, padRight(emptyMsg, width))
 		for len(lines) < height {
@@ -154,48 +160,48 @@ func (m *Model) renderEditor(width, height int) []string {
 		return lines
 	}
 
-	startLine, startChar, endLine, endChar := m.normalizedSelection()
+	startLine, startChar, endLine, endChar := t.normalizedSelection()
 
-	offset := m.scrollOffset
+	offset := t.scrollOffset
 
-	for i := offset; i < len(m.lines) && len(lines) < height; i++ {
-		lineContent := m.lines[i]
+	for i := offset; i < len(t.lines) && len(lines) < height; i++ {
+		lineContent := t.lines[i]
 
 		var sb strings.Builder
 		sb.WriteString(fmt.Sprintf("%3d ", i+1))
 
-		isCursorLine := m.focusPane == paneEditor && i == m.cursorLine
-		isSelected := m.focusPane == paneEditor && m.selecting && i >= startLine && i <= endLine
+		isCursorLine := m.focusPane == paneEditor && i == t.cursorLine
+		isSelected := m.focusPane == paneEditor && t.selecting && i >= startLine && i <= endLine
 
 		if isCursorLine && isSelected {
 			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
-			if hl := m.getHighlightedLine(i); hl != nil {
+			if hl := t.getHighlightedLine(i); hl != nil {
 				renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
 			} else {
-				m.renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
+				renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
 			}
 		} else if isCursorLine {
-			if hl := m.getHighlightedLine(i); hl != nil {
-				renderStyledLineWithCursor(&sb, hl.runs, m.cursorChar)
+			if hl := t.getHighlightedLine(i); hl != nil {
+				renderStyledLineWithCursor(&sb, hl.runs, t.cursorChar)
 			} else {
-				m.renderLineWithCursor(&sb, lineContent)
+				renderLineWithCursor(&sb, lineContent, t.cursorChar)
 			}
 		} else if isSelected {
 			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
-			if hl := m.getHighlightedLine(i); hl != nil {
+			if hl := t.getHighlightedLine(i); hl != nil {
 				renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
 			} else {
-				m.renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
+				renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
 			}
 		} else {
-			if hl := m.getHighlightedLine(i); hl != nil {
+			if hl := t.getHighlightedLine(i); hl != nil {
 				sb.WriteString(hl.rendered)
 			} else {
 				sb.WriteString(expandTabs(lineContent))
 			}
 		}
 
-		if _, hasComment := m.comments[i]; hasComment {
+		if _, hasComment := t.comments[i]; hasComment {
 			sb.WriteString(" " + styleComment.Render("[C]"))
 		}
 
@@ -223,13 +229,13 @@ func selRange(line, startLine, endLine, startChar, endChar int, content string) 
 }
 
 // renderLineWithCursor renders a line with an inverted cursor.
-func (m *Model) renderLineWithCursor(sb *strings.Builder, line string) {
+func renderLineWithCursor(sb *strings.Builder, line string, cursorChar int) {
 	runs := []styledRun{{Text: line}}
-	renderStyledLineWithCursor(sb, runs, m.cursorChar)
+	renderStyledLineWithCursor(sb, runs, cursorChar)
 }
 
 // renderLineWithCursorAndSelection renders a line with selection highlight.
-func (m *Model) renderLineWithCursorAndSelection(sb *strings.Builder, line string, selStart, selEnd int) {
+func renderLineWithCursorAndSelection(sb *strings.Builder, line string, selStart, selEnd int) {
 	runs := []styledRun{{Text: line}}
 	renderStyledLineWithSelection(sb, runs, selStart, selEnd)
 }

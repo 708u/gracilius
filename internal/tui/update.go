@@ -20,14 +20,6 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(m.watchFile(), m.watchDir())
 }
 
-// lineLen returns the rune-length of the given line.
-func (m *Model) lineLen(line int) int {
-	if line < 0 || line >= len(m.lines) {
-		return 0
-	}
-	return len([]rune(m.lines[line]))
-}
-
 // getTreeWidth returns the tree pane width.
 func (m *Model) getTreeWidth() int {
 	if m.treeWidth > 0 {
@@ -62,43 +54,23 @@ func (m *Model) adjustTreeScroll() {
 	}
 }
 
-// adjustScrollForCursor adjusts the scroll so the cursor stays visible.
-func (m *Model) adjustScrollForCursor() {
-	contentHeight := m.getContentHeight()
-	margin := contentHeight / 5
-
-	if m.cursorLine < m.scrollOffset+margin {
-		m.scrollOffset = m.cursorLine - margin
-	}
-
-	if m.cursorLine >= m.scrollOffset+contentHeight-margin {
-		m.scrollOffset = m.cursorLine - contentHeight + margin + 1
-	}
-
-	maxOffset := max(len(m.lines)-contentHeight, 0)
-	if m.scrollOffset > maxOffset {
-		m.scrollOffset = maxOffset
-	}
-	if m.scrollOffset < 0 {
-		m.scrollOffset = 0
-	}
-}
-
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	t := m.activeTabState()
+
 	switch msg := msg.(type) {
 	case fileChangedMsg:
-		m.lines = msg.lines
-		m.highlightedLines = highlightFile(
-			m.filePath, strings.Join(msg.lines, "\n"),
+		t.lines = msg.lines
+		t.highlightedLines = highlightFile(
+			t.filePath, strings.Join(msg.lines, "\n"),
 		)
-		if m.cursorLine >= len(m.lines) {
-			m.cursorLine = max(0, len(m.lines)-1)
+		if t.cursorLine >= len(t.lines) {
+			t.cursorLine = max(0, len(t.lines)-1)
 		}
-		if m.cursorLine < len(m.lines) {
-			m.cursorChar = min(m.cursorChar, len(m.lines[m.cursorLine]))
+		if t.cursorLine < len(t.lines) {
+			t.cursorChar = min(t.cursorChar, len(t.lines[t.cursorLine]))
 		}
-		if m.filePath != "" {
+		if t.filePath != "" {
 			m.notifySelectionChanged()
 		}
 		return m, m.watchFile()
@@ -109,7 +81,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.watchDir()
 	case IdeConnectedMsg:
-		if m.filePath != "" && len(m.lines) > 0 {
+		if t.filePath != "" && len(t.lines) > 0 {
 			m.notifySelectionChanged()
 		}
 		return m, nil
@@ -120,7 +92,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.treeWidth > maxWidth {
 			m.treeWidth = maxWidth
 		}
-		if m.filePath != "" && len(m.lines) > 0 && m.focusPane == paneEditor {
+		if t.filePath != "" && len(t.lines) > 0 && m.focusPane == paneEditor {
 			m.notifySelectionChanged()
 		}
 	case tea.MouseMsg:
@@ -151,7 +123,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if len(m.lines) == 0 {
+		if len(t.lines) == 0 {
 			return m, nil
 		}
 
@@ -160,19 +132,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.X >= editorStartX && msg.Y >= headerHeight {
 			editorX := msg.X - editorStartX - lineNumberWidth
 			editorY := msg.Y - headerHeight
-			offset := m.scrollOffset
+			offset := t.scrollOffset
 			targetLine := offset + editorY
 
-			if targetLine >= len(m.lines) {
-				targetLine = len(m.lines) - 1
+			if targetLine >= len(t.lines) {
+				targetLine = len(t.lines) - 1
 			}
 			if targetLine < 0 {
 				targetLine = 0
 			}
 
 			targetChar := max(editorX, 0)
-			if targetLine < len(m.lines) {
-				runeLen := len([]rune(m.lines[targetLine]))
+			if targetLine < len(t.lines) {
+				runeLen := len([]rune(t.lines[targetLine]))
 				if targetChar > runeLen {
 					targetChar = runeLen
 				}
@@ -183,64 +155,64 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusPane = paneEditor
 				switch msg.Action {
 				case tea.MouseActionPress:
-					m.cursorLine = targetLine
-					m.cursorChar = targetChar
-					m.anchorLine = targetLine
-					m.anchorChar = targetChar
-					m.selecting = true
+					t.cursorLine = targetLine
+					t.cursorChar = targetChar
+					t.anchorLine = targetLine
+					t.anchorChar = targetChar
+					t.selecting = true
 					m.lastMouseLine = targetLine
 					m.lastMouseChar = targetChar
 				case tea.MouseActionMotion:
 					if targetLine != m.lastMouseLine || targetChar != m.lastMouseChar {
-						m.cursorLine = targetLine
-						m.cursorChar = targetChar
+						t.cursorLine = targetLine
+						t.cursorChar = targetChar
 						m.lastMouseLine = targetLine
 						m.lastMouseChar = targetChar
 					}
 				}
 			case msg.Action == tea.MouseActionRelease:
-				if m.selecting {
-					m.cursorLine = targetLine
-					m.cursorChar = targetChar
-					if m.cursorLine == m.anchorLine && m.cursorChar == m.anchorChar {
-						m.selecting = false
+				if t.selecting {
+					t.cursorLine = targetLine
+					t.cursorChar = targetChar
+					if t.cursorLine == t.anchorLine && t.cursorChar == t.anchorChar {
+						t.selecting = false
 					}
 					m.notifySelectionChanged()
 				}
 			case msg.Button == tea.MouseButtonWheelUp:
-				m.scrollOffset -= scrollAmount
-				if m.scrollOffset < 0 {
-					m.scrollOffset = 0
+				t.scrollOffset -= scrollAmount
+				if t.scrollOffset < 0 {
+					t.scrollOffset = 0
 				}
 			case msg.Button == tea.MouseButtonWheelDown:
 				contentHeight := m.getContentHeight()
-				maxOffset := max(len(m.lines)-contentHeight, 0)
-				m.scrollOffset += scrollAmount
-				if m.scrollOffset > maxOffset {
-					m.scrollOffset = maxOffset
+				maxOffset := max(len(t.lines)-contentHeight, 0)
+				t.scrollOffset += scrollAmount
+				if t.scrollOffset > maxOffset {
+					t.scrollOffset = maxOffset
 				}
 			}
 		}
 		return m, nil
 	case tea.KeyMsg:
 		var cmd tea.Cmd
-		if m.inputMode {
+		if t.inputMode {
 			switch {
 			case key.Matches(msg, m.keys.Quit):
-				m.inputMode = false
-				m.commentInput.Reset()
-				m.commentInput.Blur()
+				t.inputMode = false
+				t.commentInput.Reset()
+				t.commentInput.Blur()
 			case msg.Type == tea.KeyEnter:
-				val := m.commentInput.Value()
+				val := t.commentInput.Value()
 				if val != "" {
-					m.comments[m.inputLine] = val
-					m.notifyComment(m.inputLine, val)
+					t.comments[t.inputLine] = val
+					m.notifyComment(t.inputLine, val)
 				}
-				m.inputMode = false
-				m.commentInput.Reset()
-				m.commentInput.Blur()
+				t.inputMode = false
+				t.commentInput.Reset()
+				t.commentInput.Blur()
 			default:
-				m.commentInput, cmd = m.commentInput.Update(msg)
+				t.commentInput, cmd = t.commentInput.Update(msg)
 				return m, cmd
 			}
 			return m, nil
@@ -250,7 +222,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.SwitchPane):
-			if len(m.lines) > 0 {
+			if len(t.lines) > 0 {
 				if m.focusPane == paneEditor {
 					m.notifyClearSelection()
 				}
@@ -273,13 +245,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			} else {
-				if m.cursorChar > 0 {
-					m.cursorChar--
-				} else if m.cursorLine > 0 {
-					m.cursorLine--
-					m.cursorChar = m.lineLen(m.cursorLine)
+				if t.cursorChar > 0 {
+					t.cursorChar--
+				} else if t.cursorLine > 0 {
+					t.cursorLine--
+					t.cursorChar = t.lineLen(t.cursorLine)
 				}
-				m.syncAnchorToCursor()
+				t.syncAnchorToCursor()
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.Right):
@@ -291,13 +263,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			} else {
-				if m.cursorChar < m.lineLen(m.cursorLine) {
-					m.cursorChar++
-				} else if m.cursorLine < len(m.lines)-1 {
-					m.cursorLine++
-					m.cursorChar = 0
+				if t.cursorChar < t.lineLen(t.cursorLine) {
+					t.cursorChar++
+				} else if t.cursorLine < len(t.lines)-1 {
+					t.cursorLine++
+					t.cursorChar = 0
 				}
-				m.syncAnchorToCursor()
+				t.syncAnchorToCursor()
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.Up):
@@ -306,10 +278,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.treeCursor--
 				}
 			} else {
-				if m.cursorLine > 0 {
-					m.cursorLine--
-					m.cursorChar = min(m.cursorChar, m.lineLen(m.cursorLine))
-					m.syncAnchorToCursor()
+				if t.cursorLine > 0 {
+					t.cursorLine--
+					t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
+					t.syncAnchorToCursor()
 					m.notifySelectionChanged()
 				}
 			}
@@ -319,66 +291,66 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.treeCursor++
 				}
 			} else {
-				if m.cursorLine < len(m.lines)-1 {
-					m.cursorLine++
-					m.cursorChar = min(m.cursorChar, m.lineLen(m.cursorLine))
-					m.syncAnchorToCursor()
+				if t.cursorLine < len(t.lines)-1 {
+					t.cursorLine++
+					t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
+					t.syncAnchorToCursor()
 					m.notifySelectionChanged()
 				}
 			}
 		case key.Matches(msg, m.keys.ShiftUp):
-			if m.cursorLine > 0 {
-				m.startSelecting()
-				m.cursorLine--
-				m.cursorChar = min(m.cursorChar, m.lineLen(m.cursorLine))
+			if t.cursorLine > 0 {
+				t.startSelecting()
+				t.cursorLine--
+				t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.ShiftDown):
-			if m.cursorLine < len(m.lines)-1 {
-				m.startSelecting()
-				m.cursorLine++
-				m.cursorChar = min(m.cursorChar, m.lineLen(m.cursorLine))
+			if t.cursorLine < len(t.lines)-1 {
+				t.startSelecting()
+				t.cursorLine++
+				t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.ShiftLeft):
-			m.startSelecting()
-			if m.cursorChar > 0 {
-				m.cursorChar--
-			} else if m.cursorLine > 0 {
-				m.cursorLine--
-				m.cursorChar = m.lineLen(m.cursorLine)
+			t.startSelecting()
+			if t.cursorChar > 0 {
+				t.cursorChar--
+			} else if t.cursorLine > 0 {
+				t.cursorLine--
+				t.cursorChar = t.lineLen(t.cursorLine)
 			}
 			m.notifySelectionChanged()
 		case key.Matches(msg, m.keys.ShiftRight):
-			m.startSelecting()
-			if m.cursorChar < m.lineLen(m.cursorLine) {
-				m.cursorChar++
-			} else if m.cursorLine < len(m.lines)-1 {
-				m.cursorLine++
-				m.cursorChar = 0
+			t.startSelecting()
+			if t.cursorChar < t.lineLen(t.cursorLine) {
+				t.cursorChar++
+			} else if t.cursorLine < len(t.lines)-1 {
+				t.cursorLine++
+				t.cursorChar = 0
 			}
 			m.notifySelectionChanged()
 		case key.Matches(msg, m.keys.Comment):
-			if m.focusPane == paneEditor && len(m.lines) > 0 {
-				m.inputMode = true
-				m.inputLine = m.cursorLine
-				m.commentInput.Reset()
-				if existing, ok := m.comments[m.cursorLine]; ok {
-					m.commentInput.SetValue(existing)
+			if m.focusPane == paneEditor && len(t.lines) > 0 {
+				t.inputMode = true
+				t.inputLine = t.cursorLine
+				t.commentInput.Reset()
+				if existing, ok := t.comments[t.cursorLine]; ok {
+					t.commentInput.SetValue(existing)
 				}
-				m.commentInput.Focus()
+				t.commentInput.Focus()
 			}
 		case key.Matches(msg, m.keys.ClearAll):
 			if m.focusPane == paneEditor {
-				m.comments = make(map[int]string)
+				t.comments = make(map[int]string)
 			}
 		}
 	}
 
 	if m.focusPane == paneTree {
 		m.adjustTreeScroll()
-	} else if len(m.lines) > 0 {
-		m.adjustScrollForCursor()
+	} else if len(t.lines) > 0 {
+		t.adjustScrollForCursor(m.getContentHeight())
 	}
 
 	return m, nil

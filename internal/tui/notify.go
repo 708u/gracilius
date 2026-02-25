@@ -7,12 +7,13 @@ import (
 
 // notifySelectionChanged sends the current selection to the MCP server.
 func (m *Model) notifySelectionChanged() {
-	startLine, startChar, endLine, endChar := m.normalizedSelection()
+	t := m.activeTabState()
+	startLine, startChar, endLine, endChar := t.normalizedSelection()
 
 	var text string
 	if startLine == endLine {
-		if startLine < len(m.lines) {
-			runes := []rune(m.lines[startLine])
+		if startLine < len(t.lines) {
+			runes := []rune(t.lines[startLine])
 			if startChar <= len(runes) && endChar <= len(runes) {
 				text = string(runes[startChar:endChar])
 			}
@@ -20,10 +21,10 @@ func (m *Model) notifySelectionChanged() {
 	} else {
 		var parts []string
 		for i := startLine; i <= endLine; i++ {
-			if i >= len(m.lines) {
+			if i >= len(t.lines) {
 				continue
 			}
-			runes := []rune(m.lines[i])
+			runes := []rune(t.lines[i])
 			switch {
 			case i == startLine:
 				if startChar <= len(runes) {
@@ -34,14 +35,14 @@ func (m *Model) notifySelectionChanged() {
 					parts = append(parts, string(runes[:endChar]))
 				}
 			default:
-				parts = append(parts, m.lines[i])
+				parts = append(parts, t.lines[i])
 			}
 		}
 		text = strings.Join(parts, "\n")
 	}
 
 	m.server.NotifySelectionChanged(
-		m.filePath,
+		t.filePath,
 		text,
 		startLine,
 		startChar,
@@ -52,22 +53,24 @@ func (m *Model) notifySelectionChanged() {
 
 // notifyClearSelection sends a clear-selection notification.
 func (m *Model) notifyClearSelection() {
+	t := m.activeTabState()
 	m.server.NotifySelectionChanged(
-		m.filePath,
+		t.filePath,
 		"",
-		m.cursorLine,
-		m.cursorChar,
-		m.cursorLine,
-		m.cursorChar,
+		t.cursorLine,
+		t.cursorChar,
+		t.cursorLine,
+		t.cursorChar,
 	)
 }
 
 // notifyComment sends a comment as a selection_changed notification.
 func (m *Model) notifyComment(line int, comment string) {
-	text := fmt.Sprintf("[Comment] %s:%d\n%s", m.filePath, line+1, comment)
+	t := m.activeTabState()
+	text := fmt.Sprintf("[Comment] %s:%d\n%s", t.filePath, line+1, comment)
 
 	m.server.NotifySelectionChanged(
-		m.filePath,
+		t.filePath,
 		text,
 		line,
 		0,
