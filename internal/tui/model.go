@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -40,20 +39,18 @@ type treeChangedMsg struct{}
 
 // Model holds the entire TUI state.
 type Model struct {
-	width            int
-	height           int
-	server           MCPServer
-	ctx              context.Context
-	filePath         string
-	lines            []string
-	highlightedLines []highlightedLine // nil = no highlighting
-	cursorLine       int
-	cursorChar       int
-	anchorLine       int // selection start
-	anchorChar       int
-	selecting        bool
-	err              error
-	watcher          *fsnotify.Watcher
+	width  int
+	height int
+	server MCPServer
+	ctx    context.Context
+	err    error
+
+	// tabs
+	tabs      []tab
+	activeTab int
+
+	// file watcher
+	watcher *fsnotify.Watcher
 
 	// file tree
 	fileTree   []fileEntry
@@ -61,20 +58,13 @@ type Model struct {
 	focusPane  pane // 0: tree, 1: editor
 	rootDir    string
 
-	// comments
-	comments     map[int]string
-	commentInput textinput.Model
-	inputMode    bool
-	inputLine    int
-
 	// mouse
 	lastMouseLine int
 	lastMouseChar int
 	resizingPane  bool
 	treeWidth     int
 
-	// scroll
-	scrollOffset     int
+	// tree scroll
 	treeScrollOffset int
 
 	// directory watcher
@@ -85,32 +75,9 @@ type Model struct {
 	help help.Model
 }
 
-// normalizedSelection returns the selection range with start <= end.
-func (m *Model) normalizedSelection() (startLine, startChar, endLine, endChar int) {
-	startLine, startChar = m.anchorLine, m.anchorChar
-	endLine, endChar = m.cursorLine, m.cursorChar
-	if startLine > endLine || (startLine == endLine && startChar > endChar) {
-		startLine, endLine = endLine, startLine
-		startChar, endChar = endChar, startChar
-	}
-	return
-}
-
-// startSelecting begins a selection if not already selecting.
-func (m *Model) startSelecting() {
-	if !m.selecting {
-		m.selecting = true
-		m.anchorLine = m.cursorLine
-		m.anchorChar = m.cursorChar
-	}
-}
-
-// syncAnchorToCursor synchronizes anchor to cursor when not selecting.
-func (m *Model) syncAnchorToCursor() {
-	if !m.selecting {
-		m.anchorLine = m.cursorLine
-		m.anchorChar = m.cursorChar
-	}
+// activeTabState returns a pointer to the active tab.
+func (m *Model) activeTabState() *tab {
+	return &m.tabs[m.activeTab]
 }
 
 // toggleTreeEntry handles expanding/collapsing dirs or loading files.
@@ -144,23 +111,18 @@ func NewModel(srv MCPServer, ctx context.Context, rootDir string, watcher *fsnot
 
 	ft := buildFileTree(absRootDir)
 
-	ti := textinput.New()
-	ti.Placeholder = "Enter comment..."
-	ti.CharLimit = 500
-
 	return &Model{
-		server:       srv,
-		ctx:          ctx,
-		rootDir:      absRootDir,
-		fileTree:     ft,
-		treeCursor:   0,
-		focusPane:    paneTree,
-		watcher:      watcher,
-		dirWatcher:   dirWatcher,
-		comments:     make(map[int]string),
-		commentInput: ti,
-		treeWidth:    30,
-		keys:         newKeyMap(),
-		help:         help.New(),
+		server:     srv,
+		ctx:        ctx,
+		rootDir:    absRootDir,
+		fileTree:   ft,
+		treeCursor: 0,
+		focusPane:  paneTree,
+		watcher:    watcher,
+		dirWatcher: dirWatcher,
+		tabs:       []tab{newFileTab()},
+		treeWidth:  30,
+		keys:       newKeyMap(),
+		help:       help.New(),
 	}
 }
