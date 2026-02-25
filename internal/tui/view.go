@@ -175,7 +175,13 @@ func (m *Model) renderEditor(width, height int) []string {
 
 		if isCursorLine && isSelected {
 			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
-			if hl := t.getHighlightedLine(i); hl != nil {
+			if sc == ec {
+				if hl := t.getHighlightedLine(i); hl != nil {
+					renderStyledLineWithCursor(&sb, hl.runs, t.cursorChar)
+				} else {
+					renderLineWithCursor(&sb, lineContent, t.cursorChar)
+				}
+			} else if hl := t.getHighlightedLine(i); hl != nil {
 				renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
 			} else {
 				renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)

@@ -220,6 +220,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch {
 		case key.Matches(msg, m.keys.Quit):
+			if t.selecting {
+				t.selecting = false
+				t.lineSelect = false
+				m.notifyClearSelection()
+				return m, nil
+			}
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.SwitchPane):
 			if len(t.lines) > 0 {
@@ -298,38 +304,33 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.notifySelectionChanged()
 				}
 			}
-		case key.Matches(msg, m.keys.ShiftUp):
-			if t.cursorLine > 0 {
-				t.startSelecting()
-				t.cursorLine--
-				t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
-				m.notifySelectionChanged()
+		case key.Matches(msg, m.keys.CharSelect):
+			if m.focusPane == paneEditor && len(t.lines) > 0 {
+				if t.selecting && !t.lineSelect {
+					t.selecting = false
+					m.notifyClearSelection()
+				} else if t.selecting && t.lineSelect {
+					t.lineSelect = false
+					m.notifySelectionChanged()
+				} else {
+					t.startSelecting()
+				}
 			}
-		case key.Matches(msg, m.keys.ShiftDown):
-			if t.cursorLine < len(t.lines)-1 {
-				t.startSelecting()
-				t.cursorLine++
-				t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
-				m.notifySelectionChanged()
+		case key.Matches(msg, m.keys.LineSelect):
+			if m.focusPane == paneEditor && len(t.lines) > 0 {
+				if t.selecting && t.lineSelect {
+					t.selecting = false
+					t.lineSelect = false
+					m.notifyClearSelection()
+				} else if t.selecting && !t.lineSelect {
+					t.lineSelect = true
+					m.notifySelectionChanged()
+				} else {
+					t.startSelecting()
+					t.lineSelect = true
+					m.notifySelectionChanged()
+				}
 			}
-		case key.Matches(msg, m.keys.ShiftLeft):
-			t.startSelecting()
-			if t.cursorChar > 0 {
-				t.cursorChar--
-			} else if t.cursorLine > 0 {
-				t.cursorLine--
-				t.cursorChar = t.lineLen(t.cursorLine)
-			}
-			m.notifySelectionChanged()
-		case key.Matches(msg, m.keys.ShiftRight):
-			t.startSelecting()
-			if t.cursorChar < t.lineLen(t.cursorLine) {
-				t.cursorChar++
-			} else if t.cursorLine < len(t.lines)-1 {
-				t.cursorLine++
-				t.cursorChar = 0
-			}
-			m.notifySelectionChanged()
 		case key.Matches(msg, m.keys.Comment):
 			if m.focusPane == paneEditor && len(t.lines) > 0 {
 				t.inputMode = true
