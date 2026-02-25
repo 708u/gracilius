@@ -46,7 +46,7 @@ type Model struct {
 	err    error
 
 	// tabs
-	tabs      []tab
+	tabs      []*tab
 	activeTab int
 
 	// file watcher
@@ -75,9 +75,9 @@ type Model struct {
 	help help.Model
 }
 
-// activeTabState returns a pointer to the active tab.
+// activeTabState returns the active tab.
 func (m *Model) activeTabState() *tab {
-	return &m.tabs[m.activeTab]
+	return m.tabs[m.activeTab]
 }
 
 // toggleTreeEntry handles expanding/collapsing dirs or loading files.
@@ -120,7 +120,7 @@ func NewModel(srv MCPServer, ctx context.Context, rootDir string, watcher *fsnot
 		focusPane:  paneTree,
 		watcher:    watcher,
 		dirWatcher: dirWatcher,
-		tabs:       []tab{newFileTab()},
+		tabs:       []*tab{newFileTab()},
 		treeWidth:  30,
 		keys:       newKeyMap(),
 		help:       help.New(),

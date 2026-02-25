@@ -31,12 +31,12 @@ type tab struct {
 }
 
 // newFileTab creates a new tab for file viewing.
-func newFileTab() tab {
+func newFileTab() *tab {
 	ti := textinput.New()
 	ti.Placeholder = "Enter comment..."
 	ti.CharLimit = 500
 
-	return tab{
+	return &tab{
 		kind:         fileTab,
 		comments:     make(map[int]string),
 		commentInput: ti,
