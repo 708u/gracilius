@@ -6,20 +6,17 @@ import (
 )
 
 type keyMap struct {
-	Quit         key.Binding
-	SwitchPane   key.Binding
-	Enter        key.Binding
-	Up           key.Binding
-	Down         key.Binding
-	Left         key.Binding
-	Right        key.Binding
-	ShiftUp      key.Binding
-	ShiftDown    key.Binding
-	ShiftLeft    key.Binding
-	ShiftRight   key.Binding
-	ToggleSelect key.Binding
-	Comment      key.Binding
-	ClearAll     key.Binding
+	Quit       key.Binding
+	SwitchPane key.Binding
+	Enter      key.Binding
+	Up         key.Binding
+	Down       key.Binding
+	Left       key.Binding
+	Right      key.Binding
+	CharSelect key.Binding
+	LineSelect key.Binding
+	Comment    key.Binding
+	ClearAll   key.Binding
 }
 
 func newKeyMap() keyMap {
@@ -52,25 +49,13 @@ func newKeyMap() keyMap {
 			key.WithKeys("right"),
 			key.WithHelp("→", "right"),
 		),
-		ShiftUp: key.NewBinding(
-			key.WithKeys("shift+up"),
-			key.WithHelp("Shift+↑", "select up"),
-		),
-		ShiftDown: key.NewBinding(
-			key.WithKeys("shift+down"),
-			key.WithHelp("Shift+↓", "select down"),
-		),
-		ShiftLeft: key.NewBinding(
-			key.WithKeys("shift+left"),
-			key.WithHelp("Shift+←", "select left"),
-		),
-		ShiftRight: key.NewBinding(
-			key.WithKeys("shift+right"),
-			key.WithHelp("Shift+→", "select right"),
-		),
-		ToggleSelect: key.NewBinding(
+		CharSelect: key.NewBinding(
 			key.WithKeys("v"),
 			key.WithHelp("v", "select"),
+		),
+		LineSelect: key.NewBinding(
+			key.WithKeys("V"),
+			key.WithHelp("V", "select line"),
 		),
 		Comment: key.NewBinding(
 			key.WithKeys("i"),
@@ -87,7 +72,7 @@ func newKeyMap() keyMap {
 func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.SwitchPane, k.Up, k.Down,
-		k.ToggleSelect, k.Comment, k.ClearAll, k.Quit,
+		k.CharSelect, k.LineSelect, k.Comment, k.ClearAll, k.Quit,
 	}
 }
 
@@ -95,8 +80,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right},
-		{k.ShiftUp, k.ShiftDown, k.ShiftLeft, k.ShiftRight},
-		{k.Enter, k.SwitchPane, k.ToggleSelect, k.Comment, k.ClearAll, k.Quit},
+		{k.Enter, k.SwitchPane, k.CharSelect, k.LineSelect, k.Comment, k.ClearAll, k.Quit},
 	}
 }
 
@@ -104,7 +88,8 @@ func (k keyMap) FullHelp() [][]key.Binding {
 // based on the current TUI state.
 func (m *Model) contextKeyMap() help.KeyMap {
 	km := m.keys
-	km.ToggleSelect.SetEnabled(m.focusPane == paneEditor)
+	km.CharSelect.SetEnabled(m.focusPane == paneEditor)
+	km.LineSelect.SetEnabled(m.focusPane == paneEditor)
 	km.Comment.SetEnabled(m.focusPane == paneEditor)
 	km.ClearAll.SetEnabled(m.focusPane == paneEditor)
 	return km
