@@ -120,7 +120,7 @@ func TestRenderStyledLineWithSelection(t *testing.T) {
 	output := sb.String()
 
 	// Selection should use the active theme's selectionBg, not inverse video
-	if !strings.Contains(output, activeTheme.selectionBg) {
+	if !strings.Contains(output, activeTheme.selectionBgSeq()) {
 		t.Error("expected selection background color in output")
 	}
 
@@ -130,8 +130,8 @@ func TestRenderStyledLineWithSelection(t *testing.T) {
 	}
 
 	// Check that selection contains the right text
-	selBgIdx := strings.Index(output, activeTheme.selectionBg)
-	afterSelBg := output[selBgIdx+len(activeTheme.selectionBg):]
+	selBgIdx := strings.Index(output, activeTheme.selectionBgSeq())
+	afterSelBg := output[selBgIdx+len(activeTheme.selectionBgSeq()):]
 	resetIdx := strings.Index(afterSelBg, "\033[0m")
 	if resetIdx < 0 {
 		t.Fatal("expected reset after selection background")

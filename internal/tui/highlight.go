@@ -12,18 +12,25 @@ import (
 )
 
 type themeConfig struct {
-	name        string // Chroma style name
-	selectionBg string // ANSI SGR sequence for selection background
+	name            string // Chroma style name
+	selectionBg     string // Editor selection background hex color
+	listSelectionBg string // List/tree active selection hex color
+}
+
+func (t themeConfig) selectionBgSeq() string {
+	return termenv.CSI + termenv.RGBColor(t.selectionBg).Sequence(true) + "m"
 }
 
 var (
 	darkTheme = themeConfig{
-		name:        "github-dark",
-		selectionBg: termenv.CSI + termenv.RGBColor("#264F78").Sequence(true) + "m",
+		name:            "github-dark",
+		selectionBg:     "#264F78",
+		listSelectionBg: "#37373D",
 	}
 	lightTheme = themeConfig{
-		name:        "github",
-		selectionBg: termenv.CSI + termenv.RGBColor("#ADD6FF").Sequence(true) + "m",
+		name:            "github",
+		selectionBg:     "#ADD6FF",
+		listSelectionBg: "#B8D8F8",
 	}
 	activeTheme = darkTheme // default fallback
 )
@@ -201,7 +208,7 @@ func renderStyledLineWithSelection(sb *strings.Builder, runs []styledRun, selSta
 			if run.ANSI != "" {
 				sb.WriteString(run.ANSI)
 			}
-			sb.WriteString(activeTheme.selectionBg)
+			sb.WriteString(activeTheme.selectionBgSeq())
 			sb.WriteString(expandTabs(string(runes[selLocalStart:selLocalEnd])))
 			sb.WriteString(ansiReset)
 
