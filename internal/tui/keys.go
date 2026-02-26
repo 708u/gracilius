@@ -7,6 +7,7 @@ import (
 
 type keyMap struct {
 	Quit       key.Binding
+	Cancel     key.Binding
 	SwitchPane key.Binding
 	Enter      key.Binding
 	Up         key.Binding
@@ -22,8 +23,12 @@ type keyMap struct {
 func newKeyMap() keyMap {
 	return keyMap{
 		Quit: key.NewBinding(
-			key.WithKeys("esc", "ctrl+c"),
-			key.WithHelp("Esc", "quit"),
+			key.WithKeys("ctrl+c"),
+			key.WithHelp("Ctrl+C×2", "quit"),
+		),
+		Cancel: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("Esc", "cancel"),
 		),
 		SwitchPane: key.NewBinding(
 			key.WithKeys("tab"),
@@ -72,7 +77,7 @@ func newKeyMap() keyMap {
 func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.SwitchPane, k.Up, k.Down,
-		k.CharSelect, k.LineSelect, k.Comment, k.ClearAll, k.Quit,
+		k.CharSelect, k.LineSelect, k.Comment, k.ClearAll, k.Cancel, k.Quit,
 	}
 }
 
@@ -80,7 +85,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right},
-		{k.Enter, k.SwitchPane, k.CharSelect, k.LineSelect, k.Comment, k.ClearAll, k.Quit},
+		{k.Enter, k.SwitchPane, k.CharSelect, k.LineSelect, k.Comment, k.ClearAll, k.Cancel, k.Quit},
 	}
 }
 
