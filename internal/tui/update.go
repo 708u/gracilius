@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,7 +14,11 @@ const (
 	separatorWidth      = 3
 	lineNumberWidth     = 4
 	maxTreeWidthPercent = 70
+	quitTimeout         = 750 * time.Millisecond
 )
+
+// quitTimeoutMsg is sent when the quit confirmation window expires.
+type quitTimeoutMsg struct{}
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
@@ -80,6 +85,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.treeCursor = max(0, len(m.fileTree)-1)
 		}
 		return m, m.watchDir()
+	case quitTimeoutMsg:
+		m.quitPending = false
+		return m, nil
 	case IdeConnectedMsg:
 		if t.filePath != "" && len(t.lines) > 0 {
 			m.notifySelectionChanged()
@@ -196,9 +204,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		var cmd tea.Cmd
+		if key.Matches(msg, m.keys.Quit) {
+			if m.quitPending {
+				return m, tea.Quit
+			}
+			m.quitPending = true
+			return m, tea.Tick(quitTimeout, func(time.Time) tea.Msg {
+				return quitTimeoutMsg{}
+			})
+		}
+
 		if t.inputMode {
 			switch {
-			case key.Matches(msg, m.keys.Quit):
+			case key.Matches(msg, m.keys.Cancel):
 				t.inputMode = false
 				t.commentInput.Reset()
 				t.commentInput.Blur()
@@ -219,14 +237,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch {
-		case key.Matches(msg, m.keys.Quit):
+		case key.Matches(msg, m.keys.Cancel):
 			if t.selecting {
 				t.selecting = false
 				t.lineSelect = false
 				m.notifyClearSelection()
 				return m, nil
 			}
-			return m, tea.Quit
 		case key.Matches(msg, m.keys.SwitchPane):
 			if len(t.lines) > 0 {
 				if m.focusPane == paneEditor {

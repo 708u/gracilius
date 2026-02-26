@@ -26,7 +26,7 @@ func styleTreeCursor() lipgloss.Style {
 // View implements tea.Model.
 func (m *Model) View() string {
 	if m.err != nil {
-		return fmt.Sprintf("Error: %v\n\nPress Esc to quit.", m.err)
+		return fmt.Sprintf("Error: %v\n\nPress Ctrl+C to quit.", m.err)
 	}
 
 	if m.width == 0 || m.height == 0 {
@@ -80,6 +80,11 @@ func (m *Model) renderFooter() string {
 	t := m.activeTabState()
 
 	var sb strings.Builder
+
+	if m.quitPending {
+		sb.WriteString("Press Ctrl+C again to quit")
+		return sb.String()
+	}
 
 	if t.inputMode {
 		sb.WriteString("[Editor] Comment (Enter: confirm, Esc: cancel)\n")
