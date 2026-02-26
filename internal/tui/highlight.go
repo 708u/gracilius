@@ -7,10 +7,41 @@ import (
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )
 
-const defaultThemeName = "github-dark"
+type themeConfig struct {
+	name            string // Chroma style name
+	selectionBg     string // Editor selection background hex color
+	listSelectionBg string // List/tree active selection hex color
+}
+
+func (t themeConfig) selectionBgSeq() string {
+	return termenv.CSI + termenv.RGBColor(t.selectionBg).Sequence(true) + "m"
+}
+
+var (
+	darkTheme = themeConfig{
+		name:            "github-dark",
+		selectionBg:     "#264F78",
+		listSelectionBg: "#37373D",
+	}
+	lightTheme = themeConfig{
+		name:            "github",
+		selectionBg:     "#ADD6FF",
+		listSelectionBg: "#B8D8F8",
+	}
+	activeTheme = darkTheme // default fallback
+)
+
+func init() {
+	if lipgloss.HasDarkBackground() {
+		activeTheme = darkTheme
+	} else {
+		activeTheme = lightTheme
+	}
+}
 
 var (
 	ansiInverse = termenv.CSI + termenv.ReverseSeq + "m"
@@ -34,7 +65,7 @@ func highlightFile(filePath, source string) []highlightedLine {
 	}
 	lexer = chroma.Coalesce(lexer)
 
-	style := styles.Get(defaultThemeName)
+	style := styles.Get(activeTheme.name)
 
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {
@@ -174,7 +205,10 @@ func renderStyledLineWithSelection(sb *strings.Builder, runs []styledRun, selSta
 			// Within selection
 			selLocalStart := overlapStart - runStart
 			selLocalEnd := overlapEnd - runStart
-			sb.WriteString(ansiInverse)
+			if run.ANSI != "" {
+				sb.WriteString(run.ANSI)
+			}
+			sb.WriteString(activeTheme.selectionBgSeq())
 			sb.WriteString(expandTabs(string(runes[selLocalStart:selLocalEnd])))
 			sb.WriteString(ansiReset)
 

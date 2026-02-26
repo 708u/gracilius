@@ -13,12 +13,15 @@ var separatorBorder = lipgloss.Border{
 }
 
 var (
-	styleComment    = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	styleTreeCursor = lipgloss.NewStyle().Reverse(true)
-	styleFooter     = lipgloss.NewStyle().
+	styleComment = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	styleFooter  = lipgloss.NewStyle().
 			BorderTop(true).
 			BorderStyle(separatorBorder)
 )
+
+func styleTreeCursor() lipgloss.Style {
+	return lipgloss.NewStyle().Background(lipgloss.Color(activeTheme.listSelectionBg))
+}
 
 // View implements tea.Model.
 func (m *Model) View() string {
@@ -137,7 +140,7 @@ func (m *Model) renderTree(width, height int) []string {
 		displayLine = padRight(displayLine, width)
 
 		if i == m.treeCursor && m.focusPane == paneTree {
-			displayLine = styleTreeCursor.Render(displayLine)
+			displayLine = styleTreeCursor().Render(displayLine)
 		}
 
 		lines = append(lines, displayLine)
