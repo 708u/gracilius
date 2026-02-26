@@ -204,14 +204,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		var cmd tea.Cmd
+		if key.Matches(msg, m.keys.Quit) {
+			if m.quitPending {
+				return m, tea.Quit
+			}
+			m.quitPending = true
+			return m, tea.Tick(quitTimeout, func(time.Time) tea.Msg {
+				return quitTimeoutMsg{}
+			})
+		}
+
 		if t.inputMode {
 			switch {
-			case key.Matches(msg, m.keys.Quit):
-				t.inputMode = false
-				t.commentInput.Reset()
-				t.commentInput.Blur()
-				m.quitPending = false
-				return m, nil
 			case key.Matches(msg, m.keys.Cancel):
 				t.inputMode = false
 				t.commentInput.Reset()
@@ -233,20 +237,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch {
-		case key.Matches(msg, m.keys.Quit):
-			if t.selecting {
-				t.selecting = false
-				t.lineSelect = false
-				m.notifyClearSelection()
-				return m, nil
-			}
-			if m.quitPending {
-				return m, tea.Quit
-			}
-			m.quitPending = true
-			return m, tea.Tick(quitTimeout, func(time.Time) tea.Msg {
-				return quitTimeoutMsg{}
-			})
 		case key.Matches(msg, m.keys.Cancel):
 			if t.selecting {
 				t.selecting = false
