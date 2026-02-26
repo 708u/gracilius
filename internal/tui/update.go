@@ -14,7 +14,7 @@ const (
 	separatorWidth      = 3
 	lineNumberWidth     = 4
 	maxTreeWidthPercent = 70
-	quitTimeout         = 1 * time.Second
+	quitTimeout         = 750 * time.Millisecond
 )
 
 // quitTimeoutMsg is sent when the quit confirmation window expires.
