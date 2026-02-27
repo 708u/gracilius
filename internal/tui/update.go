@@ -41,7 +41,7 @@ func (m *Model) getTreeWidth() int {
 
 // getContentHeight returns the content area height.
 func (m *Model) getContentHeight() int {
-	return max(m.height-5, 5)
+	return max(m.height-7, 5)
 }
 
 // adjustTreeScroll adjusts the tree scroll so the tree cursor

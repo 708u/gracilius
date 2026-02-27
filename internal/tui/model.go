@@ -124,13 +124,21 @@ func (m *Model) toggleTreeEntry(idx int) {
 		if i := m.findTabByPath(absPath); i >= 0 {
 			m.activeTab = i
 		} else {
-			t := newFileTab()
-			if err := m.loadFileIntoTab(t, entry.path); err != nil {
-				m.err = err
-				return
+			cur := m.activeTabState()
+			if cur.kind == fileTab && cur.filePath == "" {
+				if err := m.loadFileIntoTab(cur, entry.path); err != nil {
+					m.err = err
+					return
+				}
+			} else {
+				t := newFileTab()
+				if err := m.loadFileIntoTab(t, entry.path); err != nil {
+					m.err = err
+					return
+				}
+				m.tabs = append(m.tabs, t)
+				m.activeTab = len(m.tabs) - 1
 			}
-			m.tabs = append(m.tabs, t)
-			m.activeTab = len(m.tabs) - 1
 		}
 		m.focusPane = paneEditor
 		m.notifySelectionChanged()

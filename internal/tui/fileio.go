@@ -58,11 +58,6 @@ func (m *Model) loadFileIntoTab(t *tab, filePath string) error {
 	return nil
 }
 
-// loadFile reads a file and updates the active tab state.
-func (m *Model) loadFile(filePath string) error {
-	return m.loadFileIntoTab(m.activeTabState(), filePath)
-}
-
 // splitLines splits content into lines.
 // Uses bufio.Scanner to handle \n, \r\n, and \r transparently.
 func splitLines(content []byte) []string {

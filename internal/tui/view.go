@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -67,12 +68,61 @@ func (m *Model) View() string {
 		Width(m.width).
 		Render(footer)
 
+	tabBar := m.renderTabBar(treeWidth + separatorWidth)
+
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
+		tabBar,
 		content,
 		footerRendered,
 	)
+}
+
+// renderTabBar generates the tab bar (2 lines: labels + underline).
+// offset is the left padding to align with the editor pane.
+func (m *Model) renderTabBar(offset int) string {
+	styleActive := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(activeTheme.tabActiveFg))
+	styleInactive := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(activeTheme.tabInactiveFg))
+	styleBorder := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(activeTheme.tabActiveBorder))
+
+	padding := strings.Repeat(" ", offset)
+
+	var labels []string
+	var borders []string
+
+	for i, t := range m.tabs {
+		name := "[empty]"
+		if t.filePath != "" {
+			name = filepath.Base(t.filePath)
+		}
+		if t.kind == diffTab {
+			name = "[diff] " + name
+		}
+
+		label := " " + name + " "
+		w := len([]rune(label))
+		if i == m.activeTab {
+			labels = append(labels, styleActive.Render(label))
+			borders = append(borders, styleBorder.Render(
+				strings.Repeat("\u2500", w)))
+		} else {
+			labels = append(labels, styleInactive.Render(label))
+			borders = append(borders, strings.Repeat(" ", w))
+		}
+	}
+
+	sep := " "
+	borderSep := " "
+	labelLine := strings.Join(labels, sep)
+	borderLine := strings.Join(borders, borderSep)
+
+	return ansi.Truncate(padding+labelLine, m.width, "...") +
+		"\n" +
+		ansi.Truncate(padding+borderLine, m.width, "")
 }
 
 // renderFooter generates the footer area (help hints + status).
