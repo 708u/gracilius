@@ -22,6 +22,7 @@ type tab struct {
 	anchorLine       int
 	anchorChar       int
 	selecting        bool
+	lineSelect       bool
 	scrollOffset     int
 
 	comments     map[int]string
@@ -65,6 +66,10 @@ func (t *tab) normalizedSelection() (startLine, startChar, endLine, endChar int)
 	if startLine > endLine || (startLine == endLine && startChar > endChar) {
 		startLine, endLine = endLine, startLine
 		startChar, endChar = endChar, startChar
+	}
+	if t.lineSelect {
+		startChar = 0
+		endChar = t.lineLen(endLine)
 	}
 	return
 }
@@ -111,6 +116,7 @@ func (t *tab) resetEditorState() {
 	t.anchorChar = 0
 	t.scrollOffset = 0
 	t.selecting = false
+	t.lineSelect = false
 	t.comments = make(map[int]string)
 	t.inputMode = false
 	t.commentInput.Reset()

@@ -82,6 +82,9 @@ type Model struct {
 	// keybindings
 	keys keyMap
 	help help.Model
+
+	// quit confirmation
+	quitPending bool
 }
 
 // activeTabState returns the active tab.

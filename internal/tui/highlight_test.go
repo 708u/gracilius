@@ -119,14 +119,24 @@ func TestRenderStyledLineWithSelection(t *testing.T) {
 	renderStyledLineWithSelection(&sb, runs, 2, 7) // select "llo w"
 	output := sb.String()
 
-	if !strings.Contains(output, "\033[7m") {
-		t.Error("expected inverse video for selection")
+	// Selection should use the active theme's selectionBg, not inverse video
+	if !strings.Contains(output, activeTheme.selectionBgSeq()) {
+		t.Error("expected selection background color in output")
+	}
+
+	// The run's foreground ANSI should be preserved within the selection
+	if !strings.Contains(output, "\033[38;5;148m") {
+		t.Error("expected foreground ANSI to be preserved in selection")
 	}
 
 	// Check that selection contains the right text
-	invIdx := strings.Index(output, "\033[7m")
-	resetIdx := strings.Index(output[invIdx:], "\033[0m")
-	selected := output[invIdx+len("\033[7m") : invIdx+resetIdx]
+	selBgIdx := strings.Index(output, activeTheme.selectionBgSeq())
+	afterSelBg := output[selBgIdx+len(activeTheme.selectionBgSeq()):]
+	resetIdx := strings.Index(afterSelBg, "\033[0m")
+	if resetIdx < 0 {
+		t.Fatal("expected reset after selection background")
+	}
+	selected := afterSelBg[:resetIdx]
 	if selected != "llo w" {
 		t.Errorf("expected selected text 'llo w', got %q", selected)
 	}

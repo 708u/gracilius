@@ -13,17 +13,20 @@ var separatorBorder = lipgloss.Border{
 }
 
 var (
-	styleComment    = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	styleTreeCursor = lipgloss.NewStyle().Reverse(true)
-	styleFooter     = lipgloss.NewStyle().
+	styleComment = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	styleFooter  = lipgloss.NewStyle().
 			BorderTop(true).
 			BorderStyle(separatorBorder)
 )
 
+func styleTreeCursor() lipgloss.Style {
+	return lipgloss.NewStyle().Background(lipgloss.Color(activeTheme.listSelectionBg))
+}
+
 // View implements tea.Model.
 func (m *Model) View() string {
 	if m.err != nil {
-		return fmt.Sprintf("Error: %v\n\nPress Esc to quit.", m.err)
+		return fmt.Sprintf("Error: %v\n\nPress Ctrl+C to quit.", m.err)
 	}
 
 	if m.width == 0 || m.height == 0 {
@@ -77,6 +80,11 @@ func (m *Model) renderFooter() string {
 	t := m.activeTabState()
 
 	var sb strings.Builder
+
+	if m.quitPending {
+		sb.WriteString("Press Ctrl+C again to quit")
+		return sb.String()
+	}
 
 	if t.inputMode {
 		sb.WriteString("[Editor] Comment (Enter: confirm, Esc: cancel)\n")
@@ -132,7 +140,7 @@ func (m *Model) renderTree(width, height int) []string {
 		displayLine = padRight(displayLine, width)
 
 		if i == m.treeCursor && m.focusPane == paneTree {
-			displayLine = styleTreeCursor.Render(displayLine)
+			displayLine = styleTreeCursor().Render(displayLine)
 		}
 
 		lines = append(lines, displayLine)
@@ -175,7 +183,13 @@ func (m *Model) renderEditor(width, height int) []string {
 
 		if isCursorLine && isSelected {
 			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
-			if hl := t.getHighlightedLine(i); hl != nil {
+			if sc == ec {
+				if hl := t.getHighlightedLine(i); hl != nil {
+					renderStyledLineWithCursor(&sb, hl.runs, t.cursorChar)
+				} else {
+					renderLineWithCursor(&sb, lineContent, t.cursorChar)
+				}
+			} else if hl := t.getHighlightedLine(i); hl != nil {
 				renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
 			} else {
 				renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
