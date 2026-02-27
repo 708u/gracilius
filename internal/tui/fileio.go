@@ -19,8 +19,8 @@ func isBinary(content []byte) bool {
 	return false
 }
 
-// loadFile reads a file and updates the model state.
-func (m *Model) loadFile(filePath string) error {
+// loadFileIntoTab reads a file and loads it into the given tab.
+func (m *Model) loadFileIntoTab(t *tab, filePath string) error {
 	absPath, err := filepath.Abs(filePath)
 	if err != nil {
 		return err
@@ -30,8 +30,6 @@ func (m *Model) loadFile(filePath string) error {
 	if err != nil {
 		return err
 	}
-
-	t := m.activeTabState()
 
 	// Remove watch on previous file
 	if t.filePath != "" && m.watcher != nil {

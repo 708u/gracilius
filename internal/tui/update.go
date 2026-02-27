@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -40,7 +41,7 @@ func (m *Model) getTreeWidth() int {
 
 // getContentHeight returns the content area height.
 func (m *Model) getContentHeight() int {
-	return max(m.height-5, 5)
+	return max(m.height-7, 5)
 }
 
 // adjustTreeScroll adjusts the tree scroll so the tree cursor
@@ -85,6 +86,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.treeCursor = max(0, len(m.fileTree)-1)
 		}
 		return m, m.watchDir()
+	case OpenDiffMsg:
+		lines := splitLines([]byte(msg.Contents))
+		dt := newDiffTab(msg.FilePath, lines)
+		dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents)
+		m.tabs = append(m.tabs, dt)
+		m.activeTab = len(m.tabs) - 1
+		m.focusPane = paneEditor
+		return m, nil
+	case CloseDiffMsg:
+		m.closeDiffTabs()
+		return m, nil
 	case quitTimeoutMsg:
 		m.quitPending = false
 		return m, nil
@@ -362,6 +374,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focusPane == paneEditor {
 				t.comments = make(map[int]string)
 			}
+		case key.Matches(msg, m.keys.NextTab):
+			m.activeTab = (m.activeTab + 1) % len(m.tabs)
+		case key.Matches(msg, m.keys.PrevTab):
+			m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
+		case key.Matches(msg, m.keys.CloseTab):
+			if len(m.tabs) > 1 {
+				m.closeTab(m.activeTab)
+			}
 		}
 	}
 
@@ -372,4 +392,33 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// closeTab removes the tab at idx and adjusts activeTab.
+func (m *Model) closeTab(idx int) {
+	t := m.tabs[idx]
+	if t.filePath != "" && t.kind == fileTab && m.watcher != nil {
+		_ = m.watcher.Remove(t.filePath)
+	}
+	m.tabs = slices.Delete(m.tabs, idx, idx+1)
+	if m.activeTab >= len(m.tabs) {
+		m.activeTab = len(m.tabs) - 1
+	}
+}
+
+// closeDiffTabs removes all diff tabs.
+func (m *Model) closeDiffTabs() {
+	tabs := make([]*tab, 0, len(m.tabs))
+	for _, t := range m.tabs {
+		if t.kind != diffTab {
+			tabs = append(tabs, t)
+		}
+	}
+	m.tabs = tabs
+	if len(m.tabs) == 0 {
+		m.tabs = []*tab{newFileTab()}
+	}
+	if m.activeTab >= len(m.tabs) {
+		m.activeTab = len(m.tabs) - 1
+	}
 }

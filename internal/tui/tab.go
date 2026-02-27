@@ -44,6 +44,21 @@ func newFileTab() *tab {
 	}
 }
 
+// newDiffTab creates a new tab for diff viewing.
+func newDiffTab(filePath string, lines []string) *tab {
+	ti := textinput.New()
+	ti.Placeholder = "Enter comment..."
+	ti.CharLimit = 500
+
+	return &tab{
+		kind:         diffTab,
+		filePath:     filePath,
+		lines:        lines,
+		comments:     make(map[int]string),
+		commentInput: ti,
+	}
+}
+
 // normalizedSelection returns the selection range with start <= end.
 func (t *tab) normalizedSelection() (startLine, startChar, endLine, endChar int) {
 	startLine, startChar = t.anchorLine, t.anchorChar

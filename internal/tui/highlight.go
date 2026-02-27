@@ -15,6 +15,9 @@ type themeConfig struct {
 	name            string // Chroma style name
 	selectionBg     string // Editor selection background hex color
 	listSelectionBg string // List/tree active selection hex color
+	tabActiveFg     string // Active tab foreground hex color
+	tabActiveBorder string // Active tab underline hex color
+	tabInactiveFg   string // Inactive tab foreground hex color
 }
 
 func (t themeConfig) selectionBgSeq() string {
@@ -26,11 +29,17 @@ var (
 		name:            "github-dark",
 		selectionBg:     "#264F78",
 		listSelectionBg: "#37373D",
+		tabActiveFg:     "#FFFFFF",
+		tabActiveBorder: "#E8AB53",
+		tabInactiveFg:   "#969696",
 	}
 	lightTheme = themeConfig{
 		name:            "github",
 		selectionBg:     "#ADD6FF",
 		listSelectionBg: "#B8D8F8",
+		tabActiveFg:     "#333333",
+		tabActiveBorder: "#005FB8",
+		tabInactiveFg:   "#6E6E6E",
 	}
 	activeTheme = darkTheme // default fallback
 )
