@@ -379,10 +379,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.PrevTab):
 			m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
 		case key.Matches(msg, m.keys.CloseTab):
-			if len(m.tabs) <= 1 {
-				return m, tea.Quit
+			if len(m.tabs) > 1 {
+				m.closeTab(m.activeTab)
 			}
-			m.closeTab(m.activeTab)
 		}
 	}
 
