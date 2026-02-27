@@ -112,11 +112,16 @@ func main() {
 
 	// Register callbacks
 	srv.SetOpenDiffCallback(func(filePath string, contents string) {
-		log.Printf("openDiff callback: %s (ignored, diff not yet implemented)", filePath)
+		log.Printf("openDiff callback: %s", filePath)
+		p.Send(tui.OpenDiffMsg{
+			FilePath: filePath,
+			Contents: contents,
+		})
 	})
 
 	srv.SetCloseTabCallback(func() {
-		log.Printf("close_tab callback (ignored, diff not yet implemented)")
+		log.Printf("close_tab callback")
+		p.Send(tui.CloseDiffMsg{})
 	})
 
 	srv.SetIdeConnectedCallback(func() {

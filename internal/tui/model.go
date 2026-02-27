@@ -26,6 +26,15 @@ type MCPServer interface {
 	)
 }
 
+// OpenDiffMsg notifies the TUI to open a diff tab.
+type OpenDiffMsg struct {
+	FilePath string
+	Contents string
+}
+
+// CloseDiffMsg notifies the TUI to close diff tab(s).
+type CloseDiffMsg struct{}
+
 // IdeConnectedMsg notifies the TUI that Claude Code has connected.
 type IdeConnectedMsg struct{}
 
@@ -80,6 +89,17 @@ func (m *Model) activeTabState() *tab {
 	return m.tabs[m.activeTab]
 }
 
+// findTabByPath returns the index of the tab with the given file path,
+// or -1 if not found.
+func (m *Model) findTabByPath(path string) int {
+	for i, t := range m.tabs {
+		if t.filePath == path {
+			return i
+		}
+	}
+	return -1
+}
+
 // toggleTreeEntry handles expanding/collapsing dirs or loading files.
 func (m *Model) toggleTreeEntry(idx int) {
 	if idx < 0 || idx >= len(m.fileTree) {
@@ -93,12 +113,24 @@ func (m *Model) toggleTreeEntry(idx int) {
 			m.fileTree = expandDir(m.fileTree, idx)
 		}
 	} else {
-		if err := m.loadFile(entry.path); err != nil {
+		absPath, err := filepath.Abs(entry.path)
+		if err != nil {
 			m.err = err
-		} else {
-			m.focusPane = paneEditor
-			m.notifySelectionChanged()
+			return
 		}
+		if i := m.findTabByPath(absPath); i >= 0 {
+			m.activeTab = i
+		} else {
+			t := newFileTab()
+			if err := m.loadFileIntoTab(t, entry.path); err != nil {
+				m.err = err
+				return
+			}
+			m.tabs = append(m.tabs, t)
+			m.activeTab = len(m.tabs) - 1
+		}
+		m.focusPane = paneEditor
+		m.notifySelectionChanged()
 	}
 }
 

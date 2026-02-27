@@ -19,6 +19,9 @@ type keyMap struct {
 	ShiftRight key.Binding
 	Comment    key.Binding
 	ClearAll   key.Binding
+	NextTab    key.Binding
+	PrevTab    key.Binding
+	CloseTab   key.Binding
 }
 
 func newKeyMap() keyMap {
@@ -75,14 +78,26 @@ func newKeyMap() keyMap {
 			key.WithKeys("D"),
 			key.WithHelp("D", "clear comments"),
 		),
+		NextTab: key.NewBinding(
+			key.WithKeys("L"),
+			key.WithHelp("L", "next tab"),
+		),
+		PrevTab: key.NewBinding(
+			key.WithKeys("H"),
+			key.WithHelp("H", "prev tab"),
+		),
+		CloseTab: key.NewBinding(
+			key.WithKeys("q"),
+			key.WithHelp("q", "close tab"),
+		),
 	}
 }
 
 // ShortHelp returns key bindings for the short help view.
 func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
-		k.SwitchPane, k.Up, k.Down,
-		k.Comment, k.ClearAll, k.Quit,
+		k.SwitchPane, k.PrevTab, k.NextTab, k.CloseTab,
+		k.Up, k.Down, k.Quit,
 	}
 }
 
@@ -91,7 +106,8 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right},
 		{k.ShiftUp, k.ShiftDown, k.ShiftLeft, k.ShiftRight},
-		{k.Enter, k.SwitchPane, k.Comment, k.ClearAll, k.Quit},
+		{k.Enter, k.SwitchPane, k.PrevTab, k.NextTab, k.CloseTab},
+		{k.Comment, k.ClearAll, k.Quit},
 	}
 }
 
