@@ -177,23 +177,30 @@ func (m *Model) renderTree(width, height int) []string {
 		entry := m.fileTree[i]
 		indent := strings.Repeat("  ", entry.depth)
 
-		icon := "  "
+		isCursor := i == m.treeCursor && m.focusPane == paneTree
+
+		var arrow string
 		if entry.isDir {
 			if entry.expanded {
-				icon = "\u25bc "
+				arrow = "\u25be "
 			} else {
-				icon = "\u25b6 "
+				arrow = "\u25b8 "
 			}
+		} else {
+			arrow = "  "
 		}
 
-		line := indent + icon + entry.name
+		icon := iconFor(m.iconMode, entry)
 
+		line := indent + arrow + icon.prefix() + entry.name
 		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)
 
-		if i == m.treeCursor && m.focusPane == paneTree {
+		if isCursor {
 			displayLine = styleTreeCursor().Render(displayLine)
 		}
+
+		displayLine = icon.colorize(displayLine)
 
 		lines = append(lines, displayLine)
 	}

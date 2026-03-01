@@ -19,6 +19,19 @@ func isBinary(content []byte) bool {
 	return false
 }
 
+// sniffBinary reads the first bytes of a file to detect binary content.
+func sniffBinary(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = f.Close() }()
+
+	buf := make([]byte, 8192)
+	n, _ := f.Read(buf)
+	return isBinary(buf[:n])
+}
+
 // loadFileIntoTab reads a file and loads it into the given tab.
 func (m *Model) loadFileIntoTab(t *tab, filePath string) error {
 	absPath, err := filepath.Abs(filePath)

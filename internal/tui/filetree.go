@@ -15,6 +15,7 @@ type fileEntry struct {
 	path     string
 	name     string
 	isDir    bool
+	isBinary bool
 	depth    int
 	expanded bool
 }
@@ -105,10 +106,11 @@ func scanDir(dir string, depth int, entries []fileEntry) []fileEntry {
 	for _, f := range regularFiles {
 		fullPath := filepath.Join(dir, f.Name())
 		entries = append(entries, fileEntry{
-			path:  fullPath,
-			name:  f.Name(),
-			isDir: false,
-			depth: depth,
+			path:     fullPath,
+			name:     f.Name(),
+			isDir:    false,
+			isBinary: sniffBinary(fullPath),
+			depth:    depth,
 		})
 	}
 
