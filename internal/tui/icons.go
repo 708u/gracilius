@@ -36,10 +36,15 @@ type iconInfo struct {
 }
 
 // iconFor returns icon info for the given entry.
+// For symlinks, uses the resolved target path to determine the icon.
 // Returns zero value for symbol-mode directories (no icon).
 func iconFor(mode iconMode, entry fileEntry) iconInfo {
 	if mode == iconNerd {
-		s := devicons.IconForPath(entry.path)
+		path := entry.path
+		if entry.resolvedPath != "" {
+			path = entry.resolvedPath
+		}
+		s := devicons.IconForPath(path)
 		return iconInfo{char: s.Icon, color: s.Color}
 	}
 	if entry.isDir {

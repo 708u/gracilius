@@ -123,7 +123,7 @@ func (m *Model) toggleTreeEntry(idx int) {
 	} else {
 		absPath, err := filepath.Abs(entry.path)
 		if err != nil {
-			m.err = err
+			m.statusMsg = fmt.Sprintf("Cannot open: %v", err)
 			return
 		}
 		if i := m.findTabByPath(absPath); i >= 0 {
@@ -132,13 +132,17 @@ func (m *Model) toggleTreeEntry(idx int) {
 			cur := m.activeTabState()
 			if cur.kind == fileTab && cur.filePath == "" {
 				if err := m.loadFileIntoTab(cur, entry.path); err != nil {
-					m.err = err
+					m.statusMsg = fmt.Sprintf(
+						"Cannot open: %v", err,
+					)
 					return
 				}
 			} else {
 				t := newFileTab()
 				if err := m.loadFileIntoTab(t, entry.path); err != nil {
-					m.err = err
+					m.statusMsg = fmt.Sprintf(
+						"Cannot open: %v", err,
+					)
 					return
 				}
 				m.tabs = append(m.tabs, t)

@@ -12,12 +12,13 @@ import (
 
 // fileEntry represents a single entry in the file tree.
 type fileEntry struct {
-	path     string
-	name     string
-	isDir    bool
-	isBinary bool
-	depth    int
-	expanded bool
+	path         string
+	name         string
+	isDir        bool
+	isBinary     bool
+	depth        int
+	expanded     bool
+	resolvedPath string // symlink target path (empty if not a symlink)
 }
 
 // TODO: make configurable (e.g. .gitignore or config file)
@@ -73,44 +74,70 @@ func scanDir(dir string, depth int, entries []fileEntry) []fileEntry {
 		return entries
 	}
 
-	var dirs, regularFiles []os.DirEntry
+	type dirEntryInfo struct {
+		entry        os.DirEntry
+		resolvedPath string // non-empty for symlinks
+	}
+	var dirs, regularFiles []dirEntryInfo
 	for _, f := range files {
 		if isHiddenEntry(f.Name()) {
 			continue
 		}
-		if f.IsDir() {
-			dirs = append(dirs, f)
+		isDir := f.IsDir()
+		var resolvedPath string
+		// Resolve symlinks: DirEntry.IsDir() returns false for
+		// symlinks, so we need to follow the link to determine
+		// if the target is a directory.
+		if f.Type()&os.ModeSymlink != 0 {
+			fullPath := filepath.Join(dir, f.Name())
+			resolved, err := filepath.EvalSymlinks(fullPath)
+			if err != nil {
+				// Broken symlink (target does not exist): skip
+				continue
+			}
+			target, err := os.Stat(resolved)
+			if err != nil {
+				continue
+			}
+			isDir = target.IsDir()
+			resolvedPath = resolved
+		}
+		info := dirEntryInfo{entry: f, resolvedPath: resolvedPath}
+		if isDir {
+			dirs = append(dirs, info)
 		} else {
-			regularFiles = append(regularFiles, f)
+			regularFiles = append(regularFiles, info)
 		}
 	}
 
-	slices.SortFunc(dirs, func(a, b os.DirEntry) int {
-		return strings.Compare(a.Name(), b.Name())
+	slices.SortFunc(dirs, func(a, b dirEntryInfo) int {
+		return strings.Compare(a.entry.Name(), b.entry.Name())
 	})
-	slices.SortFunc(regularFiles, func(a, b os.DirEntry) int {
-		return strings.Compare(a.Name(), b.Name())
+	slices.SortFunc(regularFiles, func(a, b dirEntryInfo) int {
+		return strings.Compare(a.entry.Name(), b.entry.Name())
 	})
 
 	for _, d := range dirs {
-		fullPath := filepath.Join(dir, d.Name())
+		fullPath := filepath.Join(dir, d.entry.Name())
 		entries = append(entries, fileEntry{
-			path:     fullPath,
-			name:     d.Name(),
-			isDir:    true,
-			depth:    depth,
-			expanded: false,
+			path:         fullPath,
+			name:         d.entry.Name(),
+			isDir:        true,
+			depth:        depth,
+			expanded:     false,
+			resolvedPath: d.resolvedPath,
 		})
 	}
 
 	for _, f := range regularFiles {
-		fullPath := filepath.Join(dir, f.Name())
+		fullPath := filepath.Join(dir, f.entry.Name())
 		entries = append(entries, fileEntry{
-			path:     fullPath,
-			name:     f.Name(),
-			isDir:    false,
-			isBinary: sniffBinary(fullPath),
-			depth:    depth,
+			path:         fullPath,
+			name:         f.entry.Name(),
+			isDir:        false,
+			isBinary:     sniffBinary(fullPath),
+			depth:        depth,
+			resolvedPath: f.resolvedPath,
 		})
 	}
 
