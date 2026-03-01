@@ -233,6 +233,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		handled := false
+		if m.gPending {
+			m.gPending = false
+			if msg.String() == "g" {
+				if m.focusPane == paneTree {
+					m.treeCursor = 0
+				} else if len(t.lines) > 0 {
+					t.cursorLine = 0
+					t.cursorChar = 0
+					t.syncAnchorToCursor()
+					m.notifySelectionChanged()
+				}
+				handled = true
+			}
+		}
+		if handled {
+			break
+		}
+
 		switch {
 		case key.Matches(msg, m.keys.Cancel):
 			if t.selecting {
@@ -378,9 +397,59 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeTab = (m.activeTab + 1) % len(m.tabs)
 		case key.Matches(msg, m.keys.PrevTab):
 			m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
+		case key.Matches(msg, m.keys.GoBottom):
+			if m.focusPane == paneTree {
+				if len(m.fileTree) > 0 {
+					m.treeCursor = len(m.fileTree) - 1
+				}
+			} else if len(t.lines) > 0 {
+				t.cursorLine = len(t.lines) - 1
+				t.cursorChar = 0
+				t.syncAnchorToCursor()
+				m.notifySelectionChanged()
+			}
+		case key.Matches(msg, m.keys.BlockUp):
+			if m.focusPane == paneEditor && len(t.lines) > 0 {
+				line := t.cursorLine
+				if line > 0 {
+					line--
+					for line > 0 && strings.TrimSpace(t.lines[line]) == "" {
+						line--
+					}
+					for line > 0 && strings.TrimSpace(t.lines[line]) != "" {
+						line--
+					}
+				}
+				t.cursorLine = line
+				t.cursorChar = 0
+				t.syncAnchorToCursor()
+				m.notifySelectionChanged()
+			}
+		case key.Matches(msg, m.keys.BlockDown):
+			if m.focusPane == paneEditor && len(t.lines) > 0 {
+				line := t.cursorLine
+				last := len(t.lines) - 1
+				if line < last {
+					line++
+					for line < last && strings.TrimSpace(t.lines[line]) == "" {
+						line++
+					}
+					for line < last && strings.TrimSpace(t.lines[line]) != "" {
+						line++
+					}
+				}
+				t.cursorLine = line
+				t.cursorChar = 0
+				t.syncAnchorToCursor()
+				m.notifySelectionChanged()
+			}
 		case key.Matches(msg, m.keys.CloseTab):
 			if len(m.tabs) > 1 {
 				m.closeTab(m.activeTab)
+			}
+		default:
+			if msg.String() == "g" {
+				m.gPending = true
 			}
 		}
 	}
