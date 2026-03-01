@@ -107,7 +107,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		lo := m.computeLayout()
 
 		borderX := lo.treeWidth
-		isBorderArea := msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= headerHeight+tabBarHeight
+		isBorderArea := msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= contentStartY
 
 		if isBorderArea && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
 			m.resizingPane = true
@@ -122,8 +122,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if msg.X < lo.treeWidth && msg.Y >= headerHeight+tabBarHeight && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
-			treeIdx := msg.Y - headerHeight - tabBarHeight + m.treeScrollOffset
+		if msg.X < lo.treeWidth && msg.Y >= contentStartY && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+			treeIdx := msg.Y - contentStartY + m.treeScrollOffset
 			if treeIdx >= 0 && treeIdx < len(m.fileTree) {
 				m.treeCursor = treeIdx
 				m.toggleTreeEntry(treeIdx)
@@ -135,9 +135,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if msg.X >= lo.editorStartX && msg.Y >= headerHeight+tabBarHeight {
+		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
 			editorX := msg.X - lo.editorStartX - lineNumberWidth
-			editorY := msg.Y - headerHeight - tabBarHeight
+			editorY := msg.Y - contentStartY
 			offset := t.scrollOffset
 			targetLine := offset + editorY
 
