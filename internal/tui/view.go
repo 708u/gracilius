@@ -34,6 +34,10 @@ func (m *Model) View() string {
 		return ""
 	}
 
+	if m.search.active {
+		return m.search.view(m.width, m.height)
+	}
+
 	t := m.activeTabState()
 
 	// header

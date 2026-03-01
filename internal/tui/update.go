@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -149,6 +150,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notifySelectionChanged()
 		}
 	case tea.MouseMsg:
+		if m.search.active {
+			return m, nil
+		}
 		lo := m.computeLayout()
 
 		borderX := lo.treeWidth
@@ -290,6 +294,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.notifySelectionChanged()
 				}
 				break
+			}
+		}
+
+		if m.search.active {
+			switch {
+			case key.Matches(msg, m.keys.Cancel):
+				m.search.close()
+				return m, nil
+			case msg.Type == tea.KeyEnter:
+				if p := m.search.selectedPath(); p != "" {
+					absPath := filepath.Join(m.rootDir, p)
+					m.search.close()
+					m.openFileByPath(absPath)
+				}
+				return m, nil
+			default:
+				cmd = m.search.update(msg)
+				return m, cmd
 			}
 		}
 
@@ -459,6 +481,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.GoTop):
 			m.gPending = true
+		case key.Matches(msg, m.keys.Search):
+			m.search.open(m.rootDir)
 		}
 	}
 
