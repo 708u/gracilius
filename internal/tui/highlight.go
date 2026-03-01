@@ -15,6 +15,7 @@ type themeConfig struct {
 	name            string // Chroma style name
 	selectionBg     string // Editor selection background hex color
 	listSelectionBg string // List/tree active selection hex color
+	activeFileBg    string // File tree active-tab file background hex color
 	tabActiveFg     string // Active tab foreground hex color
 	tabActiveBorder string // Active tab underline hex color
 	tabInactiveFg   string // Inactive tab foreground hex color
@@ -29,6 +30,7 @@ var (
 		name:            "github-dark",
 		selectionBg:     "#264F78",
 		listSelectionBg: "#37373D",
+		activeFileBg:    "#2A2D2E",
 		tabActiveFg:     "#FFFFFF",
 		tabActiveBorder: "#E8AB53",
 		tabInactiveFg:   "#969696",
@@ -37,6 +39,7 @@ var (
 		name:            "github",
 		selectionBg:     "#ADD6FF",
 		listSelectionBg: "#B8D8F8",
+		activeFileBg:    "#E4E6F1",
 		tabActiveFg:     "#333333",
 		tabActiveBorder: "#005FB8",
 		tabInactiveFg:   "#6E6E6E",

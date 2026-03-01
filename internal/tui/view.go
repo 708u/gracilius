@@ -200,12 +200,12 @@ func (m *Model) renderTree(width, height int) []string {
 		displayLine = padRight(displayLine, width)
 
 		switch {
-		case isCursor && isActiveFile:
-			displayLine = styleTreeCursor().Bold(true).Render(displayLine)
 		case isCursor:
 			displayLine = styleTreeCursor().Render(displayLine)
 		case isActiveFile:
-			displayLine = lipgloss.NewStyle().Bold(true).Render(displayLine)
+			displayLine = lipgloss.NewStyle().
+				Background(lipgloss.Color(activeTheme.activeFileBg)).
+				Render(displayLine)
 		}
 
 		displayLine = icon.colorize(displayLine)
