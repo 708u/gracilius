@@ -497,7 +497,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.GoTop):
 			m.gPending = true
 		case key.Matches(msg, m.keys.Search):
-			m.search.open(m.rootDir)
+			return m, m.search.open(m.rootDir)
 		}
 	}
 

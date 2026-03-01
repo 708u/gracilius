@@ -71,13 +71,22 @@ func collectFiles(rootDir string, entries []fileEntry, items *[]list.Item) {
 }
 
 // open activates the search overlay and populates it with files.
-func (s *searchOverlay) open(rootDir string) {
+// open activates the search overlay and populates it with files.
+// It triggers the list's built-in filter mode via a synthetic "/"
+// keypress so the user can start typing immediately.
+func (s *searchOverlay) open(rootDir string) tea.Cmd {
 	items := scanAllFiles(rootDir)
 	s.list.SetItems(items)
 	s.list.ResetFilter()
-	s.list.FilterInput.Focus()
-	s.list.SetFilterState(list.Filtering)
+	// Trigger the list's own filter activation (handles internal
+	// state setup that SetFilterState alone does not).
+	s.list, _ = s.list.Update(tea.KeyMsg{
+		Type:  tea.KeyRunes,
+		Runes: []rune{'/'},
+	})
 	s.active = true
+	// Return the blink cmd so the cursor is visible immediately.
+	return s.list.FilterInput.Cursor.BlinkCmd()
 }
 
 // close deactivates the search overlay and frees the item list.
