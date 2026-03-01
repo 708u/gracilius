@@ -69,6 +69,7 @@ type Model struct {
 	// mouse
 	lastMouseLine int
 	lastMouseChar int
+	mouseDown     bool
 	resizingPane  bool
 	treeWidth     int
 
