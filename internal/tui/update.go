@@ -28,29 +28,9 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(m.watchFile(), m.watchDir())
 }
 
-// getTreeWidth returns the tree pane width.
-func (m *Model) getTreeWidth() int {
-	if m.treeWidth > 0 {
-		tw := max(m.treeWidth, minTreeWidth)
-		maxWidth := m.width * maxTreeWidthPercent / 100
-		if tw > maxWidth {
-			tw = maxWidth
-		}
-		return tw
-	}
-	return m.width * defaultTreePercent / 100
-}
-
-// getContentHeight returns the content area height.
-func (m *Model) getContentHeight() int {
-	chrome := headerHeight + tabBarHeight + footerHeight
-	return max(m.height-chrome, minContentHeight)
-}
-
 // adjustTreeScroll adjusts the tree scroll so the tree cursor
 // stays visible.
-func (m *Model) adjustTreeScroll() {
-	contentHeight := m.getContentHeight()
+func (m *Model) adjustTreeScroll(contentHeight int) {
 	if m.treeScrollOffset > m.treeCursor {
 		m.treeScrollOffset = m.treeCursor
 	}
@@ -405,10 +385,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	lo := m.computeLayout()
 	if m.focusPane == paneTree {
-		m.adjustTreeScroll()
+		m.adjustTreeScroll(lo.contentHeight)
 	} else if len(t.lines) > 0 {
-		t.adjustScrollForCursor(m.getContentHeight())
+		t.adjustScrollForCursor(lo.contentHeight)
 	}
 
 	return m, nil

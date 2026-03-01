@@ -43,11 +43,29 @@ type layout struct {
 	editorWidth   int // total width - treeWidth - separatorWidth
 }
 
+// getTreeWidth returns the tree pane width.
+func (m *Model) getTreeWidth() int {
+	if m.treeWidth > 0 {
+		tw := max(m.treeWidth, minTreeWidth)
+		maxWidth := m.width * maxTreeWidthPercent / 100
+		if tw > maxWidth {
+			tw = maxWidth
+		}
+		return tw
+	}
+	return m.width * defaultTreePercent / 100
+}
+
+// getContentHeight returns the content area height.
+func (m *Model) getContentHeight() int {
+	chrome := headerHeight + tabBarHeight + footerHeight
+	return max(m.height-chrome, minContentHeight)
+}
+
 func (m *Model) computeLayout() layout {
 	tw := m.getTreeWidth()
-	chrome := headerHeight + tabBarHeight + footerHeight
 	return layout{
-		contentHeight: max(m.height-chrome, minContentHeight),
+		contentHeight: m.getContentHeight(),
 		treeWidth:     tw,
 		editorStartX:  tw + separatorWidth,
 		editorWidth:   m.width - tw - separatorWidth,
