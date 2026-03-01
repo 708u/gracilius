@@ -34,10 +34,6 @@ func (m *Model) View() string {
 		return ""
 	}
 
-	if m.search.active {
-		return m.search.view(m.width, m.height)
-	}
-
 	t := m.activeTabState()
 
 	// header
@@ -72,13 +68,19 @@ func (m *Model) View() string {
 
 	tabBar := m.renderTabBar(lo.editorStartX)
 
-	return lipgloss.JoinVertical(
+	base := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		tabBar,
 		content,
 		footerRendered,
 	)
+
+	if m.search.active {
+		return m.search.overlay(base, m.width, m.height)
+	}
+
+	return base
 }
 
 // renderTabBar generates the tab bar (2 lines: labels + underline).

@@ -2,10 +2,12 @@ package tui
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // fileItem implements list.Item and list.DefaultItem for file search.
@@ -104,8 +106,8 @@ func (s *searchOverlay) selectedPath() string {
 	return ""
 }
 
-// view renders the search overlay centered on the screen.
-func (s *searchOverlay) view(width, height int) string {
+// overlay renders the search overlay on top of the background view.
+func (s *searchOverlay) overlay(bg string, width, height int) string {
 	overlayW := min(width*3/4, 80)
 	overlayH := min(height*3/4, 20)
 
@@ -130,10 +132,61 @@ func (s *searchOverlay) view(width, height int) string {
 		Width(innerW).
 		Render(content)
 
-	return lipgloss.Place(
-		width, height,
-		lipgloss.Center, lipgloss.Center,
-		box,
-		lipgloss.WithWhitespaceChars(" "),
-	)
+	return placeOverlay(width, height, box, bg)
+}
+
+// placeOverlay composites fg on top of bg, centered.
+func placeOverlay(width, height int, fg, bg string) string {
+	fgLines := strings.Split(fg, "\n")
+	bgLines := strings.Split(bg, "\n")
+
+	// Pad background to fill height
+	for len(bgLines) < height {
+		bgLines = append(bgLines, "")
+	}
+
+	fgH := len(fgLines)
+	fgW := 0
+	for _, l := range fgLines {
+		if w := ansi.StringWidth(l); w > fgW {
+			fgW = w
+		}
+	}
+
+	startY := (height - fgH) / 2
+	startX := (width - fgW) / 2
+	if startY < 0 {
+		startY = 0
+	}
+	if startX < 0 {
+		startX = 0
+	}
+
+	result := make([]string, len(bgLines))
+	for i, bgLine := range bgLines {
+		if i >= startY && i < startY+fgH {
+			fgIdx := i - startY
+			result[i] = composeLine(bgLine, fgLines[fgIdx], startX)
+		} else {
+			result[i] = bgLine
+		}
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// composeLine overlays fgLine onto bgLine at the given x offset.
+func composeLine(bgLine, fgLine string, startX int) string {
+	bgW := ansi.StringWidth(bgLine)
+	fgW := ansi.StringWidth(fgLine)
+
+	// Ensure background is wide enough
+	if bgW < startX+fgW {
+		bgLine = bgLine + strings.Repeat(" ", startX+fgW-bgW)
+	}
+
+	before := ansi.Truncate(bgLine, startX, "")
+	after := ansi.TruncateLeft(bgLine, startX+fgW, "")
+
+	return before + fgLine + after
 }
