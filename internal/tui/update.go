@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
@@ -30,12 +31,9 @@ func (m *Model) Init() tea.Cmd {
 
 // isBlankLine returns true if the line contains only whitespace.
 func isBlankLine(s string) bool {
-	for _, c := range s {
-		if c != ' ' && c != '\t' && c != '\r' && c != '\n' {
-			return false
-		}
-	}
-	return true
+	return !strings.ContainsFunc(s, func(r rune) bool {
+		return !unicode.IsSpace(r)
+	})
 }
 
 // moveToParagraphBoundary moves the cursor to the next paragraph
@@ -452,10 +450,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.tabs) > 1 {
 				m.closeTab(m.activeTab)
 			}
-		default:
-			if key.Matches(msg, m.keys.GoTop) {
-				m.gPending = true
-			}
+		case key.Matches(msg, m.keys.GoTop):
+			m.gPending = true
 		}
 	}
 

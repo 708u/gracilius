@@ -130,7 +130,7 @@ func (m *Model) renderFooter() string {
 	var sb strings.Builder
 
 	if m.gPending {
-		sb.WriteString("g-")
+		sb.WriteString("g → g: top")
 		return sb.String()
 	}
 
