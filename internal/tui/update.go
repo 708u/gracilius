@@ -29,6 +29,13 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(m.watchFile(), m.watchDir())
 }
 
+type direction int
+
+const (
+	dirUp   direction = -1
+	dirDown direction = 1
+)
+
 // isBlankLine returns true if the line contains only whitespace.
 func isBlankLine(s string) bool {
 	return !strings.ContainsFunc(s, func(r rune) bool {
@@ -38,7 +45,7 @@ func isBlankLine(s string) bool {
 
 // moveToParagraphBoundary moves the cursor to the next paragraph
 // boundary in the given direction (1 for down, -1 for up).
-func (m *Model) moveToParagraphBoundary(dir int) {
+func (m *Model) moveToParagraphBoundary(dir direction) {
 	t := m.activeTabState()
 	if m.focusPane != paneEditor || len(t.lines) == 0 {
 		return
@@ -52,12 +59,12 @@ func (m *Model) moveToParagraphBoundary(dir int) {
 		return l > 0
 	}
 	if inBounds(line) {
-		line += dir
+		line += int(dir)
 		for inBounds(line) && isBlankLine(t.lines[line]) {
-			line += dir
+			line += int(dir)
 		}
 		for inBounds(line) && !isBlankLine(t.lines[line]) {
-			line += dir
+			line += int(dir)
 		}
 	}
 	t.cursorLine = line
@@ -443,9 +450,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.BlockUp):
-			m.moveToParagraphBoundary(-1)
+			m.moveToParagraphBoundary(dirUp)
 		case key.Matches(msg, m.keys.BlockDown):
-			m.moveToParagraphBoundary(1)
+			m.moveToParagraphBoundary(dirDown)
 		case key.Matches(msg, m.keys.CloseTab):
 			if len(m.tabs) > 1 {
 				m.closeTab(m.activeTab)
