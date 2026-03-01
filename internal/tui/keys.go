@@ -16,6 +16,7 @@ type keyMap struct {
 	Right      key.Binding
 	CharSelect key.Binding
 	LineSelect key.Binding
+	Copy       key.Binding
 	Comment    key.Binding
 	ClearAll   key.Binding
 	NextTab    key.Binding
@@ -65,6 +66,10 @@ func newKeyMap() keyMap {
 			key.WithKeys("V"),
 			key.WithHelp("V", "select line"),
 		),
+		Copy: key.NewBinding(
+			key.WithKeys("y"),
+			key.WithHelp("y", "copy"),
+		),
 		Comment: key.NewBinding(
 			key.WithKeys("i"),
 			key.WithHelp("i", "comment"),
@@ -92,7 +97,7 @@ func newKeyMap() keyMap {
 func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.SwitchPane, k.PrevTab, k.NextTab, k.CloseTab,
-		k.CharSelect, k.LineSelect, k.Cancel, k.Quit,
+		k.CharSelect, k.LineSelect, k.Copy, k.Cancel, k.Quit,
 	}
 }
 
@@ -101,7 +106,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right},
 		{k.Enter, k.SwitchPane, k.PrevTab, k.NextTab, k.CloseTab},
-		{k.CharSelect, k.LineSelect, k.Comment, k.ClearAll, k.Cancel, k.Quit},
+		{k.CharSelect, k.LineSelect, k.Copy, k.Comment, k.ClearAll, k.Cancel, k.Quit},
 	}
 }
 
@@ -111,6 +116,8 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km := m.keys
 	km.CharSelect.SetEnabled(m.focusPane == paneEditor)
 	km.LineSelect.SetEnabled(m.focusPane == paneEditor)
+	t := m.activeTabState()
+	km.Copy.SetEnabled(m.focusPane == paneEditor && t.selecting)
 	km.Comment.SetEnabled(m.focusPane == paneEditor)
 	km.ClearAll.SetEnabled(m.focusPane == paneEditor)
 	return km

@@ -84,6 +84,9 @@ type Model struct {
 
 	// quit confirmation
 	quitPending bool
+
+	// status message (temporary, auto-cleared)
+	statusMsg string
 }
 
 // activeTabState returns the active tab.

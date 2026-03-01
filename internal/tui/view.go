@@ -151,6 +151,9 @@ func (m *Model) renderFooter() string {
 				sLine, sChar, eLine, eChar := t.normalizedSelection()
 				fmt.Fprintf(&sb, "Selection: %d:%d - %d:%d",
 					sLine+1, sChar+1, eLine+1, eChar+1)
+				if m.statusMsg != "" {
+					fmt.Fprintf(&sb, "  %s", m.statusMsg)
+				}
 			case len(t.lines) > 0:
 				fmt.Fprintf(&sb, "Cursor: %d:%d",
 					t.cursorLine+1, t.cursorChar+1)
