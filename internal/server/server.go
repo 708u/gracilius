@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/url"
@@ -21,7 +22,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const maxPortRetries = 10 // maximum number of ports to try
+const (
+	maxPortRetries = 50    // maximum number of ports to try
+	minPort        = 10000 // minimum port number for random selection
+	maxPort        = 65535 // maximum port number for random selection
+)
 
 const commentPrefix = "[Comment]"
 
@@ -116,19 +121,12 @@ func loadOrCreateToken() string {
 }
 
 // New creates a new Server instance.
-func New(port int, workspaceFolders []string) (*Server, error) {
+func New(workspaceFolders []string) (*Server, error) {
 	authToken := loadOrCreateToken()
 
-	lockFile, err := NewLockFile(port, workspaceFolders, authToken)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Server{
-		port:             port,
 		authToken:        authToken,
 		workspaceFolders: workspaceFolders,
-		lockFile:         lockFile,
 		handler:          protocol.NewHandler(workspaceFolders),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -138,19 +136,18 @@ func New(port int, workspaceFolders []string) (*Server, error) {
 	}, nil
 }
 
-// Listen binds a port and creates the lock file.
-// If the configured port is in use, it tries subsequent ports up to maxPortRetries.
+// Listen binds a random port and creates the lock file.
+// Selects a random port in the range [minPort, maxPort] up to maxPortRetries attempts.
 // Call Serve after Listen to start accepting connections.
 func (s *Server) Listen() error {
 	s.mux = http.NewServeMux()
 	s.mux.HandleFunc("/", s.handleWebSocket)
 
-	// Find an available port and listen
+	// Find an available port by random selection
 	var err error
-	startPort := s.port
 
-	for i := range maxPortRetries {
-		tryPort := startPort + i
+	for range maxPortRetries {
+		tryPort := minPort + rand.IntN(maxPort-minPort+1)
 		addr := "127.0.0.1:" + strconv.Itoa(tryPort)
 		s.listener, err = net.Listen("tcp", addr)
 		if err == nil {
@@ -161,8 +158,8 @@ func (s *Server) Listen() error {
 	}
 
 	if s.listener == nil {
-		return fmt.Errorf("failed to find available port in range %d-%d: %w",
-			startPort, startPort+maxPortRetries-1, err)
+		return fmt.Errorf("failed to find available port after %d attempts: %w",
+			maxPortRetries, err)
 	}
 
 	// Create lock file after port is determined

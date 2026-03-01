@@ -16,8 +16,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const defaultPort = 18765
-
 func main() {
 	// Log file setup
 	homeDir, err := os.UserHomeDir()
@@ -65,7 +63,7 @@ func main() {
 		fmt.Printf("Failed to resolve root directory: %v\n", err)
 		os.Exit(1)
 	}
-	srv, err := server.New(defaultPort, []string{absRootDir})
+	srv, err := server.New([]string{absRootDir})
 	if err != nil {
 		fmt.Printf("Failed to create server: %v\n", err)
 		os.Exit(1)
