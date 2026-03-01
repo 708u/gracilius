@@ -43,20 +43,20 @@ func newKeyMap() keyMap {
 			key.WithHelp("Enter", "open/toggle"),
 		),
 		Up: key.NewBinding(
-			key.WithKeys("up"),
-			key.WithHelp("↑", "up"),
+			key.WithKeys("up", "k"),
+			key.WithHelp("↑/k", "up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("down"),
-			key.WithHelp("↓", "down"),
+			key.WithKeys("down", "j"),
+			key.WithHelp("↓/j", "down"),
 		),
 		Left: key.NewBinding(
-			key.WithKeys("left"),
-			key.WithHelp("←", "left"),
+			key.WithKeys("left", "h"),
+			key.WithHelp("←/h", "left"),
 		),
 		Right: key.NewBinding(
-			key.WithKeys("right"),
-			key.WithHelp("→", "right"),
+			key.WithKeys("right", "l"),
+			key.WithHelp("→/l", "right"),
 		),
 		CharSelect: key.NewBinding(
 			key.WithKeys("v"),
