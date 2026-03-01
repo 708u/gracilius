@@ -87,6 +87,9 @@ type Model struct {
 
 	// status message (temporary, auto-cleared)
 	statusMsg string
+
+	// icon display mode
+	iconMode iconMode
 }
 
 // activeTabState returns the active tab.
@@ -168,5 +171,6 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 		treeWidth:  30,
 		keys:       newKeyMap(),
 		help:       help.New(),
+		iconMode:   detectIconMode(),
 	}, nil
 }

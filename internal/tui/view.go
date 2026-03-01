@@ -177,13 +177,15 @@ func (m *Model) renderTree(width, height int) []string {
 		entry := m.fileTree[i]
 		indent := strings.Repeat("  ", entry.depth)
 
-		icon := "  "
+		var icon string
 		if entry.isDir {
 			if entry.expanded {
-				icon = "\u25bc "
+				icon = "\u25be "
 			} else {
-				icon = "\u25b6 "
+				icon = "\u25b8 "
 			}
+		} else {
+			icon = fileIcon(m.iconMode, entry)
 		}
 
 		line := indent + icon + entry.name
