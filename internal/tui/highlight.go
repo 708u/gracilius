@@ -121,8 +121,8 @@ func resolveANSI(style *chroma.Style, tokenType chroma.TokenType) string {
 	}
 
 	var params []string
-	if entry.Colour.IsSet() {
-		r, g, b := entry.Colour.Red(), entry.Colour.Green(), entry.Colour.Blue()
+	if entry.Colour.IsSet() { //nolint:misspell // Colour is the chroma library's field name
+		r, g, b := entry.Colour.Red(), entry.Colour.Green(), entry.Colour.Blue() //nolint:misspell // Colour is the chroma library's field name
 		c := termenv.RGBColor(fmt.Sprintf("#%02x%02x%02x", r, g, b))
 		params = append(params, c.Sequence(false))
 	}

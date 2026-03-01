@@ -53,11 +53,11 @@ func run() int {
 	}
 	// Create latest symlink
 	latestLink := filepath.Join(logDir, "latest")
-	os.Remove(latestLink)
+	_ = os.Remove(latestLink)
 	if err := os.Symlink(logPath, latestLink); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to create latest symlink: %v\n", err)
 	}
-	defer logFile.Close()
+	defer func() { _ = logFile.Close() }()
 	log.SetOutput(logFile)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.LUTC)
 
@@ -95,7 +95,7 @@ func run() int {
 		fmt.Fprintf(os.Stderr, "Failed to create watcher: %v\n", err)
 		return exitErr
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Directory watcher
 	dirWatcher, err := fsnotify.NewWatcher()
@@ -103,7 +103,7 @@ func run() int {
 		fmt.Fprintf(os.Stderr, "Failed to create dir watcher: %v\n", err)
 		return exitErr
 	}
-	defer dirWatcher.Close()
+	defer func() { _ = dirWatcher.Close() }()
 
 	if err := tui.WatchDirRecursive(dirWatcher, absRootDir); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to watch root dir: %v\n", err)

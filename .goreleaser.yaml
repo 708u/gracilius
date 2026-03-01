@@ -1,0 +1,33 @@
+version: 2
+
+project_name: gracilius
+
+builds:
+  - main: ./cmd/gra
+    binary: gra
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - LICENSE
+      - README.md
+
+changelog:
+  use: github-native

@@ -85,13 +85,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if t.filePath != "" {
 			m.notifySelectionChanged()
 		}
-		return m, m.watchFile()
+		cmd := m.watchFile()
+		return m, cmd
 	case treeChangedMsg:
 		m.fileTree = buildFileTree(m.rootDir)
 		if m.treeCursor >= len(m.fileTree) {
 			m.treeCursor = max(0, len(m.fileTree)-1)
 		}
-		return m, m.watchDir()
+		cmd := m.watchDir()
+		return m, cmd
 	case OpenDiffMsg:
 		lines := splitLines([]byte(msg.Contents))
 		dt := newDiffTab(msg.FilePath, lines)
@@ -344,26 +346,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.CharSelect):
 			if m.focusPane == paneEditor && len(t.lines) > 0 {
-				if t.selecting && !t.lineSelect {
+				switch {
+				case t.selecting && !t.lineSelect:
 					t.selecting = false
 					m.notifyClearSelection()
-				} else if t.selecting && t.lineSelect {
+				case t.selecting && t.lineSelect:
 					t.lineSelect = false
 					m.notifySelectionChanged()
-				} else {
+				default:
 					t.startSelecting()
 				}
 			}
 		case key.Matches(msg, m.keys.LineSelect):
 			if m.focusPane == paneEditor && len(t.lines) > 0 {
-				if t.selecting && t.lineSelect {
+				switch {
+				case t.selecting && t.lineSelect:
 					t.selecting = false
 					t.lineSelect = false
 					m.notifyClearSelection()
-				} else if t.selecting && !t.lineSelect {
+				case t.selecting && !t.lineSelect:
 					t.lineSelect = true
 					m.notifySelectionChanged()
-				} else {
+				default:
 					t.startSelecting()
 					t.lineSelect = true
 					m.notifySelectionChanged()
