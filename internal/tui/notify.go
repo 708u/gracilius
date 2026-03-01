@@ -1,49 +1,15 @@
 package tui
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // notifySelectionChanged sends the current selection to the MCP server.
 func (m *Model) notifySelectionChanged() {
 	t := m.activeTabState()
 	startLine, startChar, endLine, endChar := t.normalizedSelection()
 
-	var text string
-	if startLine == endLine {
-		if startLine < len(t.lines) {
-			runes := []rune(t.lines[startLine])
-			if startChar <= len(runes) && endChar <= len(runes) {
-				text = string(runes[startChar:endChar])
-			}
-		}
-	} else {
-		var parts []string
-		for i := startLine; i <= endLine; i++ {
-			if i >= len(t.lines) {
-				continue
-			}
-			runes := []rune(t.lines[i])
-			switch {
-			case i == startLine:
-				if startChar <= len(runes) {
-					parts = append(parts, string(runes[startChar:]))
-				}
-			case i == endLine:
-				if endChar <= len(runes) {
-					parts = append(parts, string(runes[:endChar]))
-				}
-			default:
-				parts = append(parts, t.lines[i])
-			}
-		}
-		text = strings.Join(parts, "\n")
-	}
-
 	m.server.NotifySelectionChanged(
 		t.filePath,
-		text,
+		t.selectedText(),
 		startLine,
 		startChar,
 		endLine,

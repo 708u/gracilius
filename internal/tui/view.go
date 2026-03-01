@@ -146,21 +146,23 @@ func (m *Model) renderFooter() string {
 		sb.WriteString("\n")
 
 		if m.focusPane == paneEditor {
-			if t.selecting {
+			switch {
+			case t.selecting:
 				sLine, sChar, eLine, eChar := t.normalizedSelection()
 				fmt.Fprintf(&sb, "Selection: %d:%d - %d:%d",
 					sLine+1, sChar+1, eLine+1, eChar+1)
-			} else if len(t.lines) > 0 {
+				if m.statusMsg != "" {
+					fmt.Fprintf(&sb, "  %s", m.statusMsg)
+				}
+			case len(t.lines) > 0:
 				fmt.Fprintf(&sb, "Cursor: %d:%d",
 					t.cursorLine+1, t.cursorChar+1)
-			} else {
+			default:
 				sb.WriteString("Select a file to view")
 			}
-		} else {
-			if m.treeCursor < len(m.fileTree) {
-				entry := m.fileTree[m.treeCursor]
-				sb.WriteString(entry.path)
-			}
+		} else if m.treeCursor < len(m.fileTree) {
+			entry := m.fileTree[m.treeCursor]
+			sb.WriteString(entry.path)
 		}
 	}
 
@@ -226,12 +228,13 @@ func (m *Model) renderEditor(width, height int) []string {
 		lineContent := t.lines[i]
 
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("%3d ", i+1))
+		fmt.Fprintf(&sb, "%3d ", i+1)
 
 		isCursorLine := m.focusPane == paneEditor && i == t.cursorLine
 		isSelected := m.focusPane == paneEditor && t.selecting && i >= startLine && i <= endLine
 
-		if isCursorLine && isSelected {
+		switch {
+		case isCursorLine && isSelected:
 			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
 			if sc == ec {
 				if hl := t.getHighlightedLine(i); hl != nil {
@@ -244,20 +247,20 @@ func (m *Model) renderEditor(width, height int) []string {
 			} else {
 				renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
 			}
-		} else if isCursorLine {
+		case isCursorLine:
 			if hl := t.getHighlightedLine(i); hl != nil {
 				renderStyledLineWithCursor(&sb, hl.runs, t.cursorChar)
 			} else {
 				renderLineWithCursor(&sb, lineContent, t.cursorChar)
 			}
-		} else if isSelected {
+		case isSelected:
 			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
 			if hl := t.getHighlightedLine(i); hl != nil {
 				renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
 			} else {
 				renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
 			}
-		} else {
+		default:
 			if hl := t.getHighlightedLine(i); hl != nil {
 				sb.WriteString(hl.rendered)
 			} else {

@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -16,10 +18,14 @@ const (
 	lineNumberWidth     = 4
 	maxTreeWidthPercent = 70
 	quitTimeout         = 750 * time.Millisecond
+	statusClearTimeout  = 2 * time.Second
 )
 
 // quitTimeoutMsg is sent when the quit confirmation window expires.
 type quitTimeoutMsg struct{}
+
+// statusClearMsg is sent to clear the temporary status message.
+type statusClearMsg struct{}
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
@@ -79,13 +85,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if t.filePath != "" {
 			m.notifySelectionChanged()
 		}
-		return m, m.watchFile()
+		cmd := m.watchFile()
+		return m, cmd
 	case treeChangedMsg:
 		m.fileTree = buildFileTree(m.rootDir)
 		if m.treeCursor >= len(m.fileTree) {
 			m.treeCursor = max(0, len(m.fileTree)-1)
 		}
-		return m, m.watchDir()
+		cmd := m.watchDir()
+		return m, cmd
 	case OpenDiffMsg:
 		lines := splitLines([]byte(msg.Contents))
 		dt := newDiffTab(msg.FilePath, lines)
@@ -99,6 +107,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case quitTimeoutMsg:
 		m.quitPending = false
+		return m, nil
+	case statusClearMsg:
+		m.statusMsg = ""
 		return m, nil
 	case IdeConnectedMsg:
 		if t.filePath != "" && len(t.lines) > 0 {
@@ -335,26 +346,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.CharSelect):
 			if m.focusPane == paneEditor && len(t.lines) > 0 {
-				if t.selecting && !t.lineSelect {
+				switch {
+				case t.selecting && !t.lineSelect:
 					t.selecting = false
 					m.notifyClearSelection()
-				} else if t.selecting && t.lineSelect {
+				case t.selecting && t.lineSelect:
 					t.lineSelect = false
 					m.notifySelectionChanged()
-				} else {
+				default:
 					t.startSelecting()
 				}
 			}
 		case key.Matches(msg, m.keys.LineSelect):
 			if m.focusPane == paneEditor && len(t.lines) > 0 {
-				if t.selecting && t.lineSelect {
+				switch {
+				case t.selecting && t.lineSelect:
 					t.selecting = false
 					t.lineSelect = false
 					m.notifyClearSelection()
-				} else if t.selecting && !t.lineSelect {
+				case t.selecting && !t.lineSelect:
 					t.lineSelect = true
 					m.notifySelectionChanged()
-				} else {
+				default:
 					t.startSelecting()
 					t.lineSelect = true
 					m.notifySelectionChanged()
@@ -369,6 +382,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					t.commentInput.SetValue(existing)
 				}
 				t.commentInput.Focus()
+			}
+		case key.Matches(msg, m.keys.Copy):
+			if m.focusPane == paneEditor && t.selecting {
+				text := t.selectedText()
+				if err := clipboard.WriteAll(text); err != nil {
+					m.statusMsg = fmt.Sprintf("Copy failed: %v", err)
+				} else {
+					n := strings.Count(text, "\n") + 1
+					m.statusMsg = fmt.Sprintf("Copied %d lines", n)
+				}
+				return m, tea.Tick(statusClearTimeout, func(time.Time) tea.Msg {
+					return statusClearMsg{}
+				})
 			}
 		case key.Matches(msg, m.keys.ClearAll):
 			if m.focusPane == paneEditor {
