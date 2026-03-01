@@ -177,25 +177,41 @@ func (m *Model) renderTree(width, height int) []string {
 		entry := m.fileTree[i]
 		indent := strings.Repeat("  ", entry.depth)
 
-		var icon string
+		isCursor := i == m.treeCursor && m.focusPane == paneTree
+
+		var arrow string
 		if entry.isDir {
 			if entry.expanded {
-				icon = "\u25be "
+				arrow = "\u25be "
 			} else {
-				icon = "\u25b8 "
+				arrow = "\u25b8 "
 			}
 		} else {
-			icon = fileIcon(m.iconMode, entry)
+			arrow = "  "
 		}
 
-		prefix := dirIcon(m.iconMode, entry)
-		line := indent + prefix + icon + entry.name
+		icon := iconInfoFor(m.iconMode, entry)
 
+		plainIcon := ""
+		if icon != nil {
+			plainIcon = icon.char + " "
+		}
+
+		line := indent + arrow + plainIcon + entry.name
 		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)
 
-		if i == m.treeCursor && m.focusPane == paneTree {
+		if isCursor {
 			displayLine = styleTreeCursor().Render(displayLine)
+		}
+
+		// Inject icon foreground color via ANSI escape.
+		// Icon chars are non-ASCII UTF-8; ANSI sequences are ASCII-only,
+		// so strings.Index never matches inside escape sequences.
+		if icon != nil {
+			if pos := strings.Index(displayLine, icon.char); pos >= 0 {
+				displayLine = colorizeIcon(displayLine, pos, *icon)
+			}
 		}
 
 		lines = append(lines, displayLine)

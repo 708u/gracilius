@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	devicons "github.com/epilande/go-devicons"
+	"github.com/muesli/termenv"
 )
 
 type iconMode int
@@ -37,20 +37,15 @@ const (
 
 type categoryInfo struct {
 	symbol string
-	style  lipgloss.Style
+	color  string
 }
 
 var categoryStyles = map[fileCategory]categoryInfo{
-	catSource: {"\u25c6", lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#61AFEF"))},
-	catConfig: {"\u25c7", lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#E5C07B"))},
-	catDoc: {"\u25cb", lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#98C379"))},
-	catBinary: {"\u25a1", lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#5C6370"))},
-	catOther: {"\u25cf", lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#5C6370"))},
+	catSource: {"\u25c6", "#61AFEF"},
+	catConfig: {"\u25c7", "#E5C07B"},
+	catDoc:    {"\u25cb", "#98C379"},
+	catBinary: {"\u25a1", "#5C6370"},
+	catOther:  {"\u25cf", "#5C6370"},
 }
 
 var extCategory = map[string]fileCategory{
@@ -162,26 +157,35 @@ func classifyFile(name string) fileCategory {
 	return catOther
 }
 
-func dirIcon(mode iconMode, entry fileEntry) string {
-	if mode == iconNerd && entry.isDir {
-		s := devicons.IconForPath(entry.path)
-		st := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(s.Color))
-		return st.Render(s.Icon) + " "
-	}
-	return ""
+// iconInfo holds the raw icon character and its foreground color.
+type iconInfo struct {
+	char  string
+	color string
 }
 
-func fileIcon(mode iconMode, entry fileEntry) string {
-	switch mode {
-	case iconNerd:
+// iconInfoFor returns icon info for the given entry, or nil if
+// no icon should be displayed (symbol-mode directories).
+func iconInfoFor(mode iconMode, entry fileEntry) *iconInfo {
+	if mode == iconNerd {
 		s := devicons.IconForPath(entry.path)
-		st := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(s.Color))
-		return st.Render(s.Icon) + " "
-	default:
-		cat := classifyFile(entry.name)
-		ci := categoryStyles[cat]
-		return ci.style.Render(ci.symbol) + " "
+		return &iconInfo{char: s.Icon, color: s.Color}
 	}
+	if entry.isDir {
+		return nil
+	}
+	cat := classifyFile(entry.name)
+	ci := categoryStyles[cat]
+	return &iconInfo{char: ci.symbol, color: ci.color}
+}
+
+const ansiFgReset = termenv.CSI + "39m"
+
+// colorizeIcon injects ANSI foreground color around the icon position
+// in a line. pos is the byte offset of the icon character.
+// This preserves any existing ANSI (e.g. background) on the line.
+func colorizeIcon(line string, pos int, info iconInfo) string {
+	set := termenv.CSI +
+		termenv.RGBColor(info.color).Sequence(false) + "m"
+	iconEnd := pos + len(info.char)
+	return line[:pos] + set + line[pos:iconEnd] + ansiFgReset + line[iconEnd:]
 }
