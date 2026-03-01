@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -42,7 +41,6 @@ type Model struct {
 	width  int
 	height int
 	server MCPServer
-	ctx    context.Context
 	err    error
 
 	// tabs
@@ -106,17 +104,16 @@ func (m *Model) toggleTreeEntry(idx int) {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, ctx context.Context, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher) *Model {
+func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher) *Model {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
-		return &Model{server: srv, ctx: ctx, err: err}
+		return &Model{server: srv, err: err}
 	}
 
 	ft := buildFileTree(absRootDir)
 
 	return &Model{
 		server:     srv,
-		ctx:        ctx,
 		rootDir:    absRootDir,
 		fileTree:   ft,
 		treeCursor: 0,

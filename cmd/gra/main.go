@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -99,15 +100,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	go func() {
-		<-ctx.Done()
-		srv.Stop()
-	}()
-
-	m := tui.NewModel(srv, ctx, rootDir, watcher, dirWatcher)
+	m := tui.NewModel(srv, rootDir, watcher, dirWatcher)
 	p := tea.NewProgram(m,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
+		tea.WithContext(ctx),
 	)
 
 	// Register callbacks
@@ -126,6 +123,9 @@ func main() {
 
 	if _, err := p.Run(); err != nil {
 		srv.Stop()
+		if errors.Is(err, tea.ErrProgramKilled) {
+			return
+		}
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
