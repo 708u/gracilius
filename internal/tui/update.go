@@ -12,18 +12,9 @@ import (
 )
 
 const (
-	scrollAmount        = 3
-	headerHeight        = 1
-	tabBarHeight        = 2 // labels + underline
-	footerHeight        = 4 // border-top + help + status
-	separatorWidth      = 3
-	lineNumberWidth     = 4
-	minTreeWidth        = 15
-	defaultTreePercent  = 30
-	maxTreeWidthPercent = 70
-	minContentHeight    = 5
-	quitTimeout         = 750 * time.Millisecond
-	statusClearTimeout  = 2 * time.Second
+	scrollAmount       = 3
+	quitTimeout        = 750 * time.Millisecond
+	statusClearTimeout = 2 * time.Second
 )
 
 // quitTimeoutMsg is sent when the quit confirmation window expires.

@@ -1,5 +1,17 @@
 package tui
 
+const (
+	headerHeight        = 1
+	tabBarHeight        = 2 // labels + underline
+	footerHeight        = 4 // border-top + help + status
+	separatorWidth      = 3
+	lineNumberWidth     = 4
+	minTreeWidth        = 15
+	defaultTreePercent  = 30
+	maxTreeWidthPercent = 70
+	minContentHeight    = 5
+)
+
 // layout holds all derived dimensions for a single render frame.
 // Computed fresh on each View() / mouse-handling pass; never stored.
 //
