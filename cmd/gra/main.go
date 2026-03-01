@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -16,30 +17,39 @@ import (
 	"github.com/google/uuid"
 )
 
-const defaultPort = 18765
+const (
+	defaultPort = 18765
+
+	exitOK  = 0
+	exitErr = 1
+)
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	// Log file setup
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Printf("Failed to get home directory: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Failed to get home directory: %v\n", err)
+		return exitErr
 	}
 	logDir := filepath.Join(homeDir, ".gracilius", "logs")
 	if err := os.MkdirAll(logDir, 0700); err != nil {
-		fmt.Printf("Failed to create log directory: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
+		return exitErr
 	}
 	id, err := uuid.NewV7()
 	if err != nil {
-		fmt.Printf("Failed to generate UUIDv7: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Failed to generate UUIDv7: %v\n", err)
+		return exitErr
 	}
 	logPath := filepath.Join(logDir, id.String()+".log")
 	logFile, err := os.Create(logPath)
 	if err != nil {
-		fmt.Printf("Failed to create log file: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Failed to create log file: %v\n", err)
+		return exitErr
 	}
 	// Create latest symlink
 	latestLink := filepath.Join(logDir, "latest")
@@ -62,52 +72,53 @@ func main() {
 
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
-		fmt.Printf("Failed to resolve root directory: %v\n", err)
-		os.Exit(1) //nolint:gocritic // defers are for cleanup; exit during init is safe
+		fmt.Fprintf(os.Stderr, "Failed to resolve root directory: %v\n", err)
+		return exitErr
 	}
 	srv, err := server.New(defaultPort, []string{absRootDir})
 	if err != nil {
-		fmt.Printf("Failed to create server: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Failed to create server: %v\n", err)
+		return exitErr
 	}
 
 	if err := srv.Listen(); err != nil {
-		fmt.Printf("Failed to start server: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Failed to start server: %v\n", err)
+		return exitErr
 	}
 
 	go srv.Serve()
+	defer srv.Stop()
 
 	// File watcher
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		fmt.Printf("Failed to create watcher: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Failed to create watcher: %v\n", err)
+		return exitErr
 	}
 	defer func() { _ = watcher.Close() }()
 
 	// Directory watcher
 	dirWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		fmt.Printf("Failed to create dir watcher: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Failed to create dir watcher: %v\n", err)
+		return exitErr
 	}
 	defer func() { _ = dirWatcher.Close() }()
 
 	if err := tui.WatchDirRecursive(dirWatcher, absRootDir); err != nil {
-		fmt.Printf("Failed to watch root dir: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Failed to watch root dir: %v\n", err)
+		return exitErr
 	}
 
-	go func() {
-		<-ctx.Done()
-		srv.Stop()
-	}()
-
-	m := tui.NewModel(srv, ctx, rootDir, watcher, dirWatcher)
+	m, err := tui.NewModel(srv, rootDir, watcher, dirWatcher)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create TUI model: %v\n", err)
+		return exitErr
+	}
 	p := tea.NewProgram(m,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
+		tea.WithContext(ctx),
 	)
 
 	// Register callbacks
@@ -129,11 +140,10 @@ func main() {
 		p.Send(tui.IdeConnectedMsg{})
 	})
 
-	if _, err := p.Run(); err != nil {
-		srv.Stop()
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+	if _, err := p.Run(); err != nil && !errors.Is(err, tea.ErrProgramKilled) {
+		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+		return exitErr
 	}
 
-	srv.Stop()
+	return exitOK
 }
