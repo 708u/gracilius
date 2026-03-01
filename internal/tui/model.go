@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -104,10 +105,10 @@ func (m *Model) toggleTreeEntry(idx int) {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher) *Model {
+func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher) (*Model, error) {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
-		return &Model{server: srv, err: err}
+		return nil, fmt.Errorf("resolve root directory: %w", err)
 	}
 
 	ft := buildFileTree(absRootDir)
@@ -124,5 +125,5 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 		treeWidth:  30,
 		keys:       newKeyMap(),
 		help:       help.New(),
-	}
+	}, nil
 }

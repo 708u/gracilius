@@ -100,7 +100,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	m := tui.NewModel(srv, rootDir, watcher, dirWatcher)
+	m, err := tui.NewModel(srv, rootDir, watcher, dirWatcher)
+	if err != nil {
+		fmt.Printf("Failed to create TUI model: %v\n", err)
+		os.Exit(1)
+	}
 	p := tea.NewProgram(m,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
