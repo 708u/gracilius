@@ -14,9 +14,14 @@ import (
 const (
 	scrollAmount        = 3
 	headerHeight        = 1
+	tabBarHeight        = 2 // labels + underline
+	footerHeight        = 4 // border-top + help + status
 	separatorWidth      = 3
 	lineNumberWidth     = 4
+	minTreeWidth        = 15
+	defaultTreePercent  = 30
 	maxTreeWidthPercent = 70
+	minContentHeight    = 5
 	quitTimeout         = 750 * time.Millisecond
 	statusClearTimeout  = 2 * time.Second
 )
@@ -35,19 +40,20 @@ func (m *Model) Init() tea.Cmd {
 // getTreeWidth returns the tree pane width.
 func (m *Model) getTreeWidth() int {
 	if m.treeWidth > 0 {
-		tw := max(m.treeWidth, 15)
+		tw := max(m.treeWidth, minTreeWidth)
 		maxWidth := m.width * maxTreeWidthPercent / 100
 		if tw > maxWidth {
 			tw = maxWidth
 		}
 		return tw
 	}
-	return m.width * 30 / 100
+	return m.width * defaultTreePercent / 100
 }
 
 // getContentHeight returns the content area height.
 func (m *Model) getContentHeight() int {
-	return max(m.height-7, 5)
+	chrome := headerHeight + tabBarHeight + footerHeight
+	return max(m.height-chrome, minContentHeight)
 }
 
 // adjustTreeScroll adjusts the tree scroll so the tree cursor
@@ -127,9 +133,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notifySelectionChanged()
 		}
 	case tea.MouseMsg:
-		treeWidth := m.getTreeWidth()
+		lo := m.computeLayout()
 
-		borderX := treeWidth
+		borderX := lo.treeWidth
 		isBorderArea := msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= headerHeight
 
 		if isBorderArea && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
@@ -145,7 +151,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if msg.X < treeWidth && msg.Y >= headerHeight && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+		if msg.X < lo.treeWidth && msg.Y >= headerHeight && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
 			treeIdx := msg.Y - headerHeight + m.treeScrollOffset
 			if treeIdx >= 0 && treeIdx < len(m.fileTree) {
 				m.treeCursor = treeIdx
@@ -158,10 +164,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		editorStartX := treeWidth + separatorWidth
-
-		if msg.X >= editorStartX && msg.Y >= headerHeight {
-			editorX := msg.X - editorStartX - lineNumberWidth
+		if msg.X >= lo.editorStartX && msg.Y >= headerHeight {
+			editorX := msg.X - lo.editorStartX - lineNumberWidth
 			editorY := msg.Y - headerHeight
 			offset := t.scrollOffset
 			targetLine := offset + editorY
@@ -216,8 +220,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					t.scrollOffset = 0
 				}
 			case msg.Button == tea.MouseButtonWheelDown:
-				contentHeight := m.getContentHeight()
-				maxOffset := max(len(t.lines)-contentHeight, 0)
+				maxOffset := max(len(t.lines)-lo.contentHeight, 0)
 				t.scrollOffset += scrollAmount
 				if t.scrollOffset > maxOffset {
 					t.scrollOffset = maxOffset
