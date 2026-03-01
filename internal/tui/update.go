@@ -91,6 +91,21 @@ func (m *Model) adjustTreeScroll(contentHeight int) {
 
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Route non-key messages (e.g. FilterMatchesMsg) to the list
+	// when the search overlay is active.
+	if m.search.active {
+		switch msg.(type) {
+		case tea.KeyMsg, tea.MouseMsg, tea.WindowSizeMsg,
+			fileChangedMsg, treeChangedMsg,
+			OpenDiffMsg, CloseDiffMsg,
+			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
+			// Fall through to normal handling below.
+		default:
+			cmd := m.search.update(msg)
+			return m, cmd
+		}
+	}
+
 	t := m.activeTabState()
 
 	switch msg := msg.(type) {
