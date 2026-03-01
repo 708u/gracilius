@@ -168,12 +168,12 @@ func (s *Server) Listen() error {
 	// Create lock file after port is determined
 	lockFile, err := NewLockFile(s.port, s.workspaceFolders, s.authToken)
 	if err != nil {
-		s.listener.Close()
+		_ = s.listener.Close()
 		return err
 	}
 	s.lockFile = lockFile
 	if err := s.lockFile.Create(); err != nil {
-		s.listener.Close()
+		_ = s.listener.Close()
 		return err
 	}
 
@@ -196,12 +196,12 @@ func (s *Server) Serve() {
 func (s *Server) Stop() {
 	s.stopOnce.Do(func() {
 		if s.httpSrv != nil {
-			s.httpSrv.Shutdown(context.Background())
+			_ = s.httpSrv.Shutdown(context.Background())
 		}
 
 		s.mu.Lock()
 		for _, client := range s.clients {
-			client.conn.Close()
+			_ = client.conn.Close()
 		}
 		s.clients = nil
 		s.mu.Unlock()
@@ -429,7 +429,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 				if timeSincePong > keepaliveTimeout {
 					log.Printf("Client keepalive timeout (%.1fs idle), closing connection", timeSincePong.Seconds())
-					conn.Close()
+					_ = conn.Close()
 					return
 				}
 
@@ -453,7 +453,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		close(pingDone)
-		conn.Close()
+		_ = conn.Close()
 		s.mu.Lock()
 		for i, c := range s.clients {
 			if c == client {
