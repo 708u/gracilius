@@ -42,14 +42,12 @@ func (m *Model) View() string {
 		header += fmt.Sprintf(" | %s", t.filePath)
 	}
 	// content
-	treeWidth := m.getTreeWidth()
-	editorWidth := m.width - treeWidth - separatorWidth
-	contentHeight := m.getContentHeight()
+	lo := m.computeLayout()
 
-	treeLines := m.renderTree(treeWidth, contentHeight)
-	editorLines := m.renderEditor(editorWidth, contentHeight)
+	treeLines := m.renderTree(lo.treeWidth, lo.contentHeight)
+	editorLines := m.renderEditor(lo.editorWidth, lo.contentHeight)
 
-	sepLines := make([]string, contentHeight)
+	sepLines := make([]string, lo.contentHeight)
 	for i := range sepLines {
 		sepLines[i] = " \u2502 "
 	}
@@ -68,7 +66,7 @@ func (m *Model) View() string {
 		Width(m.width).
 		Render(footer)
 
-	tabBar := m.renderTabBar(treeWidth + separatorWidth)
+	tabBar := m.renderTabBar(lo.editorStartX)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
