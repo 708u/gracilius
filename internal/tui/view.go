@@ -210,7 +210,7 @@ func (m *Model) renderTree(width, height int) []string {
 		// so strings.Index never matches inside escape sequences.
 		if icon != nil {
 			if pos := strings.Index(displayLine, icon.char); pos >= 0 {
-				displayLine = colorizeIcon(displayLine, pos, *icon)
+				displayLine = icon.colorize(displayLine, pos)
 			}
 		}
 

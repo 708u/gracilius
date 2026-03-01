@@ -53,12 +53,12 @@ func iconInfoFor(mode iconMode, entry fileEntry) *iconInfo {
 
 const ansiFgReset = termenv.CSI + "39m"
 
-// colorizeIcon injects ANSI foreground color around the icon position
+// colorize injects ANSI foreground color around the icon position
 // in a line. pos is the byte offset of the icon character.
 // This preserves any existing ANSI (e.g. background) on the line.
-func colorizeIcon(line string, pos int, info iconInfo) string {
+func (i *iconInfo) colorize(line string, pos int) string {
 	set := termenv.CSI +
-		termenv.RGBColor(info.color).Sequence(false) + "m"
-	iconEnd := pos + len(info.char)
+		termenv.RGBColor(i.color).Sequence(false) + "m"
+	iconEnd := pos + len(i.char)
 	return line[:pos] + set + line[pos:iconEnd] + ansiFgReset + line[iconEnd:]
 }
