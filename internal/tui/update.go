@@ -382,11 +382,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Copy):
 			if m.focusPane == paneEditor && t.selecting {
 				text := t.selectedText()
-				startLine, _, endLine, _ := t.normalizedSelection()
 				if err := clipboard.WriteAll(text); err != nil {
 					m.statusMsg = fmt.Sprintf("Copy failed: %v", err)
 				} else {
-					n := endLine - startLine + 1
+					n := strings.Count(text, "\n") + 1
 					m.statusMsg = fmt.Sprintf("Copied %d lines", n)
 				}
 				return m, tea.Tick(statusClearTimeout, func(time.Time) tea.Msg {
