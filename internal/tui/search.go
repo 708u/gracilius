@@ -37,7 +37,11 @@ func newSearchOverlay() searchOverlay {
 	l.SetShowHelp(false)
 	l.SetShowPagination(false)
 	l.SetFilteringEnabled(true)
+	l.SetShowFilter(false)
 	l.DisableQuitKeybindings()
+	l.FilterInput.Placeholder = "Search files..."
+	l.FilterInput.PromptStyle = lipgloss.NewStyle()
+	l.FilterInput.Prompt = ""
 
 	return searchOverlay{list: l}
 }
@@ -125,12 +129,8 @@ func (s *searchOverlay) overlay(bg string, width, height int) string {
 
 	s.list.SetSize(innerW, innerH)
 
-	title := "Search Files"
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(activeTheme.tabActiveFg)).
-		Bold(true)
-
-	content := titleStyle.Render(title) + "\n" + s.list.View()
+	filterLine := s.list.FilterInput.View()
+	content := filterLine + "\n" + s.list.View()
 
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
