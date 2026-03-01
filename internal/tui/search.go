@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 
@@ -19,17 +21,47 @@ func (f fileItem) Title() string       { return f.path }
 func (f fileItem) Description() string { return "" }
 func (f fileItem) FilterValue() string { return f.path }
 
+// searchDelegate renders file items with an icon prefix.
+type searchDelegate struct {
+	iconMode iconMode
+}
+
+func (d searchDelegate) Height() int                         { return 1 }
+func (d searchDelegate) Spacing() int                        { return 0 }
+func (d searchDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
+
+func (d searchDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	fi, ok := item.(fileItem)
+	if !ok {
+		return
+	}
+
+	entry := fileEntry{path: fi.path, name: filepath.Base(fi.path)}
+	icon := iconFor(d.iconMode, entry)
+
+	selected := index == m.Index()
+
+	var style lipgloss.Style
+	if selected {
+		style = lipgloss.NewStyle().
+			Background(lipgloss.Color(activeTheme.listSelectionBg))
+	}
+
+	line := icon.prefix() + fi.path
+	rendered := style.Render(line)
+	rendered = icon.colorize(rendered)
+
+	fmt.Fprint(w, rendered)
+}
+
 // searchOverlay manages the file search overlay state.
 type searchOverlay struct {
 	active bool
 	list   list.Model
 }
 
-func newSearchOverlay() searchOverlay {
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
-	delegate.SetHeight(1)
-	delegate.SetSpacing(0)
+func newSearchOverlay(mode iconMode) searchOverlay {
+	delegate := searchDelegate{iconMode: mode}
 
 	l := list.New(nil, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -75,7 +107,6 @@ func collectFiles(rootDir string, entries []fileEntry, items *[]list.Item) {
 }
 
 // open activates the search overlay and populates it with files.
-// open activates the search overlay and populates it with files.
 // It triggers the list's built-in filter mode via a synthetic "/"
 // keypress so the user can start typing immediately.
 func (s *searchOverlay) open(rootDir string) tea.Cmd {
@@ -89,7 +120,6 @@ func (s *searchOverlay) open(rootDir string) tea.Cmd {
 		Runes: []rune{'/'},
 	})
 	s.active = true
-	// Return the blink cmd so the cursor is visible immediately.
 	return s.list.FilterInput.Cursor.BlinkCmd()
 }
 
@@ -149,7 +179,6 @@ func placeOverlay(width, height int, fg, bg string) string {
 	fgLines := strings.Split(fg, "\n")
 	bgLines := strings.Split(bg, "\n")
 
-	// Pad background to fill height
 	for len(bgLines) < height {
 		bgLines = append(bgLines, "")
 	}
@@ -189,7 +218,6 @@ func composeLine(bgLine, fgLine string, startX int) string {
 	bgW := ansi.StringWidth(bgLine)
 	fgW := ansi.StringWidth(fgLine)
 
-	// Ensure background is wide enough
 	if bgW < startX+fgW {
 		bgLine = bgLine + strings.Repeat(" ", startX+fgW-bgW)
 	}

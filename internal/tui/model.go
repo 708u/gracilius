@@ -188,6 +188,6 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 		keys:       newKeyMap(),
 		help:       help.New(),
 		iconMode:   detectIconMode(),
-		search:     newSearchOverlay(),
+		search:     newSearchOverlay(detectIconMode()),
 	}, nil
 }
