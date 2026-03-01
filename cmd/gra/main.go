@@ -18,8 +18,6 @@ import (
 )
 
 const (
-	defaultPort = 18765
-
 	exitOK  = 0
 	exitErr = 1
 )
@@ -75,7 +73,7 @@ func run() int {
 		fmt.Fprintf(os.Stderr, "Failed to resolve root directory: %v\n", err)
 		return exitErr
 	}
-	srv, err := server.New(defaultPort, []string{absRootDir})
+	srv, err := server.New([]string{absRootDir})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create server: %v\n", err)
 		return exitErr
