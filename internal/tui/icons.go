@@ -35,9 +35,9 @@ type iconInfo struct {
 	color string
 }
 
-// iconInfoFor returns icon info for the given entry, or nil if
+// iconFor returns icon info for the given entry, or nil if
 // no icon should be displayed (symbol-mode directories).
-func iconInfoFor(mode iconMode, entry fileEntry) *iconInfo {
+func iconFor(mode iconMode, entry fileEntry) *iconInfo {
 	if mode == iconNerd {
 		s := devicons.IconForPath(entry.path)
 		return &iconInfo{char: s.Icon, color: s.Color}
@@ -51,12 +51,27 @@ func iconInfoFor(mode iconMode, entry fileEntry) *iconInfo {
 	return &symbolText
 }
 
+// prefix returns the icon character followed by a space,
+// or empty string if nil.
+func (i *iconInfo) prefix() string {
+	if i == nil {
+		return ""
+	}
+	return i.char + " "
+}
+
 const ansiFgReset = termenv.CSI + "39m"
 
-// colorize injects ANSI foreground color around the icon position
-// in a line. pos is the byte offset of the icon character.
-// This preserves any existing ANSI (e.g. background) on the line.
-func (i *iconInfo) colorize(line string, pos int) string {
+// colorize finds the icon character in line and injects
+// ANSI foreground color around it. Returns line unchanged if nil.
+func (i *iconInfo) colorize(line string) string {
+	if i == nil {
+		return line
+	}
+	pos := strings.Index(line, i.char)
+	if pos < 0 {
+		return line
+	}
 	set := termenv.CSI +
 		termenv.RGBColor(i.color).Sequence(false) + "m"
 	iconEnd := pos + len(i.char)

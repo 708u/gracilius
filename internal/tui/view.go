@@ -190,14 +190,9 @@ func (m *Model) renderTree(width, height int) []string {
 			arrow = "  "
 		}
 
-		icon := iconInfoFor(m.iconMode, entry)
+		icon := iconFor(m.iconMode, entry)
 
-		plainIcon := ""
-		if icon != nil {
-			plainIcon = icon.char + " "
-		}
-
-		line := indent + arrow + plainIcon + entry.name
+		line := indent + arrow + icon.prefix() + entry.name
 		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)
 
@@ -205,14 +200,7 @@ func (m *Model) renderTree(width, height int) []string {
 			displayLine = styleTreeCursor().Render(displayLine)
 		}
 
-		// Inject icon foreground color via ANSI escape.
-		// Icon chars are non-ASCII UTF-8; ANSI sequences are ASCII-only,
-		// so strings.Index never matches inside escape sequences.
-		if icon != nil {
-			if pos := strings.Index(displayLine, icon.char); pos >= 0 {
-				displayLine = icon.colorize(displayLine, pos)
-			}
-		}
+		displayLine = icon.colorize(displayLine)
 
 		lines = append(lines, displayLine)
 	}
