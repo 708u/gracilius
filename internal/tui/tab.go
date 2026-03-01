@@ -1,6 +1,10 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/textinput"
+import (
+	"strings"
+
+	"github.com/charmbracelet/bubbles/textinput"
+)
 
 // tabKind distinguishes between file and diff tabs.
 type tabKind int
@@ -57,6 +61,42 @@ func newDiffTab(filePath string, lines []string) *tab {
 		comments:     make(map[int]string),
 		commentInput: ti,
 	}
+}
+
+// selectedText returns the text within the current selection range.
+func (t *tab) selectedText() string {
+	startLine, startChar, endLine, endChar := t.normalizedSelection()
+
+	if startLine == endLine {
+		if startLine < len(t.lines) {
+			runes := []rune(t.lines[startLine])
+			if startChar <= len(runes) && endChar <= len(runes) {
+				return string(runes[startChar:endChar])
+			}
+		}
+		return ""
+	}
+
+	var parts []string
+	for i := startLine; i <= endLine; i++ {
+		if i >= len(t.lines) {
+			continue
+		}
+		runes := []rune(t.lines[i])
+		switch {
+		case i == startLine:
+			if startChar <= len(runes) {
+				parts = append(parts, string(runes[startChar:]))
+			}
+		case i == endLine:
+			if endChar <= len(runes) {
+				parts = append(parts, string(runes[:endChar]))
+			}
+		default:
+			parts = append(parts, t.lines[i])
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 // normalizedSelection returns the selection range with start <= end.

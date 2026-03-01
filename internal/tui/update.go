@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -16,10 +18,14 @@ const (
 	lineNumberWidth     = 4
 	maxTreeWidthPercent = 70
 	quitTimeout         = 750 * time.Millisecond
+	statusClearTimeout  = 2 * time.Second
 )
 
 // quitTimeoutMsg is sent when the quit confirmation window expires.
 type quitTimeoutMsg struct{}
+
+// statusClearMsg is sent to clear the temporary status message.
+type statusClearMsg struct{}
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
@@ -99,6 +105,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case quitTimeoutMsg:
 		m.quitPending = false
+		return m, nil
+	case statusClearMsg:
+		m.statusMsg = ""
 		return m, nil
 	case IdeConnectedMsg:
 		if t.filePath != "" && len(t.lines) > 0 {
@@ -369,6 +378,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					t.commentInput.SetValue(existing)
 				}
 				t.commentInput.Focus()
+			}
+		case key.Matches(msg, m.keys.Copy):
+			if m.focusPane == paneEditor && t.selecting {
+				text := t.selectedText()
+				startLine, _, endLine, _ := t.normalizedSelection()
+				if err := clipboard.WriteAll(text); err != nil {
+					m.statusMsg = fmt.Sprintf("Copy failed: %v", err)
+				} else {
+					n := endLine - startLine + 1
+					m.statusMsg = fmt.Sprintf("Copied %d lines", n)
+				}
+				return m, tea.Tick(statusClearTimeout, func(time.Time) tea.Msg {
+					return statusClearMsg{}
+				})
 			}
 		case key.Matches(msg, m.keys.ClearAll):
 			if m.focusPane == paneEditor {
