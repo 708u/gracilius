@@ -173,11 +173,14 @@ func (m *Model) renderFooter() string {
 func (m *Model) renderTree(width, height int) []string {
 	lines := make([]string, 0, height)
 
+	activeFilePath := m.activeTabState().filePath
+
 	for i := m.treeScrollOffset; i < len(m.fileTree) && len(lines) < height; i++ {
 		entry := m.fileTree[i]
 		indent := strings.Repeat("  ", entry.depth)
 
 		isCursor := i == m.treeCursor && m.focusPane == paneTree
+		isActiveFile := !entry.isDir && entry.path == activeFilePath
 
 		var arrow string
 		if entry.isDir {
@@ -196,8 +199,13 @@ func (m *Model) renderTree(width, height int) []string {
 		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)
 
-		if isCursor {
+		switch {
+		case isCursor:
 			displayLine = styleTreeCursor().Render(displayLine)
+		case isActiveFile:
+			displayLine = lipgloss.NewStyle().
+				Background(lipgloss.Color(activeTheme.activeFileBg)).
+				Render(displayLine)
 		}
 
 		displayLine = icon.colorize(displayLine)
