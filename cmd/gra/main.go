@@ -43,11 +43,11 @@ func main() {
 	}
 	// Create latest symlink
 	latestLink := filepath.Join(logDir, "latest")
-	os.Remove(latestLink)
+	_ = os.Remove(latestLink)
 	if err := os.Symlink(logPath, latestLink); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to create latest symlink: %v\n", err)
 	}
-	defer logFile.Close()
+	defer func() { _ = logFile.Close() }()
 	log.SetOutput(logFile)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.LUTC)
 
@@ -63,7 +63,7 @@ func main() {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
 		fmt.Printf("Failed to resolve root directory: %v\n", err)
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // defers are for cleanup; exit during init is safe
 	}
 	srv, err := server.New(defaultPort, []string{absRootDir})
 	if err != nil {
@@ -84,7 +84,7 @@ func main() {
 		fmt.Printf("Failed to create watcher: %v\n", err)
 		os.Exit(1)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Directory watcher
 	dirWatcher, err := fsnotify.NewWatcher()
@@ -92,7 +92,7 @@ func main() {
 		fmt.Printf("Failed to create dir watcher: %v\n", err)
 		os.Exit(1)
 	}
-	defer dirWatcher.Close()
+	defer func() { _ = dirWatcher.Close() }()
 
 	if err := tui.WatchDirRecursive(dirWatcher, absRootDir); err != nil {
 		fmt.Printf("Failed to watch root dir: %v\n", err)
