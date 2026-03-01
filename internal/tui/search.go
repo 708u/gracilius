@@ -14,7 +14,8 @@ import (
 
 // fileItem implements list.Item and list.DefaultItem for file search.
 type fileItem struct {
-	path string // rootDir-relative path
+	path         string // rootDir-relative path
+	resolvedPath string // symlink target path (empty if not a symlink)
 }
 
 func (f fileItem) Title() string       { return f.path }
@@ -36,7 +37,11 @@ func (d searchDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		return
 	}
 
-	entry := fileEntry{path: fi.path, name: filepath.Base(fi.path)}
+	entry := fileEntry{
+		path:         fi.path,
+		name:         filepath.Base(fi.path),
+		resolvedPath: fi.resolvedPath,
+	}
 	icon := iconFor(d.iconMode, entry)
 
 	selected := index == m.Index()
@@ -101,7 +106,10 @@ func collectFiles(rootDir string, entries []fileEntry, items *[]list.Item) {
 			if err != nil {
 				continue
 			}
-			*items = append(*items, fileItem{path: rel})
+			*items = append(*items, fileItem{
+				path:         rel,
+				resolvedPath: e.resolvedPath,
+			})
 		}
 	}
 }
