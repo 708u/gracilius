@@ -28,6 +28,46 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(m.watchFile(), m.watchDir())
 }
 
+// isBlankLine returns true if the line contains only whitespace.
+func isBlankLine(s string) bool {
+	for _, c := range s {
+		if c != ' ' && c != '\t' && c != '\r' && c != '\n' {
+			return false
+		}
+	}
+	return true
+}
+
+// moveToParagraphBoundary moves the cursor to the next paragraph
+// boundary in the given direction (1 for down, -1 for up).
+func (m *Model) moveToParagraphBoundary(dir int) {
+	t := m.activeTabState()
+	if m.focusPane != paneEditor || len(t.lines) == 0 {
+		return
+	}
+	line := t.cursorLine
+	last := len(t.lines) - 1
+	inBounds := func(l int) bool {
+		if dir > 0 {
+			return l < last
+		}
+		return l > 0
+	}
+	if inBounds(line) {
+		line += dir
+		for inBounds(line) && isBlankLine(t.lines[line]) {
+			line += dir
+		}
+		for inBounds(line) && !isBlankLine(t.lines[line]) {
+			line += dir
+		}
+	}
+	t.cursorLine = line
+	t.cursorChar = 0
+	t.syncAnchorToCursor()
+	m.notifySelectionChanged()
+}
+
 // adjustTreeScroll adjusts the tree scroll so the tree cursor
 // stays visible.
 func (m *Model) adjustTreeScroll(contentHeight int) {
@@ -233,10 +273,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		handled := false
 		if m.gPending {
 			m.gPending = false
-			if msg.String() == "g" {
+			if key.Matches(msg, m.keys.GoTop) {
 				if m.focusPane == paneTree {
 					m.treeCursor = 0
 				} else if len(t.lines) > 0 {
@@ -245,11 +284,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					t.syncAnchorToCursor()
 					m.notifySelectionChanged()
 				}
-				handled = true
+				break
 			}
-		}
-		if handled {
-			break
 		}
 
 		switch {
@@ -409,46 +445,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.notifySelectionChanged()
 			}
 		case key.Matches(msg, m.keys.BlockUp):
-			if m.focusPane == paneEditor && len(t.lines) > 0 {
-				line := t.cursorLine
-				if line > 0 {
-					line--
-					for line > 0 && strings.TrimSpace(t.lines[line]) == "" {
-						line--
-					}
-					for line > 0 && strings.TrimSpace(t.lines[line]) != "" {
-						line--
-					}
-				}
-				t.cursorLine = line
-				t.cursorChar = 0
-				t.syncAnchorToCursor()
-				m.notifySelectionChanged()
-			}
+			m.moveToParagraphBoundary(-1)
 		case key.Matches(msg, m.keys.BlockDown):
-			if m.focusPane == paneEditor && len(t.lines) > 0 {
-				line := t.cursorLine
-				last := len(t.lines) - 1
-				if line < last {
-					line++
-					for line < last && strings.TrimSpace(t.lines[line]) == "" {
-						line++
-					}
-					for line < last && strings.TrimSpace(t.lines[line]) != "" {
-						line++
-					}
-				}
-				t.cursorLine = line
-				t.cursorChar = 0
-				t.syncAnchorToCursor()
-				m.notifySelectionChanged()
-			}
+			m.moveToParagraphBoundary(1)
 		case key.Matches(msg, m.keys.CloseTab):
 			if len(m.tabs) > 1 {
 				m.closeTab(m.activeTab)
 			}
 		default:
-			if msg.String() == "g" {
+			if key.Matches(msg, m.keys.GoTop) {
 				m.gPending = true
 			}
 		}

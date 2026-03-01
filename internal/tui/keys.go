@@ -19,6 +19,7 @@ type keyMap struct {
 	Copy       key.Binding
 	Comment    key.Binding
 	ClearAll   key.Binding
+	GoTop      key.Binding
 	GoBottom   key.Binding
 	BlockUp    key.Binding
 	BlockDown  key.Binding
@@ -81,6 +82,10 @@ func newKeyMap() keyMap {
 			key.WithKeys("D"),
 			key.WithHelp("D", "clear comments"),
 		),
+		GoTop: key.NewBinding(
+			key.WithKeys("g"),
+			key.WithHelp("gg", "go top"),
+		),
 		GoBottom: key.NewBinding(
 			key.WithKeys("G"),
 			key.WithHelp("G", "go bottom"),
@@ -119,7 +124,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 // FullHelp returns key bindings for the full help view.
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Left, k.Right, k.GoBottom, k.BlockUp, k.BlockDown},
+		{k.Up, k.Down, k.Left, k.Right, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown},
 		{k.Enter, k.SwitchPane, k.PrevTab, k.NextTab, k.CloseTab},
 		{k.CharSelect, k.LineSelect, k.Copy, k.Comment, k.ClearAll, k.Cancel, k.Quit},
 	}
