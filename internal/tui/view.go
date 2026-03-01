@@ -188,7 +188,8 @@ func (m *Model) renderTree(width, height int) []string {
 			icon = fileIcon(m.iconMode, entry)
 		}
 
-		line := indent + icon + entry.name
+		prefix := dirIcon(m.iconMode, entry)
+		line := indent + prefix + icon + entry.name
 
 		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)

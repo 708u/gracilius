@@ -162,6 +162,16 @@ func classifyFile(name string) fileCategory {
 	return catOther
 }
 
+func dirIcon(mode iconMode, entry fileEntry) string {
+	if mode == iconNerd && entry.isDir {
+		s := devicons.IconForPath(entry.path)
+		st := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(s.Color))
+		return st.Render(s.Icon) + " "
+	}
+	return ""
+}
+
 func fileIcon(mode iconMode, entry fileEntry) string {
 	switch mode {
 	case iconNerd:
