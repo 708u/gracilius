@@ -19,7 +19,7 @@ func isBinary(content []byte) bool {
 	return false
 }
 
-// sniffBinary reads the first 512 bytes of a file to detect binary content.
+// sniffBinary reads the first bytes of a file to detect binary content.
 func sniffBinary(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -27,17 +27,9 @@ func sniffBinary(path string) bool {
 	}
 	defer f.Close()
 
-	buf := make([]byte, 512)
+	buf := make([]byte, 8192)
 	n, _ := f.Read(buf)
-	if n == 0 {
-		return false
-	}
-	for _, b := range buf[:n] {
-		if b == 0 {
-			return true
-		}
-	}
-	return false
+	return isBinary(buf[:n])
 }
 
 // loadFileIntoTab reads a file and loads it into the given tab.
