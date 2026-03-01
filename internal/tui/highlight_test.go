@@ -132,11 +132,11 @@ func TestRenderStyledLineWithSelection(t *testing.T) {
 	// Check that selection contains the right text
 	selBgIdx := strings.Index(output, activeTheme.selectionBgSeq())
 	afterSelBg := output[selBgIdx+len(activeTheme.selectionBgSeq()):]
-	resetIdx := strings.Index(afterSelBg, "\033[0m")
-	if resetIdx < 0 {
+	before, _, ok := strings.Cut(afterSelBg, "\033[0m")
+	if !ok {
 		t.Fatal("expected reset after selection background")
 	}
-	selected := afterSelBg[:resetIdx]
+	selected := before
 	if selected != "llo w" {
 		t.Errorf("expected selected text 'llo w', got %q", selected)
 	}

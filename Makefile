@@ -1,4 +1,4 @@
-.PHONY: build test vet lint fmt clean
+.PHONY: build test vet lint fmt fix clean
 
 build:
 	go build -o gra ./cmd/gra/
@@ -14,6 +14,9 @@ lint:
 
 fmt:
 	golangci-lint fmt ./...
+
+fix:
+	go fix ./...
 
 clean:
 	rm -f gra
