@@ -165,24 +165,32 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					t.cursorChar = targetChar
 					t.anchorLine = targetLine
 					t.anchorChar = targetChar
-					t.selecting = true
+					t.selecting = false
+					t.lineSelect = false
+					m.mouseDown = true
 					m.lastMouseLine = targetLine
 					m.lastMouseChar = targetChar
 				case tea.MouseActionMotion:
 					if targetLine != m.lastMouseLine || targetChar != m.lastMouseChar {
+						t.selecting = true
 						t.cursorLine = targetLine
 						t.cursorChar = targetChar
 						m.lastMouseLine = targetLine
 						m.lastMouseChar = targetChar
 					}
+				case tea.MouseActionRelease:
+					m.mouseDown = false
+					if t.selecting {
+						t.cursorLine = targetLine
+						t.cursorChar = targetChar
+						m.notifySelectionChanged()
+					}
 				}
 			case msg.Action == tea.MouseActionRelease:
+				m.mouseDown = false
 				if t.selecting {
 					t.cursorLine = targetLine
 					t.cursorChar = targetChar
-					if t.cursorLine == t.anchorLine && t.cursorChar == t.anchorChar {
-						t.selecting = false
-					}
 					m.notifySelectionChanged()
 				}
 			case msg.Button == tea.MouseButtonWheelUp:
