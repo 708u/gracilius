@@ -19,6 +19,8 @@ type themeConfig struct {
 	tabActiveFg     string // Active tab foreground hex color
 	tabActiveBorder string // Active tab underline hex color
 	tabInactiveFg   string // Inactive tab foreground hex color
+	logoLeaf        string // Welcome logo top color (green/leaf)
+	logoTrunk       string // Welcome logo bottom color (brown/trunk)
 }
 
 func (t themeConfig) selectionBgSeq() string {
@@ -34,6 +36,8 @@ var (
 		tabActiveFg:     "#FFFFFF",
 		tabActiveBorder: "#E8AB53",
 		tabInactiveFg:   "#969696",
+		logoLeaf:        "#73C991",
+		logoTrunk:       "#CE9178",
 	}
 	lightTheme = themeConfig{
 		name:            "github",
@@ -43,6 +47,8 @@ var (
 		tabActiveFg:     "#333333",
 		tabActiveBorder: "#005FB8",
 		tabInactiveFg:   "#6E6E6E",
+		logoLeaf:        "#1B7F37",
+		logoTrunk:       "#795E26",
 	}
 	activeTheme = darkTheme // default fallback
 )

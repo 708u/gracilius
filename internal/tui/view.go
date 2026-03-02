@@ -46,12 +46,11 @@ func (m *Model) View() string {
 
 	treeLines := m.renderTree(lo.treeWidth, lo.contentHeight)
 
-	var editorContent string
+	var editorLines []string
 	if t == nil {
-		editorContent = renderWelcome(lo.editorWidth, lo.contentHeight)
+		editorLines = renderWelcome(lo.editorWidth, lo.contentHeight)
 	} else {
-		editorLines := m.renderEditor(lo.editorWidth, lo.contentHeight)
-		editorContent = strings.Join(editorLines, "\n")
+		editorLines = m.renderEditor(lo.editorWidth, lo.contentHeight)
 	}
 
 	sepLines := make([]string, lo.contentHeight)
@@ -63,7 +62,7 @@ func (m *Model) View() string {
 		lipgloss.Top,
 		strings.Join(treeLines, "\n"),
 		strings.Join(sepLines, "\n"),
-		editorContent,
+		strings.Join(editorLines, "\n"),
 	)
 
 	// footer

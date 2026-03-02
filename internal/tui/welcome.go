@@ -6,13 +6,12 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const asciiArt = `                __ _  _ _
-   __ _ _ _ __ _ __(_) (_)_  _ ___
-  / _` + "`" + ` | '_/ _` + "`" + ` / _| | | | || (_-<
-  \__, |_| \__,_\__|_|_|_|\_,_/__/
+const asciiArt = `                       _ _ _
+   __ _ _ __ __ _  ___(_) (_)_   _ ___
+  / _` + "`" + ` | '__/ _` + "`" + ` |/ __| | | | | | / __|
+ | (_| | | | (_| | (__| | | | |_| \__ \
+  \__, |_|  \__,_|\___|_|_|_|\__,_|___/
   |___/`
-
-const subtitle = "Code Review TUI for Claude Code"
 
 type helpEntry struct {
 	key  string
@@ -29,8 +28,8 @@ var welcomeHelp = []helpSection{
 		title: "Navigation",
 		entries: []helpEntry{
 			{"Enter", "Open file / Toggle dir"},
-			{"\u2191/k  \u2193/j", "Navigate"},
-			{"\u2190/h  \u2192/l", "Collapse / Expand"},
+			{"Up/k  Down/j", "Navigate"},
+			{"Left/h  Right/l", "Collapse / Expand"},
 		},
 	},
 	{
@@ -54,9 +53,9 @@ var welcomeHelp = []helpSection{
 
 const quitHint = "Ctrl+C x2      Quit"
 
-// renderWelcome generates the welcome screen as a single string
-// that fills the given width x height area.
-func renderWelcome(width, height int) string {
+// renderWelcome generates the welcome screen as a []string
+// of exactly height lines, each padded to width.
+func renderWelcome(width, height int) []string {
 	stylePrimary := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(activeTheme.tabActiveFg))
 	styleSecondary := lipgloss.NewStyle().
@@ -64,30 +63,75 @@ func renderWelcome(width, height int) string {
 	styleSection := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(activeTheme.tabActiveBorder))
 
-	lines := make([]string, 0, 24)
+	styleLeaf := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(activeTheme.logoLeaf))
+	styleTrunk := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(activeTheme.logoTrunk))
 
-	for _, l := range strings.Split(asciiArt, "\n") {
-		lines = append(lines, stylePrimary.Render(l))
-	}
+	// Build content lines with relative indentation.
+	var raw []string
 
-	lines = append(lines, "")
-	lines = append(lines, styleSecondary.Render("      "+subtitle))
-	lines = append(lines, "")
-
-	for _, sec := range welcomeHelp {
-		lines = append(lines, "")
-		lines = append(lines, styleSection.Render("  "+sec.title))
-		for _, e := range sec.entries {
-			key := stylePrimary.Render(padRight(e.key, 12))
-			desc := styleSecondary.Render(e.desc)
-			lines = append(lines, "    "+key+" "+desc)
+	artLines := strings.Split(asciiArt, "\n")
+	leafCount := 4 // top 4 lines: leaf/canopy
+	for i, l := range artLines {
+		if i < leafCount {
+			raw = append(raw, styleLeaf.Render(l))
+		} else {
+			raw = append(raw, styleTrunk.Render(l))
 		}
 	}
 
-	lines = append(lines, "")
-	lines = append(lines, "  "+stylePrimary.Render(quitHint))
+	raw = append(raw, "")
+	raw = append(raw, styleSecondary.Render("      The human in the loop."))
 
-	content := strings.Join(lines, "\n")
+	for _, sec := range welcomeHelp {
+		raw = append(raw, "")
+		raw = append(raw, styleSection.Render("  "+sec.title))
+		for _, e := range sec.entries {
+			key := padRight(e.key, 16)
+			line := "    " + stylePrimary.Render(key) +
+				styleSecondary.Render(e.desc)
+			raw = append(raw, line)
+		}
+	}
 
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, content)
+	raw = append(raw, "")
+	raw = append(raw, "  "+stylePrimary.Render(quitHint))
+
+	// Find the widest raw line for horizontal centering.
+	maxW := 0
+	for _, l := range raw {
+		if w := lipgloss.Width(l); w > maxW {
+			maxW = w
+		}
+	}
+
+	leftPad := 0
+	if maxW < width {
+		leftPad = (width - maxW) / 2
+	}
+	padding := strings.Repeat(" ", leftPad)
+
+	// Vertical centering.
+	topPad := 0
+	if len(raw) < height {
+		topPad = (height - len(raw)) / 2
+	}
+
+	result := make([]string, 0, height)
+
+	for i := 0; i < topPad; i++ {
+		result = append(result, padRight("", width))
+	}
+	for _, l := range raw {
+		if len(result) >= height {
+			break
+		}
+		result = append(result, padding+l)
+	}
+	for len(result) < height {
+		result = append(result, padRight("", width))
+	}
+
+	return result
 }
