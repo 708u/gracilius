@@ -51,8 +51,6 @@ var welcomeHelp = []helpSection{
 	},
 }
 
-const quitHint = "Ctrl+C x2      Quit"
-
 // renderWelcome generates the welcome screen as a []string
 // of exactly height lines, each padded to width.
 func renderWelcome(width, height int) []string {
@@ -82,7 +80,8 @@ func renderWelcome(width, height int) []string {
 	}
 
 	raw = append(raw, "")
-	raw = append(raw, styleSecondary.Render("      The human in the loop."))
+	raw = append(raw, styleLeaf.Render("  The human in the loop."))
+	raw = append(raw, "")
 
 	for _, sec := range welcomeHelp {
 		raw = append(raw, "")
@@ -94,9 +93,6 @@ func renderWelcome(width, height int) []string {
 			raw = append(raw, line)
 		}
 	}
-
-	raw = append(raw, "")
-	raw = append(raw, "  "+stylePrimary.Render(quitHint))
 
 	// Find the widest raw line for horizontal centering.
 	maxW := 0
