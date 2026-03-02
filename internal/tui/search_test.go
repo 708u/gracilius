@@ -21,8 +21,7 @@ func TestScanAllFiles(t *testing.T) {
 	items := scanAllFiles(dir)
 
 	paths := make(map[string]bool)
-	for _, item := range items {
-		fi := item.(fileItem)
+	for _, fi := range items {
 		paths[fi.path] = true
 	}
 
@@ -59,8 +58,7 @@ func TestScanAllFiles_ExcludesHidden(t *testing.T) {
 	items := scanAllFiles(dir)
 
 	paths := make(map[string]bool)
-	for _, item := range items {
-		fi := item.(fileItem)
+	for _, fi := range items {
 		paths[fi.path] = true
 	}
 

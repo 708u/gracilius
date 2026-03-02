@@ -91,8 +91,8 @@ func (m *Model) adjustTreeScroll(contentHeight int) {
 
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Route non-key messages (e.g. FilterMatchesMsg) to the list
-	// when the search overlay is active.
+	// Route non-key messages (e.g. cursor blink) to the search overlay
+	// when it is active.
 	if m.search.active {
 		switch msg.(type) {
 		case tea.KeyMsg, tea.MouseMsg, tea.WindowSizeMsg,
@@ -166,6 +166,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.MouseMsg:
 		if m.search.active {
+			if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+				path, closeOverlay := m.search.handleClick(msg.X, msg.Y, m.width, m.height)
+				if path != "" {
+					absPath := filepath.Join(m.rootDir, path)
+					m.search.close()
+					m.openFileByPath(absPath)
+				} else if closeOverlay {
+					m.search.close()
+				}
+			}
 			return m, nil
 		}
 		lo := m.computeLayout()
