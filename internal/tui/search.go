@@ -28,9 +28,10 @@ func (f fileItem) FilterValue() string { return f.path }
 
 // searchDelegate renders file items with an icon prefix.
 type searchDelegate struct {
-	iconMode   iconMode
-	matchStyle lipgloss.Style // bold + match fg color
-	selBgStyle lipgloss.Style // selection background
+	iconMode    iconMode
+	listFocused bool           // true when list has focus (shows cursor indicator)
+	matchStyle  lipgloss.Style // bold + match fg color
+	selBgStyle  lipgloss.Style // selection background
 }
 
 func (d *searchDelegate) Height() int                         { return 1 }
@@ -65,11 +66,21 @@ func (d *searchDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		pathStr = d.selBgStyle.Render(pathStr)
 	}
 
-	line := icon.prefix() + pathStr
+	cursor := "  "
+	if selected && d.listFocused {
+		cursor = "▸ "
+	}
+	line := cursor + icon.prefix() + pathStr
+	maxW := m.Width()
+
+	// Truncate to fit within list width
+	if ansi.StringWidth(line) > maxW {
+		line = ansi.Truncate(line, maxW-1, "…")
+	}
 
 	if selected {
-		if lineW := ansi.StringWidth(line); lineW < m.Width() {
-			line += d.selBgStyle.Render(strings.Repeat(" ", m.Width()-lineW))
+		if lineW := ansi.StringWidth(line); lineW < maxW {
+			line += d.selBgStyle.Render(strings.Repeat(" ", maxW-lineW))
 		}
 	}
 
@@ -79,11 +90,13 @@ func (d *searchDelegate) Render(w io.Writer, m list.Model, index int, item list.
 
 // searchOverlay manages the file search overlay state.
 type searchOverlay struct {
-	active   bool
-	input    textinput.Model
-	list     list.Model
-	allItems []fileItem // all scanned files (unfiltered)
-	targets  []string   // cached paths for fuzzy matching
+	active      bool
+	listFocused bool // true = j/k navigate list; false = input has focus
+	input       textinput.Model
+	list        list.Model
+	delegate    *searchDelegate
+	allItems    []fileItem // all scanned files (unfiltered)
+	targets     []string   // cached paths for fuzzy matching
 }
 
 func newSearchOverlay(mode iconMode) searchOverlay {
@@ -102,14 +115,15 @@ func newSearchOverlay(mode iconMode) searchOverlay {
 	l.SetShowHelp(false)
 	l.SetShowPagination(false)
 	l.SetFilteringEnabled(false)
+	l.SetShowFilter(false)
 	l.DisableQuitKeybindings()
 
 	ti := textinput.New()
 	ti.Placeholder = "Search files..."
-	ti.Prompt = ""
+	ti.Prompt = "> "
 	ti.PromptStyle = lipgloss.NewStyle()
 
-	return searchOverlay{list: l, input: ti}
+	return searchOverlay{list: l, input: ti, delegate: delegate}
 }
 
 // scanAllFiles recursively scans rootDir using scanDir (from filetree.go)
@@ -160,6 +174,7 @@ func (s *searchOverlay) open(rootDir string) tea.Cmd {
 // close deactivates the search overlay and frees the item list.
 func (s *searchOverlay) close() {
 	s.active = false
+	s.listFocused = false
 	s.allItems = nil
 	s.targets = nil
 	s.list.SetItems(nil)
@@ -191,25 +206,58 @@ func (s *searchOverlay) applyFilter() {
 }
 
 // update handles messages for the search overlay.
-// Printable input goes to textinput; navigation goes to list.
+// Tab toggles focus between input and list.
+// In list focus, j/k navigate; printable keys auto-switch back to input.
 func (s *searchOverlay) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Tab toggles focus
+		if msg.Type == tea.KeyTab {
+			s.listFocused = !s.listFocused
+			s.delegate.listFocused = s.listFocused
+			if s.listFocused {
+				s.input.Prompt = "  "
+				s.input.Blur()
+			} else {
+				s.input.Prompt = "> "
+				s.input.Focus()
+			}
+			return s.input.Cursor.BlinkCmd()
+		}
+
+		// Arrow keys and Ctrl+N/P always navigate the list
 		switch msg.Type {
 		case tea.KeyUp, tea.KeyDown,
 			tea.KeyCtrlN, tea.KeyCtrlP:
 			var cmd tea.Cmd
 			s.list, cmd = s.list.Update(msg)
 			return cmd
-		default:
-			prevValue := s.input.Value()
-			var cmd tea.Cmd
-			s.input, cmd = s.input.Update(msg)
-			if s.input.Value() != prevValue {
-				s.applyFilter()
-			}
-			return cmd
 		}
+
+		if s.listFocused {
+			if msg.Type == tea.KeyRunes {
+				switch string(msg.Runes) {
+				case "j":
+					var cmd tea.Cmd
+					s.list, cmd = s.list.Update(tea.KeyMsg{Type: tea.KeyDown})
+					return cmd
+				case "k":
+					var cmd tea.Cmd
+					s.list, cmd = s.list.Update(tea.KeyMsg{Type: tea.KeyUp})
+					return cmd
+				}
+			}
+			return nil
+		}
+
+		// Input focus: route to textinput
+		prevValue := s.input.Value()
+		var cmd tea.Cmd
+		s.input, cmd = s.input.Update(msg)
+		if s.input.Value() != prevValue {
+			s.applyFilter()
+		}
+		return cmd
 	default:
 		// Route non-key messages (e.g. cursor blink) to textinput.
 		var cmd tea.Cmd
@@ -298,11 +346,42 @@ func (s *searchOverlay) overlay(bg string, width, height int) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(activeTheme.tabActiveBorder)).
 		Padding(0, 1).
+		Width(innerW + 2). // lipgloss Width includes padding
 		Height(innerH).
 		Render(content)
 
+	// Embed "Tab ⇄ focus" hint into the bottom border
+	box = embedBottomHint(box, overlayW)
+
 	dimmedBg := dimBackground(bg)
 	return placeOverlay(width, height, box, dimmedBg)
+}
+
+// embedBottomHint replaces the right portion of the last (bottom border) line
+// with a hint string like "╰──────── Tab ⇄ focus ╯".
+func embedBottomHint(box string, boxW int) string {
+	hint := " Tab: list ⇄ input "
+	hintW := ansi.StringWidth(hint)
+	if boxW < hintW+3 {
+		return box
+	}
+
+	lines := strings.Split(box, "\n")
+	if len(lines) == 0 {
+		return box
+	}
+
+	borderColor := lipgloss.Color(activeTheme.tabActiveBorder)
+	s := lipgloss.NewStyle().Foreground(borderColor)
+
+	dashCount := boxW - 2 - hintW
+	bottom := s.Render("╰") +
+		s.Render(strings.Repeat("─", dashCount)) +
+		s.Render(hint) +
+		s.Render("╯")
+
+	lines[len(lines)-1] = bottom
+	return strings.Join(lines, "\n")
 }
 
 // dimBackground wraps each line with ANSI faint to dim the background.
