@@ -38,14 +38,21 @@ func (m *Model) View() string {
 
 	// header
 	header := fmt.Sprintf("gracilius - Port %d", m.server.Port())
-	if t.filePath != "" {
+	if t != nil && t.filePath != "" {
 		header += fmt.Sprintf(" | %s", t.filePath)
 	}
 	// content
 	lo := m.computeLayout()
 
 	treeLines := m.renderTree(lo.treeWidth, lo.contentHeight)
-	editorLines := m.renderEditor(lo.editorWidth, lo.contentHeight)
+
+	var editorContent string
+	if t == nil {
+		editorContent = renderWelcome(lo.editorWidth, lo.contentHeight)
+	} else {
+		editorLines := m.renderEditor(lo.editorWidth, lo.contentHeight)
+		editorContent = strings.Join(editorLines, "\n")
+	}
 
 	sepLines := make([]string, lo.contentHeight)
 	for i := range sepLines {
@@ -56,7 +63,7 @@ func (m *Model) View() string {
 		lipgloss.Top,
 		strings.Join(treeLines, "\n"),
 		strings.Join(sepLines, "\n"),
-		strings.Join(editorLines, "\n"),
+		editorContent,
 	)
 
 	// footer
@@ -80,6 +87,10 @@ func (m *Model) View() string {
 // renderTabBar generates the tab bar (2 lines: labels + underline).
 // offset is the left padding to align with the editor pane.
 func (m *Model) renderTabBar(offset int) string {
+	if len(m.tabs) == 0 {
+		return "\n"
+	}
+
 	styleActive := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(activeTheme.tabActiveFg))
 	styleInactive := lipgloss.NewStyle().
@@ -134,7 +145,7 @@ func (m *Model) renderFooter() string {
 		return sb.String()
 	}
 
-	if t.inputMode {
+	if t != nil && t.inputMode {
 		sb.WriteString("[Editor] Comment (Enter: confirm, Esc: cancel)\n")
 		fmt.Fprintf(&sb, "Line %d: %s",
 			t.inputLine+1, t.commentInput.View())
@@ -143,7 +154,9 @@ func (m *Model) renderFooter() string {
 		sb.WriteString(m.help.View(m.contextKeyMap()))
 		sb.WriteString("\n")
 
-		if m.focusPane == paneEditor {
+		if t == nil {
+			sb.WriteString("Open a file from the tree to begin")
+		} else if m.focusPane == paneEditor {
 			switch {
 			case t.selecting:
 				sLine, sChar, eLine, eChar := t.normalizedSelection()
@@ -171,7 +184,10 @@ func (m *Model) renderFooter() string {
 func (m *Model) renderTree(width, height int) []string {
 	lines := make([]string, 0, height)
 
-	activeFilePath := m.activeTabState().filePath
+	var activeFilePath string
+	if t := m.activeTabState(); t != nil {
+		activeFilePath = t.filePath
+	}
 
 	for i := m.treeScrollOffset; i < len(m.fileTree) && len(lines) < height; i++ {
 		entry := m.fileTree[i]

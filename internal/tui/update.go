@@ -49,18 +49,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case fileChangedMsg:
-		t.lines = msg.lines
-		t.highlightedLines = highlightFile(
-			t.filePath, strings.Join(msg.lines, "\n"),
-		)
-		if t.cursorLine >= len(t.lines) {
-			t.cursorLine = max(0, len(t.lines)-1)
-		}
-		if t.cursorLine < len(t.lines) {
-			t.cursorChar = min(t.cursorChar, len(t.lines[t.cursorLine]))
-		}
-		if t.filePath != "" {
-			m.notifySelectionChanged()
+		if t != nil {
+			t.lines = msg.lines
+			t.highlightedLines = highlightFile(
+				t.filePath, strings.Join(msg.lines, "\n"),
+			)
+			if t.cursorLine >= len(t.lines) {
+				t.cursorLine = max(0, len(t.lines)-1)
+			}
+			if t.cursorLine < len(t.lines) {
+				t.cursorChar = min(t.cursorChar, len(t.lines[t.cursorLine]))
+			}
+			if t.filePath != "" {
+				m.notifySelectionChanged()
+			}
 		}
 		cmd := m.watchFile()
 		return m, cmd
@@ -89,7 +91,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = ""
 		return m, nil
 	case IdeConnectedMsg:
-		if t.filePath != "" && len(t.lines) > 0 {
+		if t != nil && t.filePath != "" && len(t.lines) > 0 {
 			m.notifySelectionChanged()
 		}
 		return m, nil
@@ -100,7 +102,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.treeWidth > maxWidth {
 			m.treeWidth = maxWidth
 		}
-		if t.filePath != "" && len(t.lines) > 0 && m.focusPane == paneEditor {
+		if t != nil && t.filePath != "" && len(t.lines) > 0 && m.focusPane == paneEditor {
 			m.notifySelectionChanged()
 		}
 	case tea.MouseMsg:
@@ -131,7 +133,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if len(t.lines) == 0 {
+		if t == nil || len(t.lines) == 0 {
 			return m, nil
 		}
 
@@ -211,7 +213,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 
-		if t.inputMode {
+		if t != nil && t.inputMode {
 			switch {
 			case key.Matches(msg, m.keys.Cancel):
 				t.inputMode = false
@@ -235,14 +237,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch {
 		case key.Matches(msg, m.keys.Cancel):
-			if t.selecting {
+			if t != nil && t.selecting {
 				t.selecting = false
 				t.lineSelect = false
 				m.notifyClearSelection()
 				return m, nil
 			}
 		case key.Matches(msg, m.keys.SwitchPane):
-			if len(t.lines) > 0 {
+			if t != nil && len(t.lines) > 0 {
 				if m.focusPane == paneEditor {
 					m.notifyClearSelection()
 				}
@@ -264,7 +266,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.fileTree = collapseDir(m.fileTree, m.treeCursor)
 					}
 				}
-			} else {
+			} else if t != nil {
 				if t.cursorChar > 0 {
 					t.cursorChar--
 				} else if t.cursorLine > 0 {
@@ -282,7 +284,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.fileTree = expandDir(m.fileTree, m.treeCursor)
 					}
 				}
-			} else {
+			} else if t != nil {
 				if t.cursorChar < t.lineLen(t.cursorLine) {
 					t.cursorChar++
 				} else if t.cursorLine < len(t.lines)-1 {
@@ -297,7 +299,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.treeCursor > 0 {
 					m.treeCursor--
 				}
-			} else {
+			} else if t != nil {
 				if t.cursorLine > 0 {
 					t.cursorLine--
 					t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
@@ -310,7 +312,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.treeCursor < len(m.fileTree)-1 {
 					m.treeCursor++
 				}
-			} else {
+			} else if t != nil {
 				if t.cursorLine < len(t.lines)-1 {
 					t.cursorLine++
 					t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
@@ -319,7 +321,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.CharSelect):
-			if m.focusPane == paneEditor && len(t.lines) > 0 {
+			if t != nil && m.focusPane == paneEditor && len(t.lines) > 0 {
 				switch {
 				case t.selecting && !t.lineSelect:
 					t.selecting = false
@@ -332,7 +334,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.LineSelect):
-			if m.focusPane == paneEditor && len(t.lines) > 0 {
+			if t != nil && m.focusPane == paneEditor && len(t.lines) > 0 {
 				switch {
 				case t.selecting && t.lineSelect:
 					t.selecting = false
@@ -348,7 +350,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.Comment):
-			if m.focusPane == paneEditor && len(t.lines) > 0 {
+			if t != nil && m.focusPane == paneEditor && len(t.lines) > 0 {
 				t.inputMode = true
 				t.inputLine = t.cursorLine
 				t.commentInput.Reset()
@@ -358,7 +360,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.commentInput.Focus()
 			}
 		case key.Matches(msg, m.keys.Copy):
-			if m.focusPane == paneEditor && t.selecting {
+			if t != nil && m.focusPane == paneEditor && t.selecting {
 				text := t.selectedText()
 				if err := clipboard.WriteAll(text); err != nil {
 					m.statusMsg = fmt.Sprintf("Copy failed: %v", err)
@@ -371,15 +373,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 			}
 		case key.Matches(msg, m.keys.ClearAll):
-			if m.focusPane == paneEditor {
+			if t != nil && m.focusPane == paneEditor {
 				t.comments = make(map[int]string)
 			}
 		case key.Matches(msg, m.keys.NextTab):
-			m.activeTab = (m.activeTab + 1) % len(m.tabs)
+			if len(m.tabs) > 0 {
+				m.activeTab = (m.activeTab + 1) % len(m.tabs)
+			}
 		case key.Matches(msg, m.keys.PrevTab):
-			m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
+			if len(m.tabs) > 0 {
+				m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
+			}
 		case key.Matches(msg, m.keys.CloseTab):
-			if len(m.tabs) > 1 {
+			if len(m.tabs) > 0 {
 				m.closeTab(m.activeTab)
 			}
 		}
@@ -388,7 +394,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	lo := m.computeLayout()
 	if m.focusPane == paneTree {
 		m.adjustTreeScroll(lo.contentHeight)
-	} else if len(t.lines) > 0 {
+	} else if t != nil && len(t.lines) > 0 {
 		t.adjustScrollForCursor(lo.contentHeight)
 	}
 
@@ -402,7 +408,10 @@ func (m *Model) closeTab(idx int) {
 		_ = m.watcher.Remove(t.filePath)
 	}
 	m.tabs = slices.Delete(m.tabs, idx, idx+1)
-	if m.activeTab >= len(m.tabs) {
+	if len(m.tabs) == 0 {
+		m.activeTab = 0
+		m.focusPane = paneTree
+	} else if m.activeTab >= len(m.tabs) {
 		m.activeTab = len(m.tabs) - 1
 	}
 }
@@ -417,9 +426,9 @@ func (m *Model) closeDiffTabs() {
 	}
 	m.tabs = tabs
 	if len(m.tabs) == 0 {
-		m.tabs = []*tab{newFileTab()}
-	}
-	if m.activeTab >= len(m.tabs) {
+		m.activeTab = 0
+		m.focusPane = paneTree
+	} else if m.activeTab >= len(m.tabs) {
 		m.activeTab = len(m.tabs) - 1
 	}
 }

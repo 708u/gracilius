@@ -92,8 +92,11 @@ type Model struct {
 	iconMode iconMode
 }
 
-// activeTabState returns the active tab.
+// activeTabState returns the active tab, or nil if no tabs exist.
 func (m *Model) activeTabState() *tab {
+	if len(m.tabs) == 0 {
+		return nil
+	}
 	return m.tabs[m.activeTab]
 }
 
@@ -129,25 +132,15 @@ func (m *Model) toggleTreeEntry(idx int) {
 		if i := m.findTabByPath(absPath); i >= 0 {
 			m.activeTab = i
 		} else {
-			cur := m.activeTabState()
-			if cur.kind == fileTab && cur.filePath == "" {
-				if err := m.loadFileIntoTab(cur, entry.path); err != nil {
-					m.statusMsg = fmt.Sprintf(
-						"Cannot open: %v", err,
-					)
-					return
-				}
-			} else {
-				t := newFileTab()
-				if err := m.loadFileIntoTab(t, entry.path); err != nil {
-					m.statusMsg = fmt.Sprintf(
-						"Cannot open: %v", err,
-					)
-					return
-				}
-				m.tabs = append(m.tabs, t)
-				m.activeTab = len(m.tabs) - 1
+			t := newFileTab()
+			if err := m.loadFileIntoTab(t, entry.path); err != nil {
+				m.statusMsg = fmt.Sprintf(
+					"Cannot open: %v", err,
+				)
+				return
 			}
+			m.tabs = append(m.tabs, t)
+			m.activeTab = len(m.tabs) - 1
 		}
 		m.focusPane = paneEditor
 		m.notifySelectionChanged()
@@ -171,7 +164,7 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 		focusPane:  paneTree,
 		watcher:    watcher,
 		dirWatcher: dirWatcher,
-		tabs:       []*tab{newFileTab()},
+		tabs:       []*tab{},
 		treeWidth:  30,
 		keys:       newKeyMap(),
 		help:       help.New(),
