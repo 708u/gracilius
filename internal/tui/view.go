@@ -158,9 +158,10 @@ func (m *Model) renderFooter() string {
 		sb.WriteString(m.help.View(m.contextKeyMap()))
 		sb.WriteString("\n")
 
-		if !hasTab {
+		switch {
+		case !hasTab:
 			sb.WriteString("Open a file from the tree to begin")
-		} else if m.focusPane == paneEditor {
+		case m.focusPane == paneEditor:
 			switch {
 			case t.selecting:
 				sLine, sChar, eLine, eChar := t.normalizedSelection()
@@ -175,7 +176,7 @@ func (m *Model) renderFooter() string {
 			default:
 				sb.WriteString("Select a file to view")
 			}
-		} else if m.treeCursor < len(m.fileTree) {
+		case m.treeCursor < len(m.fileTree):
 			entry := m.fileTree[m.treeCursor]
 			sb.WriteString(entry.path)
 		}

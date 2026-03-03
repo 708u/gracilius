@@ -79,13 +79,17 @@ func renderWelcome(width, height int) []string {
 		}
 	}
 
-	raw = append(raw, "")
-	raw = append(raw, styleLeaf.Render("  The human in the loop."))
-	raw = append(raw, "")
+	raw = append(raw,
+		"",
+		styleLeaf.Render("  The human in the loop."),
+		"",
+	)
 
 	for _, sec := range welcomeHelp {
-		raw = append(raw, "")
-		raw = append(raw, styleSection.Render("  "+sec.title))
+		raw = append(raw,
+			"",
+			styleSection.Render("  "+sec.title),
+		)
 		for _, e := range sec.entries {
 			key := padRight(e.key, 16)
 			line := "    " + stylePrimary.Render(key) +
