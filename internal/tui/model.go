@@ -69,6 +69,7 @@ type Model struct {
 	// mouse
 	lastMouseLine int
 	lastMouseChar int
+	mouseDown     bool
 	resizingPane  bool
 	treeWidth     int
 
@@ -84,6 +85,9 @@ type Model struct {
 
 	// quit confirmation
 	quitPending bool
+
+	// gg sequence
+	gPending bool
 
 	// status message (temporary, auto-cleared)
 	statusMsg string

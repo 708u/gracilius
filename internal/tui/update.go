@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
@@ -26,6 +27,50 @@ type statusClearMsg struct{}
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(m.watchFile(), m.watchDir())
+}
+
+type direction int
+
+const (
+	dirUp   direction = -1
+	dirDown direction = 1
+)
+
+// isBlankLine returns true if the line contains only whitespace.
+func isBlankLine(s string) bool {
+	return !strings.ContainsFunc(s, func(r rune) bool {
+		return !unicode.IsSpace(r)
+	})
+}
+
+// moveToParagraphBoundary moves the cursor to the next paragraph
+// boundary in the given direction (1 for down, -1 for up).
+func (m *Model) moveToParagraphBoundary(dir direction) {
+	t, hasTab := m.activeTabState()
+	if !hasTab || m.focusPane != paneEditor || len(t.lines) == 0 {
+		return
+	}
+	line := t.cursorLine
+	last := len(t.lines) - 1
+	inBounds := func(l int) bool {
+		if dir > 0 {
+			return l < last
+		}
+		return l > 0
+	}
+	if inBounds(line) {
+		line += int(dir)
+		for inBounds(line) && isBlankLine(t.lines[line]) {
+			line += int(dir)
+		}
+		for inBounds(line) && !isBlankLine(t.lines[line]) {
+			line += int(dir)
+		}
+	}
+	t.cursorLine = line
+	t.cursorChar = 0
+	t.syncAnchorToCursor()
+	m.notifySelectionChanged()
 }
 
 // adjustTreeScroll adjusts the tree scroll so the tree cursor
@@ -109,7 +154,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		lo := m.computeLayout()
 
 		borderX := lo.treeWidth
-		isBorderArea := msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= headerHeight
+		isBorderArea := msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= contentStartY
 
 		if isBorderArea && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
 			m.resizingPane = true
@@ -124,8 +169,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if msg.X < lo.treeWidth && msg.Y >= headerHeight && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
-			treeIdx := msg.Y - headerHeight + m.treeScrollOffset
+		if msg.X < lo.treeWidth && msg.Y >= contentStartY && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+			treeIdx := msg.Y - contentStartY + m.treeScrollOffset
 			if treeIdx >= 0 && treeIdx < len(m.fileTree) {
 				m.treeCursor = treeIdx
 				m.toggleTreeEntry(treeIdx)
@@ -137,9 +182,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if msg.X >= lo.editorStartX && msg.Y >= headerHeight {
+		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
 			editorX := msg.X - lo.editorStartX - lineNumberWidth
-			editorY := msg.Y - headerHeight
+			editorY := msg.Y - contentStartY
 			offset := t.scrollOffset
 			targetLine := offset + editorY
 
@@ -167,24 +212,32 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					t.cursorChar = targetChar
 					t.anchorLine = targetLine
 					t.anchorChar = targetChar
-					t.selecting = true
+					t.selecting = false
+					t.lineSelect = false
+					m.mouseDown = true
 					m.lastMouseLine = targetLine
 					m.lastMouseChar = targetChar
 				case tea.MouseActionMotion:
-					if targetLine != m.lastMouseLine || targetChar != m.lastMouseChar {
+					if m.mouseDown && (targetLine != m.lastMouseLine || targetChar != m.lastMouseChar) {
+						t.selecting = true
 						t.cursorLine = targetLine
 						t.cursorChar = targetChar
 						m.lastMouseLine = targetLine
 						m.lastMouseChar = targetChar
 					}
+				case tea.MouseActionRelease:
+					m.mouseDown = false
+					if t.selecting {
+						t.cursorLine = targetLine
+						t.cursorChar = targetChar
+						m.notifySelectionChanged()
+					}
 				}
 			case msg.Action == tea.MouseActionRelease:
+				m.mouseDown = false
 				if t.selecting {
 					t.cursorLine = targetLine
 					t.cursorChar = targetChar
-					if t.cursorLine == t.anchorLine && t.cursorChar == t.anchorChar {
-						t.selecting = false
-					}
 					m.notifySelectionChanged()
 				}
 			case msg.Button == tea.MouseButtonWheelUp:
@@ -233,6 +286,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 			return m, nil
+		}
+
+		if m.gPending {
+			m.gPending = false
+			if key.Matches(msg, m.keys.GoTop) {
+				if m.focusPane == paneTree {
+					m.treeCursor = 0
+				} else if len(t.lines) > 0 {
+					t.cursorLine = 0
+					t.cursorChar = 0
+					t.syncAnchorToCursor()
+					m.notifySelectionChanged()
+				}
+				break
+			}
 		}
 
 		switch {
@@ -384,10 +452,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.tabs) > 0 {
 				m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
 			}
+		case key.Matches(msg, m.keys.GoBottom):
+			if m.focusPane == paneTree {
+				if len(m.fileTree) > 0 {
+					m.treeCursor = len(m.fileTree) - 1
+				}
+			} else if hasTab && len(t.lines) > 0 {
+				t.cursorLine = len(t.lines) - 1
+				t.cursorChar = 0
+				t.syncAnchorToCursor()
+				m.notifySelectionChanged()
+			}
+		case key.Matches(msg, m.keys.BlockUp):
+			m.moveToParagraphBoundary(dirUp)
+		case key.Matches(msg, m.keys.BlockDown):
+			m.moveToParagraphBoundary(dirDown)
 		case key.Matches(msg, m.keys.CloseTab):
 			if len(m.tabs) > 0 {
 				m.closeTab(m.activeTab)
 			}
+		case key.Matches(msg, m.keys.GoTop):
+			m.gPending = true
 		}
 	}
 

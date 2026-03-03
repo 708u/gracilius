@@ -139,6 +139,11 @@ func (m *Model) renderFooter() string {
 
 	var sb strings.Builder
 
+	if m.gPending {
+		sb.WriteString("g → g: top")
+		return sb.String()
+	}
+
 	if m.quitPending {
 		sb.WriteString("Press Ctrl+C again to quit")
 		return sb.String()
