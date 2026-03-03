@@ -247,11 +247,11 @@ func (m *Model) renderTree(width, height int) []string {
 
 // renderEditor generates the editor pane lines.
 func (m *Model) renderEditor(width, height int) []string {
-	t, _ := m.activeTabState()
+	t, hasTab := m.activeTabState()
 
 	lines := make([]string, 0, height)
 
-	if len(t.lines) == 0 {
+	if !hasTab || len(t.lines) == 0 {
 		emptyMsg := "No file selected"
 		lines = append(lines, padRight(emptyMsg, width))
 		for len(lines) < height {

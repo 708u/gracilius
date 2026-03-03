@@ -124,8 +124,8 @@ func (m *Model) openFileByPath(absPath string) {
 	if i := m.findTabByPath(absPath); i >= 0 {
 		m.activeTab = i
 	} else {
-		cur, _ := m.activeTabState()
-		if cur.kind == fileTab && cur.filePath == "" {
+		cur, hasTab := m.activeTabState()
+		if hasTab && cur.kind == fileTab && cur.filePath == "" {
 			if err := m.loadFileIntoTab(cur, absPath); err != nil {
 				m.statusMsg = fmt.Sprintf(
 					"Cannot open: %v", err,
