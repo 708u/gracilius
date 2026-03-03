@@ -365,7 +365,7 @@ func composeLine(bgLine, fgLine string, startX int) string {
 	fgW := ansi.StringWidth(fgLine)
 
 	if bgW < startX+fgW {
-		bgLine = bgLine + strings.Repeat(" ", startX+fgW-bgW)
+		bgLine += strings.Repeat(" ", startX+fgW-bgW)
 	}
 
 	before := ansi.Truncate(bgLine, startX, "")
