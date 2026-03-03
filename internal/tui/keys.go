@@ -114,8 +114,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 // based on the current TUI state.
 func (m *Model) contextKeyMap() help.KeyMap {
 	km := m.keys
-	t := m.activeTabState()
-	hasTab := t != nil
+	t, hasTab := m.activeTabState()
 	km.CharSelect.SetEnabled(hasTab && m.focusPane == paneEditor)
 	km.LineSelect.SetEnabled(hasTab && m.focusPane == paneEditor)
 	km.Copy.SetEnabled(hasTab && m.focusPane == paneEditor && t.selecting)

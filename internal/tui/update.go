@@ -45,11 +45,11 @@ func (m *Model) adjustTreeScroll(contentHeight int) {
 
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	t := m.activeTabState()
+	t, hasTab := m.activeTabState()
 
 	switch msg := msg.(type) {
 	case fileChangedMsg:
-		if t != nil {
+		if hasTab {
 			t.lines = msg.lines
 			t.highlightedLines = highlightFile(
 				t.filePath, strings.Join(msg.lines, "\n"),
@@ -91,7 +91,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = ""
 		return m, nil
 	case IdeConnectedMsg:
-		if t != nil && t.filePath != "" && len(t.lines) > 0 {
+		if hasTab && t.filePath != "" && len(t.lines) > 0 {
 			m.notifySelectionChanged()
 		}
 		return m, nil
@@ -102,7 +102,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.treeWidth > maxWidth {
 			m.treeWidth = maxWidth
 		}
-		if t != nil && t.filePath != "" && len(t.lines) > 0 && m.focusPane == paneEditor {
+		if hasTab && t.filePath != "" && len(t.lines) > 0 && m.focusPane == paneEditor {
 			m.notifySelectionChanged()
 		}
 	case tea.MouseMsg:
@@ -133,7 +133,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if t == nil || len(t.lines) == 0 {
+		if !hasTab || len(t.lines) == 0 {
 			return m, nil
 		}
 
@@ -213,7 +213,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		}
 
-		if t != nil && t.inputMode {
+		if hasTab && t.inputMode {
 			switch {
 			case key.Matches(msg, m.keys.Cancel):
 				t.inputMode = false
@@ -237,14 +237,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch {
 		case key.Matches(msg, m.keys.Cancel):
-			if t != nil && t.selecting {
+			if hasTab && t.selecting {
 				t.selecting = false
 				t.lineSelect = false
 				m.notifyClearSelection()
 				return m, nil
 			}
 		case key.Matches(msg, m.keys.SwitchPane):
-			if t != nil && len(t.lines) > 0 {
+			if hasTab && len(t.lines) > 0 {
 				if m.focusPane == paneEditor {
 					m.notifyClearSelection()
 				}
@@ -266,7 +266,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.fileTree = collapseDir(m.fileTree, m.treeCursor)
 					}
 				}
-			} else if t != nil {
+			} else if hasTab {
 				if t.cursorChar > 0 {
 					t.cursorChar--
 				} else if t.cursorLine > 0 {
@@ -284,7 +284,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.fileTree = expandDir(m.fileTree, m.treeCursor)
 					}
 				}
-			} else if t != nil {
+			} else if hasTab {
 				if t.cursorChar < t.lineLen(t.cursorLine) {
 					t.cursorChar++
 				} else if t.cursorLine < len(t.lines)-1 {
@@ -299,7 +299,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.treeCursor > 0 {
 					m.treeCursor--
 				}
-			} else if t != nil {
+			} else if hasTab {
 				if t.cursorLine > 0 {
 					t.cursorLine--
 					t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
@@ -312,7 +312,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.treeCursor < len(m.fileTree)-1 {
 					m.treeCursor++
 				}
-			} else if t != nil {
+			} else if hasTab {
 				if t.cursorLine < len(t.lines)-1 {
 					t.cursorLine++
 					t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
@@ -321,7 +321,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.CharSelect):
-			if t != nil && m.focusPane == paneEditor && len(t.lines) > 0 {
+			if hasTab && m.focusPane == paneEditor && len(t.lines) > 0 {
 				switch {
 				case t.selecting && !t.lineSelect:
 					t.selecting = false
@@ -334,7 +334,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.LineSelect):
-			if t != nil && m.focusPane == paneEditor && len(t.lines) > 0 {
+			if hasTab && m.focusPane == paneEditor && len(t.lines) > 0 {
 				switch {
 				case t.selecting && t.lineSelect:
 					t.selecting = false
@@ -350,7 +350,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.Comment):
-			if t != nil && m.focusPane == paneEditor && len(t.lines) > 0 {
+			if hasTab && m.focusPane == paneEditor && len(t.lines) > 0 {
 				t.inputMode = true
 				t.inputLine = t.cursorLine
 				t.commentInput.Reset()
@@ -360,7 +360,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.commentInput.Focus()
 			}
 		case key.Matches(msg, m.keys.Copy):
-			if t != nil && m.focusPane == paneEditor && t.selecting {
+			if hasTab && m.focusPane == paneEditor && t.selecting {
 				text := t.selectedText()
 				if err := clipboard.WriteAll(text); err != nil {
 					m.statusMsg = fmt.Sprintf("Copy failed: %v", err)
@@ -373,7 +373,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 			}
 		case key.Matches(msg, m.keys.ClearAll):
-			if t != nil && m.focusPane == paneEditor {
+			if hasTab && m.focusPane == paneEditor {
 				t.comments = make(map[int]string)
 			}
 		case key.Matches(msg, m.keys.NextTab):
@@ -394,7 +394,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	lo := m.computeLayout()
 	if m.focusPane == paneTree {
 		m.adjustTreeScroll(lo.contentHeight)
-	} else if t != nil && len(t.lines) > 0 {
+	} else if hasTab && len(t.lines) > 0 {
 		t.adjustScrollForCursor(lo.contentHeight)
 	}
 

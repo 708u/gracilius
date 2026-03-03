@@ -34,11 +34,11 @@ func (m *Model) View() string {
 		return ""
 	}
 
-	t := m.activeTabState()
+	t, hasTab := m.activeTabState()
 
 	// header
 	header := fmt.Sprintf("gracilius - Port %d", m.server.Port())
-	if t != nil && t.filePath != "" {
+	if hasTab && t.filePath != "" {
 		header += fmt.Sprintf(" | %s", t.filePath)
 	}
 	// content
@@ -47,7 +47,7 @@ func (m *Model) View() string {
 	treeLines := m.renderTree(lo.treeWidth, lo.contentHeight)
 
 	var editorLines []string
-	if t == nil {
+	if !hasTab {
 		editorLines = renderWelcome(lo.editorWidth, lo.contentHeight)
 	} else {
 		editorLines = m.renderEditor(lo.editorWidth, lo.contentHeight)
@@ -135,7 +135,7 @@ func (m *Model) renderTabBar(offset int) string {
 
 // renderFooter generates the footer area (help hints + status).
 func (m *Model) renderFooter() string {
-	t := m.activeTabState()
+	t, hasTab := m.activeTabState()
 
 	var sb strings.Builder
 
@@ -144,7 +144,7 @@ func (m *Model) renderFooter() string {
 		return sb.String()
 	}
 
-	if t != nil && t.inputMode {
+	if hasTab && t.inputMode {
 		sb.WriteString("[Editor] Comment (Enter: confirm, Esc: cancel)\n")
 		fmt.Fprintf(&sb, "Line %d: %s",
 			t.inputLine+1, t.commentInput.View())
@@ -153,7 +153,7 @@ func (m *Model) renderFooter() string {
 		sb.WriteString(m.help.View(m.contextKeyMap()))
 		sb.WriteString("\n")
 
-		if t == nil {
+		if !hasTab {
 			sb.WriteString("Open a file from the tree to begin")
 		} else if m.focusPane == paneEditor {
 			switch {
@@ -184,7 +184,7 @@ func (m *Model) renderTree(width, height int) []string {
 	lines := make([]string, 0, height)
 
 	var activeFilePath string
-	if t := m.activeTabState(); t != nil {
+	if t, ok := m.activeTabState(); ok {
 		activeFilePath = t.filePath
 	}
 
@@ -235,7 +235,7 @@ func (m *Model) renderTree(width, height int) []string {
 
 // renderEditor generates the editor pane lines.
 func (m *Model) renderEditor(width, height int) []string {
-	t := m.activeTabState()
+	t, _ := m.activeTabState()
 
 	lines := make([]string, 0, height)
 

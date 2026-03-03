@@ -92,13 +92,12 @@ type Model struct {
 	iconMode iconMode
 }
 
-// activeTabState returns the active tab, or nil if no tabs exist.
-// TODO: return with bool
-func (m *Model) activeTabState() *tab {
+// activeTabState returns the active tab and whether it exists.
+func (m *Model) activeTabState() (*tab, bool) {
 	if len(m.tabs) == 0 {
-		return nil
+		return nil, false
 	}
-	return m.tabs[m.activeTab]
+	return m.tabs[m.activeTab], true
 }
 
 // findTabByPath returns the index of the tab with the given file path,
