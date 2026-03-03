@@ -1,2 +1,5 @@
 .claude/user_instructions
 .claude/settings.local.json
+gra
+docs/sessions/
+*.txt
