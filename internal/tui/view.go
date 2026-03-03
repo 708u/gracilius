@@ -34,18 +34,24 @@ func (m *Model) View() string {
 		return ""
 	}
 
-	t := m.activeTabState()
+	t, hasTab := m.activeTabState()
 
 	// header
 	header := fmt.Sprintf("gracilius - Port %d", m.server.Port())
-	if t.filePath != "" {
+	if hasTab && t.filePath != "" {
 		header += fmt.Sprintf(" | %s", t.filePath)
 	}
 	// content
 	lo := m.computeLayout()
 
 	treeLines := m.renderTree(lo.treeWidth, lo.contentHeight)
-	editorLines := m.renderEditor(lo.editorWidth, lo.contentHeight)
+
+	var editorLines []string
+	if !hasTab {
+		editorLines = renderWelcome(lo.editorWidth, lo.contentHeight)
+	} else {
+		editorLines = m.renderEditor(lo.editorWidth, lo.contentHeight)
+	}
 
 	sepLines := make([]string, lo.contentHeight)
 	for i := range sepLines {
@@ -80,6 +86,10 @@ func (m *Model) View() string {
 // renderTabBar generates the tab bar (2 lines: labels + underline).
 // offset is the left padding to align with the editor pane.
 func (m *Model) renderTabBar(offset int) string {
+	if len(m.tabs) == 0 {
+		return "\n"
+	}
+
 	styleActive := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(activeTheme.tabActiveFg))
 	styleInactive := lipgloss.NewStyle().
@@ -125,7 +135,7 @@ func (m *Model) renderTabBar(offset int) string {
 
 // renderFooter generates the footer area (help hints + status).
 func (m *Model) renderFooter() string {
-	t := m.activeTabState()
+	t, hasTab := m.activeTabState()
 
 	var sb strings.Builder
 
@@ -139,7 +149,7 @@ func (m *Model) renderFooter() string {
 		return sb.String()
 	}
 
-	if t.inputMode {
+	if hasTab && t.inputMode {
 		sb.WriteString("[Editor] Comment (Enter: confirm, Esc: cancel)\n")
 		fmt.Fprintf(&sb, "Line %d: %s",
 			t.inputLine+1, t.commentInput.View())
@@ -148,7 +158,10 @@ func (m *Model) renderFooter() string {
 		sb.WriteString(m.help.View(m.contextKeyMap()))
 		sb.WriteString("\n")
 
-		if m.focusPane == paneEditor {
+		switch {
+		case !hasTab:
+			sb.WriteString("Open a file from the tree to begin")
+		case m.focusPane == paneEditor:
 			switch {
 			case t.selecting:
 				sLine, sChar, eLine, eChar := t.normalizedSelection()
@@ -163,7 +176,7 @@ func (m *Model) renderFooter() string {
 			default:
 				sb.WriteString("Select a file to view")
 			}
-		} else if m.treeCursor < len(m.fileTree) {
+		case m.treeCursor < len(m.fileTree):
 			entry := m.fileTree[m.treeCursor]
 			sb.WriteString(entry.path)
 		}
@@ -176,7 +189,10 @@ func (m *Model) renderFooter() string {
 func (m *Model) renderTree(width, height int) []string {
 	lines := make([]string, 0, height)
 
-	activeFilePath := m.activeTabState().filePath
+	var activeFilePath string
+	if t, ok := m.activeTabState(); ok {
+		activeFilePath = t.filePath
+	}
 
 	for i := m.treeScrollOffset; i < len(m.fileTree) && len(lines) < height; i++ {
 		entry := m.fileTree[i]
@@ -225,7 +241,7 @@ func (m *Model) renderTree(width, height int) []string {
 
 // renderEditor generates the editor pane lines.
 func (m *Model) renderEditor(width, height int) []string {
-	t := m.activeTabState()
+	t, _ := m.activeTabState()
 
 	lines := make([]string, 0, height)
 

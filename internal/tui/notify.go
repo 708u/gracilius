@@ -4,7 +4,10 @@ import "fmt"
 
 // notifySelectionChanged sends the current selection to the MCP server.
 func (m *Model) notifySelectionChanged() {
-	t := m.activeTabState()
+	t, ok := m.activeTabState()
+	if !ok {
+		return
+	}
 	startLine, startChar, endLine, endChar := t.normalizedSelection()
 
 	m.server.NotifySelectionChanged(
@@ -19,7 +22,10 @@ func (m *Model) notifySelectionChanged() {
 
 // notifyClearSelection sends a clear-selection notification.
 func (m *Model) notifyClearSelection() {
-	t := m.activeTabState()
+	t, ok := m.activeTabState()
+	if !ok {
+		return
+	}
 	m.server.NotifySelectionChanged(
 		t.filePath,
 		"",
@@ -32,7 +38,10 @@ func (m *Model) notifyClearSelection() {
 
 // notifyComment sends a comment as a selection_changed notification.
 func (m *Model) notifyComment(line int, comment string) {
-	t := m.activeTabState()
+	t, ok := m.activeTabState()
+	if !ok {
+		return
+	}
 	text := fmt.Sprintf("[Comment] %s:%d\n%s", t.filePath, line+1, comment)
 
 	m.server.NotifySelectionChanged(
