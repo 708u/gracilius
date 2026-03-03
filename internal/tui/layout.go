@@ -9,6 +9,7 @@ const (
 	minTreeWidth        = 15
 	defaultTreePercent  = 30
 	maxTreeWidthPercent = 70
+	contentStartY       = headerHeight + tabBarHeight
 	minContentHeight    = 5
 )
 

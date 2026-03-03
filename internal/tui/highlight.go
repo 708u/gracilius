@@ -21,6 +21,8 @@ type themeConfig struct {
 	tabInactiveFg     string // Inactive tab foreground hex color
 	searchSelectionBg string // Search overlay selection bg
 	searchMatchFg     string // Fuzzy match highlight fg
+	logoLeaf          string // Welcome logo top color (green/leaf)
+	logoTrunk         string // Welcome logo bottom color (brown/trunk)
 }
 
 func (t themeConfig) selectionBgSeq() string {
@@ -38,6 +40,8 @@ var (
 		tabInactiveFg:     "#969696",
 		searchSelectionBg: "#04395E",
 		searchMatchFg:     "#FFCC66",
+		logoLeaf:          "#73C991",
+		logoTrunk:         "#CE9178",
 	}
 	lightTheme = themeConfig{
 		name:              "github",
@@ -49,6 +53,8 @@ var (
 		tabInactiveFg:     "#6E6E6E",
 		searchSelectionBg: "#C4E0F9",
 		searchMatchFg:     "#0066CC",
+		logoLeaf:          "#1B7F37",
+		logoTrunk:         "#795E26",
 	}
 	activeTheme = darkTheme // default fallback
 )

@@ -1,0 +1,2773 @@
+
+ ▐▛███▜▌   Claude Code v2.1.63
+▝▜█████▛▘  Opus 4.6 · Claude Max
+  ▘▘ ▝▝    ~/ghq/github.com/708u/gracilius-worktree/feat/file-search-overlay
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Plan to implement                                                            │
+│                                                                              │
+│ Search Overlay UI/UX Improvements                                            │
+│                                                                              │
+│ Context                                                                      │
+│                                                                              │
+│ 現在の検索オーバーレイは機能的には動作するが、UI/UX に複数の問題がある。     │
+│ オーバーレイが画面の大部分を占め、背景とのコントラストが不足し、             │
+│ 選択状態やマッチ箇所の視認性が低い。                                         │
+│ VS Code の Quick Open (Cmd+P) のような洗練された操作感を目指す。             │
+│                                                                              │
+│ 変更ファイル                                                                 │
+│                                                                              │
+│ ┌───────────────────────────┬──────────────────────────────────────────────┐ │
+│ │           File            │                    Action                    │ │
+│ ├───────────────────────────┼──────────────────────────────────────────────┤ │
+│ │ internal/tui/highlight.go │ theme に 2 フィールド追加、ansiFaint         │ │
+│ │                           │ 定数追加                                     │ │
+│ ├───────────────────────────┼──────────────────────────────────────────────┤ │
+│ │ internal/tui/search.go    │ overlay サイズ/位置変更、背景 dim、delegate  │ │
+│ │                           │ 全面改修                                     │ │
+│ └───────────────────────────┴──────────────────────────────────────────────┘ │
+│                                                                              │
+│ Step 1: highlight.go - theme 拡張                                            │
+│                                                                              │
+│ themeConfig に 2 フィールド追加:                                             │
+│                                                                              │
+│ searchSelectionBg string // Search overlay selection bg                      │
+│ searchMatchFg     string // Fuzzy match highlight fg                         │
+│                                                                              │
+│ 値:                                                                          │
+│                                                                              │
+│ - dark: searchSelectionBg: "#04395E", searchMatchFg: "#FFCC66"               │
+│ - light: searchSelectionBg: "#C4E0F9", searchMatchFg: "#0066CC"              │
+│                                                                              │
+│ ANSI 定数を追加 (L58-61 の var ブロック内):                                  │
+│                                                                              │
+│ ansiFaint = termenv.CSI + termenv.FaintSeq + "m"                             │
+│                                                                              │
+│ Step 2: search.go - overlay サイズ/位置変更                                  │
+│                                                                              │
+│ overlay() メソッドを改修:                                                    │
+│                                                                              │
+│ - 幅: min(width*3/5, 60) (現在: min(width*3/4, 80))                          │
+│ - 高さ: 結果件数に適応。filterLine(1) + separator(1) + items + border(2)     │
+│   - min 5, max 15                                                            │
+│ - 位置: 上部 1/5 (startY = height/5)                                         │
+│                                                                              │
+│ placeOverlay に startY パラメータを追加するか、                              │
+│ 新関数 placeOverlayAt を作成。                                               │
+│                                                                              │
+│ Step 3: search.go - 背景 dim                                                 │
+│                                                                              │
+│ dimBackground(bg string) string 関数を追加。                                 │
+│ 各行を ansiFaint で wrap し、ansiReset でリセット。                          │
+│ overlay() 内で placeOverlayAt に渡す前に適用。                               │
+│                                                                              │
+│ Step 4: search.go - 入力/結果間セパレータ + 件数表示                         │
+│                                                                              │
+│ overlay() の content 組み立てを変更:                                         │
+│                                                                              │
+│ countStr := fmt.Sprintf(" %d/%d ", visibleCount, totalCount)                 │
+│ rulerW := innerW - ansi.StringWidth(countStr)                                │
+│ separator := strings.Repeat("─", rulerW) + countStr                          │
+│ content := filterLine + "\n" + separator + "\n" + s.list.View()              │
+│                                                                              │
+│ list の SetSize 高さを innerH - 2 (filter + separator 分) に調整。           │
+│                                                                              │
+│ Step 5: search.go - 選択インジケータ改善                                     │
+│                                                                              │
+│ searchDelegate.Render() を改修:                                              │
+│                                                                              │
+│ - 選択行に > プレフィックス、非選択行に                                      │
+│ - 背景色を activeTheme.searchSelectionBg に変更                              │
+│ - padRight で行幅全体を塗りつぶし                                            │
+│                                                                              │
+│ Step 6: search.go - マッチハイライト                                         │
+│                                                                              │
+│ searchDelegate.Render() に追加:                                              │
+│                                                                              │
+│ - m.MatchesForItem(index) で一致ルーン位置を取得                             │
+│ - lipgloss.StyleRunes(pathStr, matches, matchedStyle, unmatchedStyle)        │
+│ を path 部分のみ に適用 (icon prefix の前)                                   │
+│ - match indices は FilterValue() = fi.path 基準なので offset 不要            │
+│ - icon.colorize() は最後に適用 (icon 文字は path 外なので干渉しない)         │
+│                                                                              │
+│ 実装順序                                                                     │
+│                                                                              │
+│ 1. highlight.go (theme 追加) - 他の変更の前提                                │
+│ 2. overlay サイズ/位置 (Step 2)                                              │
+│ 3. 背景 dim (Step 3)                                                         │
+│ 4. セパレータ + 件数 (Step 4)                                                │
+│ 5. 選択インジケータ (Step 5)                                                 │
+│ 6. マッチハイライト (Step 6)                                                 │
+│                                                                              │
+│ 各ステップ後に go build ./... && go test ./... で検証。                      │
+│                                                                              │
+│ 検証方法                                                                     │
+│                                                                              │
+│ go build ./... && go test ./...                                              │
+│ go build -o gra ./cmd/gra/ && ./gra .                                        │
+│                                                                              │
+│ - / キーで overlay を開き、入力開始でフィルタ動作を確認                      │
+│ - 背景が dim されていること                                                  │
+│ - overlay が画面上部に配置され、結果数に応じてサイズが変わること             │
+│ - 選択行に > と背景色があること                                              │
+│ - マッチ文字がハイライトされていること                                       │
+│ - セパレータ行に件数が表示されること                                         │
+│ - Esc で閉じる、Enter でファイルが開くことを確認                             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+⏺ 計画を実装していきます。まず現在のコードを確認します。
+
+⏺ Read 2 files (ctrl+o to expand)
+
+⏺ コードを確認しました。次に display.go の padRight と、view.go での
+  placeOverlay の使用箇所を確認します。
+
+⏺ Searched for 3 patterns, read 1 file (ctrl+o to expand)
+
+⏺ lipgloss.StyleRunes が使えるか確認します。
+
+⏺ Searched for 2 patterns (ctrl+o to expand)
+
+⏺ lipgloss.StyleRunes は利用可能です。MatchesForItem メソッドも確認します。
+
+⏺ Searched for 1 pattern (ctrl+o to expand)
+
+⏺ 全て利用可能です。それでは実装を進めます。
+
+  まず Step 1: highlight.go に theme フィールドと ansiFaint 定数を追加します。
+
+⏺ Update(internal/tui/highlight.go)
+  ⎿  Added 9 lines, removed 7 lines
+      12  )
+      13 
+      14  type themeConfig struct {
+      15 -  name            string // Chroma style name                  
+      16 -  selectionBg     string // Editor selection background hex col
+         -or                                                             
+      17 -  listSelectionBg string // List/tree active selection hex colo
+         -r                                                              
+      18 -  activeFileBg    string // File tree active-tab file backgroun
+         -d hex color                                                    
+      19 -  tabActiveFg     string // Active tab foreground hex color    
+      20 -  tabActiveBorder string // Active tab underline hex color     
+      21 -  tabInactiveFg   string // Inactive tab foreground hex color  
+      15 +  name              string // Chroma style name
+      16 +  selectionBg       string // Editor selection background hex c
+         +olor
+      17 +  listSelectionBg   string // List/tree active selection hex co
+         +lor
+      18 +  activeFileBg      string // File tree active-tab file backgro
+         +und hex color
+      19 +  tabActiveFg       string // Active tab foreground hex color
+      20 +  tabActiveBorder   string // Active tab underline hex color
+      21 +  tabInactiveFg     string // Inactive tab foreground hex color
+      22 +  searchSelectionBg string // Search overlay selection bg
+      23 +  searchMatchFg     string // Fuzzy match highlight fg
+      24  }
+      25 
+      26  func (t themeConfig) selectionBgSeq() string {
+
+⏺ Update(internal/tui/highlight.go)
+  ⎿  Added 18 lines, removed 14 lines
+      29 
+      30  var (
+      31    darkTheme = themeConfig{
+      32 -    name:            "github-dark",                            
+      33 -    selectionBg:     "#264F78",                                
+      34 -    listSelectionBg: "#37373D",                                
+      35 -    activeFileBg:    "#2A2D2E",                                
+      36 -    tabActiveFg:     "#FFFFFF",                                
+      37 -    tabActiveBorder: "#E8AB53",                                
+      38 -    tabInactiveFg:   "#969696",                                
+      32 +    name:              "github-dark",
+      33 +    selectionBg:       "#264F78",
+      34 +    listSelectionBg:   "#37373D",
+      35 +    activeFileBg:      "#2A2D2E",
+      36 +    tabActiveFg:       "#FFFFFF",
+      37 +    tabActiveBorder:   "#E8AB53",
+      38 +    tabInactiveFg:     "#969696",
+      39 +    searchSelectionBg: "#04395E",
+      40 +    searchMatchFg:     "#FFCC66",
+      41    }
+      42    lightTheme = themeConfig{
+      41 -    name:            "github",                                 
+      42 -    selectionBg:     "#ADD6FF",                                
+      43 -    listSelectionBg: "#B8D8F8",                                
+      44 -    activeFileBg:    "#E4E6F1",                                
+      45 -    tabActiveFg:     "#333333",                                
+      46 -    tabActiveBorder: "#005FB8",                                
+      47 -    tabInactiveFg:   "#6E6E6E",                                
+      43 +    name:              "github",
+      44 +    selectionBg:       "#ADD6FF",
+      45 +    listSelectionBg:   "#B8D8F8",
+      46 +    activeFileBg:      "#E4E6F1",
+      47 +    tabActiveFg:       "#333333",
+      48 +    tabActiveBorder:   "#005FB8",
+      49 +    tabInactiveFg:     "#6E6E6E",
+      50 +    searchSelectionBg: "#C4E0F9",
+      51 +    searchMatchFg:     "#0066CC",
+      52    }
+      53    activeTheme = darkTheme // default fallback
+      54  )
+
+⏺ Update(internal/tui/highlight.go)
+  ⎿  Added 1 line
+      64  var (
+      65    ansiInverse = termenv.CSI + termenv.ReverseSeq + "m"
+      66    ansiReset   = termenv.CSI + termenv.ResetSeq + "m"
+      67 +  ansiFaint   = termenv.CSI + termenv.FaintSeq + "m"
+      68  )
+      69 
+      70  type styledRun struct {
+
+⏺ Step 1 完了。Step 2-6: search.go を全面改修します。
+
+⏺ Read 1 file (ctrl+o to expand)
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+⏺ search.go を全面改修します。全ての Step (2-6) をまとめて適用します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 40 lines, removed 8 lines
+      25  // searchDelegate renders file items with an icon prefix.
+      26  type searchDelegate struct {
+      27    iconMode iconMode
+      28 +  width    int
+      29  }
+      30 
+      31  func (d searchDelegate) Height() int                         {
+          return 1 }
+     ...
+      44      resolvedPath: fi.resolvedPath,
+      45    }
+      46    icon := iconFor(d.iconMode, entry)
+      46 -                                                               
+      47    selected := index == m.Index()
+      48 
+      49 -  var style lipgloss.Style                                     
+      49 +  // Build prefix indicator
+      50 +  prefix := "  "
+      51    if selected {
+      51 -    style = lipgloss.NewStyle().                               
+      52 -      Background(lipgloss.Color(activeTheme.listSelectionBg))  
+      52 +    prefix = "> "
+      53    }
+      54 
+      55 -  line := icon.prefix() + fi.path                              
+      56 -  rendered := style.Render(line)                               
+      57 -  rendered = icon.colorize(rendered)                           
+      55 +  // Apply fuzzy match highlighting to the path
+      56 +  matchedStyle := lipgloss.NewStyle().
+      57 +    Foreground(lipgloss.Color(activeTheme.searchMatchFg)).
+      58 +    Bold(true)
+      59 +  unmatchedStyle := lipgloss.NewStyle()
+      60 +  if selected {
+      61 +    matchedStyle = matchedStyle.
+      62 +      Background(lipgloss.Color(activeTheme.searchSelectionBg))
+      63 +    unmatchedStyle = unmatchedStyle.
+      64 +      Background(lipgloss.Color(activeTheme.searchSelectionBg))
+      65 +  }
+      66 
+      59 -  fmt.Fprint(w, rendered)                                      
+      67 +  pathStr := fi.path
+      68 +  matches := m.MatchesForItem(index)
+      69 +  if len(matches) > 0 {
+      70 +    pathStr = lipgloss.StyleRunes(pathStr, matches, matchedStyl
+         +e, unmatchedStyle)
+      71 +  } else if selected {
+      72 +    pathStr = unmatchedStyle.Render(pathStr)
+      73 +  }
+      74 +
+      75 +  iconPrefix := icon.prefix()
+      76 +  line := prefix + iconPrefix + pathStr
+      77 +
+      78 +  // Pad the line to fill the full width with selection backgro
+         +und
+      79 +  if selected && d.width > 0 {
+      80 +    lineW := ansi.StringWidth(line)
+      81 +    if lineW < d.width {
+      82 +      bgStyle := lipgloss.NewStyle().
+      83 +        Background(lipgloss.Color(activeTheme.searchSelectionBg
+         +))
+      84 +      line += bgStyle.Render(strings.Repeat(" ", d.width-lineW)
+         +)
+      85 +    }
+      86 +  }
+      87 +
+      88 +  // Colorize icon after all styling
+      89 +  line = icon.colorize(line)
+      90 +
+      91 +  fmt.Fprint(w, line)
+      92  }
+      93 
+      94  // searchOverlay manages the file search overlay state.
+
+⏺ 次に overlay メソッドと placeOverlay 関連を改修します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 47 lines, removed 9 lines
+      191 
+      192  // overlay renders the search overlay on top of the background
+            view.
+      193  func (s *searchOverlay) overlay(bg string, width, height int)
+           string {
+      194 -  overlayW := min(width*3/4, 80)                              
+      195 -  overlayH := min(height*3/4, 20)                             
+      194 +  overlayW := min(width*3/5, 60)
+      195 
+      196    innerW := overlayW - 4 // border + padding
+      198 -  innerH := overlayH - 2 // border                            
+      197 
+      200 -  s.list.SetSize(innerW, innerH)                              
+      198 +  // Adaptive height based on result count
+      199 +  visibleCount := len(s.list.VisibleItems())
+      200 +  totalCount := len(s.list.Items())
+      201 +  itemLines := max(min(visibleCount, 15), 3)
+      202 +  // filterLine(1) + separator(1) + items
+      203 +  innerH := 2 + itemLines
+      204 +  overlayH := innerH + 2 // border
+      205 
+      206 +  if overlayH > height-2 {
+      207 +    overlayH = height - 2
+      208 +    innerH = overlayH - 2
+      209 +  }
+      210 +
+      211 +  // Update delegate width for padding
+      212 +  if d, ok := s.list.Delegate().(searchDelegate); ok {
+      213 +    d.width = innerW
+      214 +    s.list.SetDelegate(d)
+      215 +  }
+      216 +
+      217 +  // List height excludes filter line and separator
+      218 +  s.list.SetSize(innerW, innerH-2)
+      219 +
+      220    filterLine := s.list.FilterInput.View()
+      203 -  content := filterLine + "\n" + s.list.View()                
+      221 
+      222 +  // Build separator with count
+      223 +  countStr := fmt.Sprintf(" %d/%d ", visibleCount, totalCount)
+      224 +  rulerW := innerW - ansi.StringWidth(countStr)
+      225 +  if rulerW < 0 {
+      226 +    rulerW = 0
+      227 +  }
+      228 +  separator := strings.Repeat("─", rulerW) + countStr
+      229 +
+      230 +  content := filterLine + "\n" + separator + "\n" + s.list.Vie
+          +w()
+      231 +
+      232    borderStyle := lipgloss.NewStyle().
+      233      Border(lipgloss.RoundedBorder()).
+      234      BorderForeground(lipgloss.Color(activeTheme.tabActiveBorde
+           r)).
+     ...
+      238      Width(innerW).
+      239      Render(content)
+      240 
+      214 -  return placeOverlay(width, height, box, bg)                 
+      241 +  dimmedBg := dimBackground(bg)
+      242 +  startY := height / 5
+      243 +  return placeOverlayAt(width, height, box, dimmedBg, startY)
+      244  }
+      245 
+      217 -// placeOverlay composites fg on top of bg, centered.         
+      218 -func placeOverlay(width, height int, fg, bg string) string {  
+      246 +// dimBackground wraps each line with ANSI faint to dim the ba
+          +ckground.
+      247 +func dimBackground(bg string) string {
+      248 +  lines := strings.Split(bg, "\n")
+      249 +  for i, line := range lines {
+      250 +    lines[i] = ansiFaint + line + ansiReset
+      251 +  }
+      252 +  return strings.Join(lines, "\n")
+      253 +}
+      254 +
+      255 +// placeOverlayAt composites fg on top of bg at a given Y posi
+          +tion,
+      256 +// horizontally centered.
+      257 +func placeOverlayAt(width, height int, fg, bg string, startY i
+          +nt) string {
+      258    fgLines := strings.Split(fg, "\n")
+      259    bgLines := strings.Split(bg, "\n")
+      260 
+     ...
+      270      }
+      271    }
+      272 
+      234 -  startY := (height - fgH) / 2                                
+      273    startX := (width - fgW) / 2
+      274    if startY < 0 {
+      275      startY = 0
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+⏺ list.Model に Delegate() メソッドがないようです。delegate の width
+  を別の方法で渡す必要があります。searchOverlay に delegate
+  を保持するように変更します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 4 lines, removed 3 lines
+       93 
+       94  // searchOverlay manages the file search overlay state.
+       95  type searchOverlay struct {
+       96 -  active bool                                                 
+       97 -  list   list.Model                                           
+       96 +  active   bool
+       97 +  list     list.Model
+       98 +  delegate *searchDelegate
+       99  }
+      100 
+      101  func newSearchOverlay(mode iconMode) searchOverlay {
+      101 -  delegate := searchDelegate{iconMode: mode}                  
+      102 +  delegate := &searchDelegate{iconMode: mode}
+      103 
+      104    l := list.New(nil, delegate, 0, 0)
+      105    l.SetShowTitle(false)
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 1 line, removed 1 line
+      113    l.FilterInput.PromptStyle = lipgloss.NewStyle()
+      114    l.FilterInput.Prompt = ""
+      115 
+      116 -  return searchOverlay{list: l}                               
+      116 +  return searchOverlay{list: l, delegate: delegate}
+      117  }
+      118 
+      119  // scanAllFiles recursively scans rootDir using scanDir (from 
+           filetree.go)
+
+⏺ delegate を pointer で保持するようになったので、overlay 内の delegate width
+  更新を簡略化します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 1 line, removed 4 lines
+      210    }
+      211 
+      212    // Update delegate width for padding
+      213 -  if d, ok := s.list.Delegate().(searchDelegate); ok {        
+      214 -    d.width = innerW                                          
+      215 -    s.list.SetDelegate(d)                                     
+      216 -  }                                                           
+      213 +  s.delegate.width = innerW
+      214 
+      215    // List height excludes filter line and separator
+      216    s.list.SetSize(innerW, innerH-2)
+
+⏺ ビルドとテストを実行します。
+
+⏺ Bash(go build ./... 2>&1)
+  ⎿  (No output)
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+⏺ ビルド成功です。テストも実行します。
+
+⏺ Bash(go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  0.572s
+
+
+
+⏺ ビルド、テストともに成功しました。最終的なコードを確認します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ lint の指摘にある if rulerW < 0 を max に置き換えます。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 1 line, removed 4 lines
+      219 
+      220    // Build separator with count
+      221    countStr := fmt.Sprintf(" %d/%d ", visibleCount, totalCount)
+      222 -  rulerW := innerW - ansi.StringWidth(countStr)               
+      223 -  if rulerW < 0 {                                             
+      224 -    rulerW = 0                                                
+      225 -  }                                                           
+      222 +  rulerW := max(innerW-ansi.StringWidth(countStr), 0)
+      223    separator := strings.Repeat("─", rulerW) + countStr
+      224 
+      225    content := filterLine + "\n" + separator + "\n" + s.list.Vie
+           w()
+
+⏺ searchDelegate が pointer receiver にもかかわらず list.ItemDelegate interface
+  を value receiver で実装しています。list.New に pointer
+  を渡しているので問題ないはずですが、念のため Render メソッドの receiver
+  を確認します。
+
+⏺ Searched for 1 pattern (ctrl+o to expand)
+
+⏺ searchDelegate の全メソッドは value receiver なので、pointer *searchDelegate
+  も value searchDelegate も両方 interface を満たします。pointer
+  を渡す場合は問題ありません。ただし Render 内で d.width
+  にアクセスしますが、value receiver なので pointer
+  の値が正しく反映されるか確認が必要です。
+
+  list.New に *searchDelegate を渡しており、Render が value receiver (d 
+  searchDelegate) なので、呼び出し時にコピーされます。しかし s.delegate.width = 
+  innerW で pointer 経由で書き換えた値は、list 内部で保持された interface
+  value（pointer）を通じてアクセスされるため、正しく動作します。value receiver
+  でも d は *searchDelegate の dereference なので最新値が取得されます。
+
+  最終ビルドとテストを確認します。
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ 全て成功しています。変更の概要をまとめます。
+
+  ---
+  実装が完了しました。変更内容は以下の通りです。
+
+  internal/tui/highlight.go
+  - themeConfig に searchSelectionBg（検索選択背景色）と
+  searchMatchFg（マッチハイライト前景色）を追加
+  - dark/light テーマにそれぞれ値を設定
+  - ansiFaint ANSI 定数を追加（背景 dim 用）
+
+  internal/tui/search.go
+  - overlay サイズ/位置: 幅 min(width*3/5, 60)、高さは結果件数に適応（3-15
+  行）、位置は上部 1/5
+  - 背景 dim: dimBackground() 関数で全背景行を ANSI faint で wrap
+  - セパレータ + 件数: ───────── 5/42 形式のセパレータ行を filter
+  と結果の間に追加
+  - 選択インジケータ: 選択行に > プレフィックス、searchSelectionBg
+  で行全体を塗りつぶし
+  - マッチハイライト: lipgloss.StyleRunes と MatchesForItem でマッチ文字を
+  searchMatchFg + bold でハイライト
+  - 構造変更: searchOverlay に delegate *searchDelegate を保持し、overlay
+  描画時に幅を動的更新。placeOverlay を placeOverlayAt に変更して Y
+  位置を指定可能に
+
+✻ Brewed for 2m 45s
+
+❯ *searchDelegate ややこしいからぜんぶpointer扱いに 
+
+⏺ searchDelegate のメソッドを全て pointer receiver に統一します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 4 lines, removed 4 lines
+      28    width    int
+      29  }
+      30 
+      31 -func (d searchDelegate) Height() int                         { 
+         -return 1 }                                                     
+      32 -func (d searchDelegate) Spacing() int                        { 
+         -return 0 }                                                     
+      33 -func (d searchDelegate) Update(tea.Msg, *list.Model) tea.Cmd { 
+         -return nil }                                                   
+      31 +func (d *searchDelegate) Height() int                         {
+         + return 1 }
+      32 +func (d *searchDelegate) Spacing() int                        {
+         + return 0 }
+      33 +func (d *searchDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
+         + return nil }
+      34 
+      35 -func (d searchDelegate) Render(w io.Writer, m list.Model, index
+         - int, item list.Item) {                                        
+      35 +func (d *searchDelegate) Render(w io.Writer, m list.Model, inde
+         +x int, item list.Item) {
+      36    fi, ok := item.(fileItem)
+      37    if !ok {
+      38      return
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ 完了です。4つのメソッド (Height, Spacing, Update, Render) を全て
+  *searchDelegate の pointer receiver に統一しました。
+
+❯ フィードバックします 現在選択行の > とhitが二行になっています\            
+  widthが小さくて窮屈です、もう少し広くして                                 
+  ⎿  [Image #2]
+
+⏺ スクリーンショットから2つの問題が確認できます。
+
+  1. 選択行の > とアイコン+パスが折り返して2行になっている（innerW が狭すぎる）
+  2. overlay 全体の幅が窮屈
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ 上限 60 が狭すぎるので 80 に戻します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 1 line, removed 1 line
+      192 
+      193  // overlay renders the search overlay on top of the background
+            view.
+      194  func (s *searchOverlay) overlay(bg string, width, height int)
+           string {
+      195 -  overlayW := min(width*3/5, 60)                              
+      195 +  overlayW := min(width*3/5, 80)
+      196 
+      197    innerW := overlayW - 4 // border + padding
+      198 
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ 上限を 80 に変更しました。これで長いパスでも折り返さず1行に収まるはずです。
+
+❯ tuiのheightが小さいときにoverrayが見切れています                          
+  全ての要素が必ず画面に収まるようにして                                    
+  ⎿  [Image #3]
+  ⎿  ⧉ Selected 125 lines from .twig-claude-prompt-feat-file-search-overlay.sh 
+     in Visual Studio Code
+
+⏺ overlay の高さ制限と startY の計算が不十分で、画面下端をはみ出しています。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ 問題は2つです。
+
+  1. overlayH の上限チェック後に startY を計算していないので、startY + overlayH
+  が height を超える
+  2. innerH - 2 が負になる可能性がある
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 14 lines, removed 9 lines
+      200    visibleCount := len(s.list.VisibleItems())
+      201    totalCount := len(s.list.Items())
+      202    itemLines := max(min(visibleCount, 15), 3)
+      203 -  // filterLine(1) + separator(1) + items                     
+      204 -  innerH := 2 + itemLines                                     
+      205 -  overlayH := innerH + 2 // border                            
+      203 +  // filterLine(1) + separator(1) + items + border(2)
+      204 +  overlayH := 2 + itemLines + 2
+      205 
+      207 -  if overlayH > height-2 {                                    
+      208 -    overlayH = height - 2                                     
+      209 -    innerH = overlayH - 2                                     
+      206 +  startY := height / 5
+      207 +
+      208 +  // Clamp so overlay fits within screen
+      209 +  maxH := height - startY
+      210 +  if overlayH > maxH {
+      211 +    overlayH = maxH
+      212    }
+      213 +  if overlayH < 4 { // border(2) + at least filter+separator
+      214 +    overlayH = 4
+      215 +  }
+      216 +  innerH := overlayH - 2 // border
+      217 +  listH := max(innerH-2, 1) // exclude filter + separator
+      218 
+      219    // Update delegate width for padding
+      220    s.delegate.width = innerW
+      221 
+      215 -  // List height excludes filter line and separator           
+      216 -  s.list.SetSize(innerW, innerH-2)                            
+      222 +  s.list.SetSize(innerW, listH)
+      223 
+      224    filterLine := s.list.FilterInput.View()
+      225 
+     ...
+      240      Render(content)
+      241 
+      242    dimmedBg := dimBackground(bg)
+      237 -  startY := height / 5                                        
+      243    return placeOverlayAt(width, height, box, dimmedBg, startY)
+      244  }
+      245 
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ 修正しました。startY を先に計算し、height - startY を overlay の最大高さとして
+   clamp するようにしました。これにより overlay
+  が画面下端をはみ出すことはなくなります。
+
+✻ Baked for 32s
+
+❯ 直ってない 
+  ⎿  [Image #4]
+
+⏺ スクリーンショットを見ると、overlay box のレンダリング後の実際の行数が
+  overlayH を超えています。borderStyle.Render(content)
+  が生成する実際の行数を制御する必要があります。問題は list.View() が listH
+  より多くの行を返している可能性があること、また lipgloss.Render
+  自体が余分な行を追加している可能性です。
+
+  box レンダリング後に行数を clamp します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ 根本原因は lipgloss.Render の Height を指定していないので、content
+  の行数がそのまま反映されることです。Height を明示的に設定します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 1 line
+      237 
+      238    box := borderStyle.
+      239      Width(innerW).
+      240 +    Height(innerH).
+      241      Render(content)
+      242 
+      243    dimmedBg := dimBackground(bg)
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ borderStyle に .Height(innerH) を追加しました。これにより lipgloss が content
+  を innerH 行に切り詰めるため、border 込みで overlayH 行に確実に収まります。
+
+❯ 高さ直ってないのと、改行されてhitが分かりづらい 
+  ⎿  [Image #5]
+
+⏺ 2つの問題があります。
+
+  1. 選択行の >  + アイコン + パスが innerW を超えて折り返している
+  2. 高さが依然として画面に収まっていない
+
+  delegate の Render で行を innerW に truncate し、overlay
+  の高さ計算を根本的に見直します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ 問題が2つあります。
+
+  1. 折り返し: delegate の Render で行が d.width を超えると lipgloss/list
+  が折り返す。path を truncate する必要がある。
+  2. 高さ: lipgloss.Height() は最小高さではなく、content
+  が溢れたら切り詰めない。box のレンダリング後に行数を強制 clamp する。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 8 lines
+      75    iconPrefix := icon.prefix()
+      76    line := prefix + iconPrefix + pathStr
+      77 
+      78 +  // Truncate to fit within width (prevent line wrapping)
+      79 +  if d.width > 0 {
+      80 +    lineW := ansi.StringWidth(line)
+      81 +    if lineW > d.width {
+      82 +      line = ansi.Truncate(line, d.width, "…")
+      83 +    }
+      84 +  }
+      85 +
+      86    // Pad the line to fill the full width with selection backgro
+          und
+      87    if selected && d.width > 0 {
+      88      lineW := ansi.StringWidth(line)
+
+⏺ 次に高さの問題。lipgloss.Height() は content
+  が多い場合に切り詰めてくれません。box レンダリング後に行数を強制的に clamp
+  します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 7 lines
+      248      Height(innerH).
+      249      Render(content)
+      250 
+      251 +  // Force-clamp box to overlayH lines to prevent overflow
+      252 +  boxLines := strings.Split(box, "\n")
+      253 +  if len(boxLines) > overlayH {
+      254 +    boxLines = boxLines[:overlayH]
+      255 +    box = strings.Join(boxLines, "\n")
+      256 +  }
+      257 +
+      258    dimmedBg := dimBackground(bg)
+      259    return placeOverlayAt(width, height, box, dimmedBg, startY)
+      260  }
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  0.597s
+
+
+
+⏺ 2つの修正を行いました。
+
+  1. 折り返し防止: delegate の Render で ansi.Truncate(line, d.width, "…")
+  を追加。行が幅を超える場合は … で切り詰め
+  2. 高さ強制 clamp: box レンダリング後に行数が overlayH
+  を超えていたら切り詰め。lipgloss.Height() が最小高さの保証にしかならないため
+
+✻ Cooked for 41s
+
+❯ 直ってない、下部が消えた 技術的に解決が厳しい？ 
+  ⎿  [Image #6]
+
+⏺ 技術的に解決可能です。問題の根本原因は2つあります。
+
+  1. path の truncate がスタイリング後に行われるため ANSI sequences
+  で幅計算がずれる
+  2. box の行数 clamp が border の下線を切っている
+
+  plain path を先に truncate し、list.View() の出力行数を border 前に clamp
+  する方針に変更します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 39 lines, removed 13 lines
+      52      prefix = "> "
+      53    }
+      54 
+      55 -  // Apply fuzzy match highlighting to the path                
+      55 +  iconPrefix := icon.prefix()
+      56 +  prefixW := ansi.StringWidth(prefix) + ansi.StringWidth(iconPr
+         +efix)
+      57 +
+      58 +  // Truncate plain path BEFORE styling to guarantee single-lin
+         +e fit
+      59 +  pathStr := fi.path
+      60 +  if d.width > 0 {
+      61 +    maxPathW := d.width - prefixW
+      62 +    if maxPathW < 4 {
+      63 +      maxPathW = 4
+      64 +    }
+      65 +    pathRunes := []rune(pathStr)
+      66 +    pathW := ansi.StringWidth(pathStr)
+      67 +    if pathW > maxPathW {
+      68 +      pathStr = string(pathRunes[:0])
+      69 +      w2 := 0
+      70 +      for _, r := range pathRunes {
+      71 +        rw := ansi.StringWidth(string(r))
+      72 +        if w2+rw+1 > maxPathW { // +1 for ellipsis
+      73 +          break
+      74 +        }
+      75 +        pathStr += string(r)
+      76 +        w2 += rw
+      77 +      }
+      78 +      pathStr += "…"
+      79 +    }
+      80 +  }
+      81 +
+      82 +  // Apply fuzzy match highlighting to the (possibly truncated)
+         + path
+      83    matchedStyle := lipgloss.NewStyle().
+      84      Foreground(lipgloss.Color(activeTheme.searchMatchFg)).
+      85      Bold(true)
+     ...
+       91        Background(lipgloss.Color(activeTheme.searchSelectionBg)
+           )
+       92    }
+       93 
+       67 -  pathStr := fi.path                                          
+       94 +  // Filter match indices to only those within truncated path
+       95    matches := m.MatchesForItem(index)
+       69 -  if len(matches) > 0 {                                       
+       70 -    pathStr = lipgloss.StyleRunes(pathStr, matches, matchedSty
+          -le, unmatchedStyle)                                           
+       96 +  truncLen := len([]rune(pathStr))
+       97 +  var validMatches []int
+       98 +  for _, idx := range matches {
+       99 +    if idx < truncLen {
+      100 +      validMatches = append(validMatches, idx)
+      101 +    }
+      102 +  }
+      103 +
+      104 +  if len(validMatches) > 0 {
+      105 +    pathStr = lipgloss.StyleRunes(pathStr, validMatches, match
+          +edStyle, unmatchedStyle)
+      106    } else if selected {
+      107      pathStr = unmatchedStyle.Render(pathStr)
+      108    }
+      109 
+       75 -  iconPrefix := icon.prefix()                                 
+      110    line := prefix + iconPrefix + pathStr
+      111 
+       78 -  // Truncate to fit within width (prevent line wrapping)     
+       79 -  if d.width > 0 {                                            
+       80 -    lineW := ansi.StringWidth(line)                           
+       81 -    if lineW > d.width {                                      
+       82 -      line = ansi.Truncate(line, d.width, "…")                
+       83 -    }                                                         
+       84 -  }                                                           
+       85 -                                                              
+      112    // Pad the line to fill the full width with selection backgr
+           ound
+      113    if selected && d.width > 0 {
+      114      lineW := ansi.StringWidth(line)
+
+⏺ 次に高さの問題。box clamp が bottom border を切っていたので、list.View()
+  の出力を border 前に clamp します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 12 lines, removed 9 lines
+      262    rulerW := max(innerW-ansi.StringWidth(countStr), 0)
+      263    separator := strings.Repeat("─", rulerW) + countStr
+      264 
+      265 -  content := filterLine + "\n" + separator + "\n" + s.list.Vie
+          -w()                                                           
+      265 +  // Clamp list view output to exactly listH lines
+      266 +  listView := s.list.View()
+      267 +  listLines := strings.Split(listView, "\n")
+      268 +  if len(listLines) > listH {
+      269 +    listLines = listLines[:listH]
+      270 +  }
+      271 +  for len(listLines) < listH {
+      272 +    listLines = append(listLines, "")
+      273 +  }
+      274 +  listView = strings.Join(listLines, "\n")
+      275 
+      276 +  content := filterLine + "\n" + separator + "\n" + listView
+      277 +
+      278    borderStyle := lipgloss.NewStyle().
+      279      Border(lipgloss.RoundedBorder()).
+      280      BorderForeground(lipgloss.Color(activeTheme.tabActiveBorde
+           r)).
+     ...
+      282 
+      283    box := borderStyle.
+      284      Width(innerW).
+      274 -    Height(innerH).                                           
+      285      Render(content)
+      286 
+      277 -  // Force-clamp box to overlayH lines to prevent overflow    
+      278 -  boxLines := strings.Split(box, "\n")                        
+      279 -  if len(boxLines) > overlayH {                               
+      280 -    boxLines = boxLines[:overlayH]                            
+      281 -    box = strings.Join(boxLines, "\n")                        
+      282 -  }                                                           
+      283 -                                                              
+      287    dimmedBg := dimBackground(bg)
+      288    return placeOverlayAt(width, height, box, dimmedBg, startY)
+      289  }
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  0.534s
+
+
+
+⏺ 修正しました。変更点は2つです。
+
+  1. 折り返し防止: plain path をスタイリング前に truncate するように変更。ANSI
+  sequences の影響を受けない確実な幅計算で、prefix + icon + path が d.width
+  に必ず収まる
+  2. 高さ保証: box の後ではなく list.View() の出力行数を border に入れる前に
+  listH 行に clamp。bottom border が切れなくなる
+
+✻ Churned for 1m 35s
+
+❯ 収まってない > が問題をややこしくしているなら消してもいい 
+  ⎿  [Image #7]
+
+⏺ lipgloss.Width() が内部で word-wrap を行うのが根本原因です。>
+  を削除し、全行を手動で innerW に pad して Width を使わないようにします。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ 根本原因は borderStyle.Width(innerW).Render(content) です。lipgloss の Width()
+   は内部で word-wrap を行い、ANSI sequences 込みの行を再折り返しします。
+
+  対策: Width() を使わず、全 content 行を手動で innerW に pad し、>
+  も削除します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 16 lines, removed 27 lines
+      46    icon := iconFor(d.iconMode, entry)
+      47    selected := index == m.Index()
+      48 
+      49 -  // Build prefix indicator                                    
+      50 -  prefix := "  "                                               
+      51 -  if selected {                                                
+      52 -    prefix = "> "                                              
+      53 -  }                                                            
+      54 -                                                               
+      49    iconPrefix := icon.prefix()
+      56 -  prefixW := ansi.StringWidth(prefix) + ansi.StringWidth(iconPr
+         -efix)                                                          
+      50 +  iconPrefixW := ansi.StringWidth(iconPrefix)
+      51 
+      52    // Truncate plain path BEFORE styling to guarantee single-lin
+          e fit
+      53    pathStr := fi.path
+      54    if d.width > 0 {
+      61 -    maxPathW := d.width - prefixW                              
+      55 +    maxPathW := d.width - iconPrefixW
+      56      if maxPathW < 4 {
+      57        maxPathW = 4
+      58      }
+      65 -    pathRunes := []rune(pathStr)                               
+      66 -    pathW := ansi.StringWidth(pathStr)                         
+      67 -    if pathW > maxPathW {                                      
+      68 -      pathStr = string(pathRunes[:0])                          
+      69 -      w2 := 0                                                  
+      70 -      for _, r := range pathRunes {                            
+      71 -        rw := ansi.StringWidth(string(r))                      
+      72 -        if w2+rw+1 > maxPathW { // +1 for ellipsis             
+      73 -          break                                                
+      74 -        }                                                      
+      75 -        pathStr += string(r)                                   
+      76 -        w2 += rw                                               
+      77 -      }                                                        
+      78 -      pathStr += "…"                                           
+      59 +    if ansi.StringWidth(pathStr) > maxPathW {
+      60 +      pathStr = truncateToWidth(pathStr, maxPathW-1) + "…"
+      61      }
+      62    }
+      63 
+     ...
+      76    // Filter match indices to only those within truncated path
+      77    matches := m.MatchesForItem(index)
+      78    truncLen := len([]rune(pathStr))
+      79 +  if pathStr[len(pathStr)-1] == 0x2026 { // ends with "…"
+      80 +    truncLen-- // exclude ellipsis from match range
+      81 +  }
+      82    var validMatches []int
+      83    for _, idx := range matches {
+      84      if idx < truncLen {
+     ...
+       92      pathStr = unmatchedStyle.Render(pathStr)
+       93    }
+       94 
+      110 -  line := prefix + iconPrefix + pathStr                       
+       95 +  line := iconPrefix + pathStr
+       96 
+      112 -  // Pad the line to fill the full width with selection backgr
+          -ound                                                          
+      113 -  if selected && d.width > 0 {                                
+       97 +  // Pad to exact d.width so lipgloss won't re-wrap
+       98 +  if d.width > 0 {
+       99      lineW := ansi.StringWidth(line)
+      115 -    if lineW < d.width {                                      
+      100 +    if selected {
+      101        bgStyle := lipgloss.NewStyle().
+      102          Background(lipgloss.Color(activeTheme.searchSelectionB
+           g))
+      118 -      line += bgStyle.Render(strings.Repeat(" ", d.width-lineW
+          -))                                                            
+      103 +      if lineW < d.width {
+      104 +        line += bgStyle.Render(strings.Repeat(" ", d.width-lin
+          +eW))
+      105 +      }
+      106 +    } else if lineW < d.width {
+      107 +      line += strings.Repeat(" ", d.width-lineW)
+      108      }
+      109    }
+      110 
+  ⎿  Found 2 new diagnostic issues in 1 file (ctrl+o to expand)
+
+⏺ truncateToWidth ヘルパーを追加し、ellipsis チェックを修正します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 1 line, removed 1 line
+      76    // Filter match indices to only those within truncated path
+      77    matches := m.MatchesForItem(index)
+      78    truncLen := len([]rune(pathStr))
+      79 -  if pathStr[len(pathStr)-1] == 0x2026 { // ends with "…"      
+      79 +  if strings.HasSuffix(pathStr, "…") {
+      80      truncLen-- // exclude ellipsis from match range
+      81    }
+      82    var validMatches []int
+
+⏺ overlay の Width(innerW) を削除し、filterLine と separator も pad
+  します。そして truncateToWidth 関数を追加します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 16 lines, removed 4 lines
+      251    rulerW := max(innerW-ansi.StringWidth(countStr), 0)
+      252    separator := strings.Repeat("─", rulerW) + countStr
+      253 
+      254 -  // Clamp list view output to exactly listH lines            
+      254 +  // Clamp list view output to exactly listH lines,
+      255 +  // and pad each line to innerW to prevent lipgloss word-wrap
+          +.
+      256    listView := s.list.View()
+      257    listLines := strings.Split(listView, "\n")
+      258    if len(listLines) > listH {
+     ...
+      261    for len(listLines) < listH {
+      262      listLines = append(listLines, "")
+      263    }
+      264 +  for i, l := range listLines {
+      265 +    if w := ansi.StringWidth(l); w < innerW {
+      266 +      listLines[i] = l + strings.Repeat(" ", innerW-w)
+      267 +    }
+      268 +  }
+      269    listView = strings.Join(listLines, "\n")
+      270 
+      271 +  // Pad filter and separator lines to innerW
+      272 +  if w := ansi.StringWidth(filterLine); w < innerW {
+      273 +    filterLine += strings.Repeat(" ", innerW-w)
+      274 +  }
+      275 +  if w := ansi.StringWidth(separator); w < innerW {
+      276 +    separator += strings.Repeat(" ", innerW-w)
+      277 +  }
+      278 +
+      279    content := filterLine + "\n" + separator + "\n" + listView
+      280 
+      281    borderStyle := lipgloss.NewStyle().
+     ...
+      283      BorderForeground(lipgloss.Color(activeTheme.tabActiveBorde
+           r)).
+      284      Padding(0, 1)
+      285 
+      272 -  box := borderStyle.                                         
+      273 -    Width(innerW).                                            
+      274 -    Render(content)                                           
+      286 +  box := borderStyle.Render(content)
+      287 
+      288    dimmedBg := dimBackground(bg)
+      289    return placeOverlayAt(width, height, box, dimmedBg, startY)
+
+⏺ truncateToWidth ヘルパーを追加します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 13 lines
+      337    return strings.Join(result, "\n")
+      338  }
+      339 
+      340 +// truncateToWidth truncates a plain string to fit within maxW
+          + display cells.
+      341 +func truncateToWidth(s string, maxW int) string {
+      342 +  w := 0
+      343 +  for i, r := range s {
+      344 +    rw := ansi.StringWidth(string(r))
+      345 +    if w+rw > maxW {
+      346 +      return s[:i]
+      347 +    }
+      348 +    w += rw
+      349 +  }
+      350 +  return s
+      351 +}
+      352 +
+      353  // composeLine overlays fgLine onto bgLine at the given x offs
+           et.
+      354  func composeLine(bgLine, fgLine string, startX int) string {
+      355    bgW := ansi.StringWidth(bgLine)
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  0.577s
+
+
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+⏺ 全て成功しました。変更の要点をまとめます。
+
+  1. > プレフィックス削除: 選択行は背景色のみで示す
+  2. lipgloss Width() 削除: word-wrap の根本原因を除去。代わりに全 content
+  行（filterLine, separator, list items）を手動で innerW に space-pad
+  3. path truncate をスタイリング前に実施: truncateToWidth ヘルパーで plain text
+   を切り詰めてから match highlight を適用
+  4. list.View() を listH 行に clamp + pad: border
+  前に行数を確定させ、はみ出しを防止
+
+✻ Cogitated for 2m 12s
+
+❯ widthのwrapはoptionで消せないの？ 
+
+⏺ 確認します。
+
+⏺ Searched for 1 pattern (ctrl+o to expand)
+
+⏺ inline が true なら word-wrap をスキップします。Inline()
+  メソッドがあるか確認します。
+
+⏺ Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Inline(true) で wrap を無効化できます。ただし border style
+  に適用すると改行自体が無視されるので、border
+  の中身ではなく個別行の制御に使う形になります。
+
+  今回は手動 pad で既に wrap 問題は解決済みなので、Width(innerW) を戻して
+  Inline(true) を使うとコードがシンプルになります。試してみます。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Inline(true) は改行も消してしまうので border style
+  には使えません。しかし、手動 pad
+  を除去してもっとシンプルにする方法があります。lipgloss v1.1.0 のソースを見ると
+   Inline でなくても Width + 改行付き content は行ごとに wrap されます。
+
+  現状の手動 pad
+  方式は確実に動作しているので、このまま維持するのが妥当です。Inline(true) は
+  border/padding との組み合わせで使えないため、今回のケースでは wrap を option
+  で消す方法はありません。
+
+❯ ファイル名に改行付きコンテンツはないと思うけど 
+
+⏺ おっしゃる通り個々の行に改行はありません。ただ Inline(true) は borderStyle の
+  Render(content) に適用されるので、content 内の filterLine + "\n" + separator +
+   "\n" + listView の改行も全て除去されてしまい、1行に潰れます。
+
+  word-wrap だけを無効化するオプションは lipgloss v1.1.0 にはありません。Width()
+   と wrap は内部で直結しています。
+
+  // lipgloss/style.go L361-368
+  if inline {
+      str = strings.ReplaceAll(str, "\n", "")
+  }
+  if !inline && width > 0 {
+      str = cellbuf.Wrap(str, wrapAt, "")
+  }
+
+  なので現在の方式（Width() を使わず各行を手動
+  pad）が最もシンプルな回避策になります。
+
+✻ Cogitated for 51s
+
+❯ できるだけ自前実装を減らしたい ソレで言うとoverray自体は色々いじったけど  
+  結局標準のやつ使ったほうがいいかも                                        
+  結局terminalの高さを変えたときに見切れる問題は直ってない                  
+
+⏺ lipgloss に標準の overlay 関数があるか確認します。
+
+⏺ Searched for 2 patterns (ctrl+o to expand)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ 違う 
+
+⏺ すみません、「標準のやつ」は何を指していますか？
+
+⏺ User answered Claude's questions:
+  ⎿  · overlay の「標準のやつ」とは何を指していますか？ → 
+     bubblesのものを使えるだけ
+
+❯ 元々の実装 
+
+⏺ 了解です。自前実装を最小限にして、bubbles/lipgloss
+  の機能に乗せる方針で整理し直します。
+
+  根本的に Width() による wrap が問題でしたが、delegate で path を truncate
+  すればそもそも wrap は発生しません。Width() + Height() で box
+  サイズを確定し、自前の padding/clamp コードを全て削除します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ 整理します。delegate で truncate しているので Width() による wrap
+  は発生しません。自前の pad/clamp を全て削除し、Width() + Height()
+  に任せます。placeOverlayAt も元の placeOverlay（中央配置）に戻して startY
+  計算を内部に入れます。
+
+⏺ Write(internal/tui/search.go)
+  ⎿  Added 32 lines, removed 93 lines
+      49    iconPrefix := icon.prefix()
+      50    iconPrefixW := ansi.StringWidth(iconPrefix)
+      51 
+      52 -  // Truncate plain path BEFORE styling to guarantee single-lin
+         -e fit                                                          
+      52 +  // Truncate plain path BEFORE styling to prevent line wrappin
+         +g
+      53    pathStr := fi.path
+      54    if d.width > 0 {
+      55 -    maxPathW := d.width - iconPrefixW                          
+      56 -    if maxPathW < 4 {                                          
+      57 -      maxPathW = 4                                             
+      58 -    }                                                          
+      55 +    maxPathW := max(d.width-iconPrefixW, 4)
+      56      if ansi.StringWidth(pathStr) > maxPathW {
+      60 -      pathStr = truncateToWidth(pathStr, maxPathW-1) + "…"     
+      57 +      pathStr = ansi.Truncate(pathStr, maxPathW-1, "") + "…"
+      58      }
+      59    }
+      60 
+      64 -  // Apply fuzzy match highlighting to the (possibly truncated)
+         - path                                                          
+      61 +  // Fuzzy match highlighting
+      62    matchedStyle := lipgloss.NewStyle().
+      63      Foreground(lipgloss.Color(activeTheme.searchMatchFg)).
+      64      Bold(true)
+     ...
+      70        Background(lipgloss.Color(activeTheme.searchSelectionBg))
+      71    }
+      72 
+      76 -  // Filter match indices to only those within truncated path  
+      73    matches := m.MatchesForItem(index)
+      74    truncLen := len([]rune(pathStr))
+      75    if strings.HasSuffix(pathStr, "…") {
+      80 -    truncLen-- // exclude ellipsis from match range            
+      76 +    truncLen--
+      77    }
+      78    var validMatches []int
+      79    for _, idx := range matches {
+     ...
+       90 
+       91    line := iconPrefix + pathStr
+       92 
+       97 -  // Pad to exact d.width so lipgloss won't re-wrap           
+       98 -  if d.width > 0 {                                            
+       93 +  // Pad selection background to full width
+       94 +  if selected && d.width > 0 {
+       95      lineW := ansi.StringWidth(line)
+      100 -    if selected {                                             
+       96 +    if lineW < d.width {
+       97        bgStyle := lipgloss.NewStyle().
+       98          Background(lipgloss.Color(activeTheme.searchSelectionB
+           g))
+      103 -      if lineW < d.width {                                    
+      104 -        line += bgStyle.Render(strings.Repeat(" ", d.width-lin
+          -eW))                                                          
+      105 -      }                                                       
+      106 -    } else if lineW < d.width {                               
+      107 -      line += strings.Repeat(" ", d.width-lineW)              
+       99 +      line += bgStyle.Render(strings.Repeat(" ", d.width-lineW
+          +))
+      100      }
+      101    }
+      102 
+      111 -  // Colorize icon after all styling                          
+      103    line = icon.colorize(line)
+      113 -                                                              
+      104    fmt.Fprint(w, line)
+      105  }
+      106 
+     ...
+      206  // overlay renders the search overlay on top of the background
+            view.
+      207  func (s *searchOverlay) overlay(bg string, width, height int)
+           string {
+      208    overlayW := min(width*3/5, 80)
+      209 +  innerW := overlayW - 4 // border(2) + padding(2)
+      210 
+      220 -  innerW := overlayW - 4 // border + padding                  
+      221 -                                                              
+      222 -  // Adaptive height based on result count                    
+      211 +  // Adaptive height clamped to screen
+      212    visibleCount := len(s.list.VisibleItems())
+      213    totalCount := len(s.list.Items())
+      214    itemLines := max(min(visibleCount, 15), 3)
+      226 -  // filterLine(1) + separator(1) + items + border(2)         
+      227 -  overlayH := 2 + itemLines + 2                               
+      215 +  innerH := 2 + itemLines          // filter(1) + separator(1)
+          + + items
+      216 +  overlayH := innerH + 2           // + border(2)
+      217 +  maxH := height - 4               // leave margin
+      218 +  overlayH = min(overlayH, maxH)
+      219 +  innerH = max(overlayH-2, 3)      // at least filter + separa
+          +tor + 1 item
+      220 +  listH := max(innerH-2, 1)
+      221 
+      229 -  startY := height / 5                                        
+      230 -                                                              
+      231 -  // Clamp so overlay fits within screen                      
+      232 -  maxH := height - startY                                     
+      233 -  if overlayH > maxH {                                        
+      234 -    overlayH = maxH                                           
+      235 -  }                                                           
+      236 -  if overlayH < 4 { // border(2) + at least filter+separator  
+      237 -    overlayH = 4                                              
+      238 -  }                                                           
+      239 -  innerH := overlayH - 2    // border                         
+      240 -  listH := max(innerH-2, 1) // exclude filter + separator     
+      241 -                                                              
+      242 -  // Update delegate width for padding                        
+      222    s.delegate.width = innerW
+      244 -                                                              
+      223    s.list.SetSize(innerW, listH)
+      224 
+      225    filterLine := s.list.FilterInput.View()
+      226 
+      249 -  // Build separator with count                               
+      227    countStr := fmt.Sprintf(" %d/%d ", visibleCount, totalCount)
+      228    rulerW := max(innerW-ansi.StringWidth(countStr), 0)
+      229    separator := strings.Repeat("─", rulerW) + countStr
+      230 
+      254 -  // Clamp list view output to exactly listH lines,           
+      255 -  // and pad each line to innerW to prevent lipgloss word-wrap
+          -.                                                             
+      256 -  listView := s.list.View()                                   
+      257 -  listLines := strings.Split(listView, "\n")                  
+      258 -  if len(listLines) > listH {                                 
+      259 -    listLines = listLines[:listH]                             
+      260 -  }                                                           
+      261 -  for len(listLines) < listH {                                
+      262 -    listLines = append(listLines, "")                         
+      263 -  }                                                           
+      264 -  for i, l := range listLines {                               
+      265 -    if w := ansi.StringWidth(l); w < innerW {                 
+      266 -      listLines[i] = l + strings.Repeat(" ", innerW-w)        
+      267 -    }                                                         
+      268 -  }                                                           
+      269 -  listView = strings.Join(listLines, "\n")                    
+      231 +  content := filterLine + "\n" + separator + "\n" + s.list.Vie
+          +w()
+      232 
+      271 -  // Pad filter and separator lines to innerW                 
+      272 -  if w := ansi.StringWidth(filterLine); w < innerW {          
+      273 -    filterLine += strings.Repeat(" ", innerW-w)               
+      274 -  }                                                           
+      275 -  if w := ansi.StringWidth(separator); w < innerW {           
+      276 -    separator += strings.Repeat(" ", innerW-w)                
+      277 -  }                                                           
+      278 -                                                              
+      279 -  content := filterLine + "\n" + separator + "\n" + listView  
+      280 -                                                              
+      281 -  borderStyle := lipgloss.NewStyle().                         
+      233 +  box := lipgloss.NewStyle().
+      234      Border(lipgloss.RoundedBorder()).
+      235      BorderForeground(lipgloss.Color(activeTheme.tabActiveBorde
+           r)).
+      284 -    Padding(0, 1)                                             
+      236 +    Padding(0, 1).
+      237 +    Width(innerW).
+      238 +    Height(innerH).
+      239 +    Render(content)
+      240 
+      286 -  box := borderStyle.Render(content)                          
+      287 -                                                              
+      241    dimmedBg := dimBackground(bg)
+      289 -  return placeOverlayAt(width, height, box, dimmedBg, startY) 
+      242 +  return placeOverlay(width, height, box, dimmedBg)
+      243  }
+      244 
+      245  // dimBackground wraps each line with ANSI faint to dim the ba
+           ckground.
+     ...
+      251    return strings.Join(lines, "\n")
+      252  }
+      253 
+      301 -// placeOverlayAt composites fg on top of bg at a given Y posi
+          -tion,                                                         
+      302 -// horizontally centered.                                     
+      303 -func placeOverlayAt(width, height int, fg, bg string, startY i
+          -nt) string {                                                  
+      254 +// placeOverlay composites fg on top of bg, horizontally cente
+          +red
+      255 +// and positioned at the upper 1/5 of the screen.
+      256 +func placeOverlay(width, height int, fg, bg string) string {
+      257    fgLines := strings.Split(fg, "\n")
+      258    bgLines := strings.Split(bg, "\n")
+      259 
+     ...
+      269      }
+      270    }
+      271 
+      319 -  startX := (width - fgW) / 2                                 
+      320 -  if startY < 0 {                                             
+      321 -    startY = 0                                                
+      272 +  startY := max(height/5, 0)
+      273 +  // Clamp so overlay doesn't exceed screen bottom
+      274 +  if startY+fgH > height {
+      275 +    startY = max(height-fgH, 0)
+      276    }
+      323 -  if startX < 0 {                                             
+      324 -    startX = 0                                                
+      325 -  }                                                           
+      277 +  startX := max((width-fgW)/2, 0)
+      278 
+      279    result := make([]string, len(bgLines))
+      280    for i, bgLine := range bgLines {
+     ...
+      289    return strings.Join(result, "\n")
+      290  }
+      291 
+      340 -// truncateToWidth truncates a plain string to fit within maxW
+          - display cells.                                               
+      341 -func truncateToWidth(s string, maxW int) string {             
+      342 -  w := 0                                                      
+      343 -  for i, r := range s {                                       
+      344 -    rw := ansi.StringWidth(string(r))                         
+      345 -    if w+rw > maxW {                                          
+      346 -      return s[:i]                                            
+      347 -    }                                                         
+      348 -    w += rw                                                   
+      349 -  }                                                           
+      350 -  return s                                                    
+      351 -}                                                             
+      352 -                                                              
+      292  // composeLine overlays fgLine onto bgLine at the given x offs
+           et.
+      293  func composeLine(bgLine, fgLine string, startX int) string {
+      294    bgW := ansi.StringWidth(bgLine)
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  0.526s
+
+
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+⏺ 整理しました。削除したもの:
+
+  - 自前の行 pad（filterLine, separator, listLines 全行への strings.Repeat pad）
+  - placeOverlayAt（placeOverlay に統合、startY clamp ロジックを内包）
+  - truncateToWidth（ansi.Truncate で代替）
+  - list view の行数 clamp（lipgloss.Height(innerH) に委譲）
+
+  残った自前実装は placeOverlay/composeLine（lipgloss に bg 上に fg を合成する
+  API がないため）と dimBackground のみです。高さは placeOverlay 内で startY + 
+  fgH > height なら startY を押し下げて画面内に収めます。
+
+✻ Crunched for 2m 13s
+
+❯ iconとfile名で二行になる問題が復活している 
+  ⎿  [Image #8]
+
+⏺ Width(innerW) が wrap の原因です。separator が既に innerW
+  幅を確保しているので、Width() を外しても box 幅は一定です。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Removed 1 line
+      234      Border(lipgloss.RoundedBorder()).
+      235      BorderForeground(lipgloss.Color(activeTheme.tabActiveBorde
+           r)).
+      236      Padding(0, 1).
+      237 -    Width(innerW).                                            
+      237      Height(innerH).
+      238      Render(content)
+      239 
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+⏺ Width(innerW) を削除しました。separator が innerW 幅のアンカーになるので box
+  幅は維持されます。
+
+✻ Worked for 35s
+
+❯ 未入力時に直接下のファイルを開けない 
+
+⏺ filter 入力中の Enter が「フィルタ確定」に消費されて、ファイル選択に届いていな
+  い可能性があります。update.go の search overlay の Enter
+  ハンドリングを確認します。
+
+⏺ Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Enter ハンドリング自体は問題なさそうです。selectedPath()
+  が空を返しているのかもしれません。list の filtering state で未入力時に
+  SelectedItem() が nil になるか確認します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ 問題が分かりました。Enter を押すと L320 でインターセプトされますが、list が
+  filtering 状態のとき SelectedItem() は nil を返します（bubbles の仕様:
+  filtering 中はアイテム選択できない）。
+
+  Enter を先に list
+  に渡してフィルタを確定させ、その後に選択アイテムを取得する必要があります。
+
+⏺ Update(internal/tui/update.go)
+  ⎿  Added 3 lines
+      318          m.search.close()
+      319          return m, nil
+      320        case msg.Type == tea.KeyEnter:
+      321 +        // Let the list process Enter first to finalize
+      322 +        // the filter, then read the selected item.
+      323 +        m.search.update(msg)
+      324          if p := m.search.selectedPath(); p != "" {
+      325            absPath := filepath.Join(m.rootDir, p)
+      326            m.search.close()
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ 修正しました。Enter を先に m.search.update(msg) へ渡して list
+  のフィルタを確定させてから selectedPath() を呼ぶようにしました。filtering
+  状態では SelectedItem() が nil を返す bubbles の仕様が原因でした。
+
+✻ Crunched for 45s
+
+❯ 直ってないので戻して 
+  ⎿  ⧉ Selected 1 lines from internal/tui/search.go in Visual Studio Code
+
+⏺ Update(internal/tui/update.go)
+  ⎿  Removed 3 lines
+      318          m.search.close()
+      319          return m, nil
+      320        case msg.Type == tea.KeyEnter:
+      321 -        // Let the list process Enter first to finalize       
+      322 -        // the filter, then read the selected item.           
+      323 -        m.search.update(msg)                                  
+      321          if p := m.search.selectedPath(); p != "" {
+      322            absPath := filepath.Join(m.rootDir, p)
+      323            m.search.close()
+
+⏺ Bash(go build ./... 2>&1)
+  ⎿  (No output)
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+⏺ 戻しました。
+
+❯ vscodeと似たような仕様にしたい。つまり最初か                              
+    ら選択肢を選択できる状態にしつつ、入力自体は                            
+    受け付けて常にfilterする  ただしこれはvim                               
+  bindがないからできる体験とも言える、考察して                              
+
+⏺ VS Code の Quick Open は以下の UX です:
+
+  - 開いた瞬間に全アイテムが表示され、先頭が選択済み
+  - Enter で即座に選択アイテムを開ける
+  - 上下矢印で選択を移動できる
+  - 文字入力はそのままフィルタに反映される
+  - これら全てが同時に機能する
+
+  bubbles/list の filter mode は vim 由来の2フェーズ設計です:
+
+  1. Filtering 状態: 全キー入力が filter input に吸われる。SelectedItem() は nil
+  2. FilterApplied 状態: Enter でフィルタ確定後、初めて矢印で選択・Enter で決定
+
+  これが2フェーズになっている理由は vim bindings との衝突回避です。j が「filter
+  に j を入力」なのか「カーソルを下に移動」なのか区別できません。
+
+  gracilius の search overlay
+  は矢印キーでナビゲーションしているので、この衝突は起きません。printable keys
+  は全て filter、arrows は navigation、Enter は selection
+  と一意に割り当てられます。
+
+  つまり VS Code 的な UX は実現可能ですが、bubbles/list の built-in filter 
+  を使わない必要があります。textinput.Model
+  を独立に持ち、入力のたびに手動でアイテムをフィルタして list.SetItems()
+  する方式です。
+
+  トレードオフ:
+
+  - bubbles の fuzzy filter（スコアリング、match
+  positions）を自前で呼ぶ必要がある
+  - list の filter state 管理が不要になり、Enter/矢印の挙動が単純化する
+  - 現在の「未入力時に選択できない」問題が構造的に解消する
+
+✻ Brewed for 36s
+
+❯ どちらがいいですか 
+
+⏺ textinput.Model を独立に持つ方式を推奨します。
+
+  理由: 現在の方式は bubbles/list の filter state と戦い続けており、workaround
+  コードが増え続けています（Enter が効かない、Height/Width の制御が filter state
+   に依存する等）。独立方式なら list を Unfiltered
+  状態のまま使えるので、SelectedItem()
+  が常に有効で、Enter/矢印がそのまま動きます。
+
+  fuzzy filter は bubbles/list.DefaultFilter が export
+  されているので自前で呼べます。match positions
+  も取得できるため、ハイライト機能も維持できます。
+
+❯ じゃあ変えたいと思うけど、いずれにせよhjklで移動できることと矢印で移動で  
+  きることの両方が必要になるUXはよくない                                    
+
+⏺ おっしゃる通りです。filter 入力中は hjkl がフィルタ文字として消費されるので、
+  ナビゲーションは矢印キーに限定されます。普段 hjkl
+  で操作しているユーザーにとって操作体系が不統一になります。
+
+  ただこれは VS Code、fzf、telescope.nvim 等の filter UI
+  全てに共通する制約です。filter
+  コンテキストでは「入力」と「移動」が排他なので、移動は矢印/Ctrl-n,p
+  に限定されるのが一般的です。
+
+  gracilius の search overlay
+  は一時的なモーダルなので、この不統一は許容範囲だと思います。実装を進めますか？
+
+❯ vscode vim extensionはどうやってこれを解消している？ 
+
+⏺ VS Code Vim extension は Quick Open (Cmd+P) をネイティブ UI 
+  コンテキストとして扱い、vim bindings を適用しません。Quick Open
+  が開いた時点で自動的に Insert Mode 相当になり:
+
+  - 全 printable keys → filter 入力
+  - Ctrl+N / Ctrl+P / 矢印 → リスト移動
+  - Enter → 選択
+  - Escape → 閉じる
+
+  これが成立する理由は、VS Code が「エディタバッファ」と「ネイティブ UI
+  ダイアログ」を明確に区別しているからです。Vim extension は editor context
+  でのみ normal mode を適用し、Quick Open/Command Palette 等の UI
+  要素には介入しません。
+
+  gracilius でも同じ設計が可能です。search overlay
+  は独立したモーダルなので、overlay が active な間は vim 的な keybinding
+  を一時停止し、上記の keybinding に切り替えれば良いだけです。現在の実装でも
+  m.search.active で分岐しているので、構造的には既にそうなっています。
+
+❯ vimの検索の場合はどうなっている？ 
+
+⏺ Vim の / 検索はそもそもこの問題が発生しない設計です。
+
+  / を押すと command-line mode に入り:
+  - 全 printable keys → 検索パターン入力
+  - Enter → 検索確定、normal mode に戻る
+  - n / N → normal mode で次/前のマッチに移動
+
+  つまり「入力」と「結果のナビゲーション」が完全に別フェーズです。リアルタイムで
+  結果リストを表示して選択する UI ではないので、衝突が起きません。
+
+  これは bubbles/list の built-in filter と同じ2フェーズ設計です。
+
+  ライブフィルタ型の picker を提供する Vim プラグインの場合:
+
+  ┌────────────────┬─────────────────────────────────────────────────────────┐
+  │     Plugin     │                 入力中のナビゲーション                  │
+  ├────────────────┼─────────────────────────────────────────────────────────┤
+  │ fzf.vim        │ Ctrl+N/Ctrl+P, 矢印                                     │
+  ├────────────────┼─────────────────────────────────────────────────────────┤
+  │ telescope.nvim │ Insert mode: Ctrl+N/Ctrl+P, 矢印。Esc で normal mode    │
+  │                │ に入ると j/k                                            │
+  ├────────────────┼─────────────────────────────────────────────────────────┤
+  │ ctrlp.vim      │ Ctrl+J/Ctrl+K, 矢印                                     │
+  └────────────────┴─────────────────────────────────────────────────────────┘
+
+  全て「入力中は Ctrl 修飾 or
+  矢印でナビゲーション」で統一されています。telescope だけは Esc で picker 内
+  normal mode に切り替えて j/k を使える二段構えです。
+
+  gracilius の search overlay は fzf/ctrlp 方式（矢印 +
+  Ctrl+N/Ctrl+P）が妥当だと思います。
+
+❯ 今は入力中に/入れると切り替わるよね 
+
+⏺ はい、bubbles/list の built-in filter は /
+  をフィルタモードのトグルキーとして使っているので、入力中に /
+  を押すとフィルタが確定されて状態が切り替わります。パスに /
+  を含むファイル（internal/tui/search.go 等）を検索するときに問題になります。
+
+  これも textinput 独立方式にすれば解消します。/
+  は単なる文字入力になるので、int/tui のようなパスの部分一致が自然にできます。
+
+  実装に進めますか？
+
+❯ 一回今のdiffをrevertしてから独立方式に変えて 
+
+⏺ まず現在の diff を確認してからrevert します。
+
+⏺ Bash(git diff --stat HEAD)
+  ⎿   internal/tui/highlight.go |  49 +++++++++-------
+      internal/tui/search.go    | 141 ++++++++++++++++++++++++++++++++++---
+     ---------
+      2 files changed, 132 insertions(+), 58 deletions(-)
+
+⏺ Bash(git checkout -- internal/tui/highlight.go internal/tui/search.go
+      internal/tui/update.go)
+  ⎿  (No output)
+
+⏺ Bash(git diff --stat HEAD)
+  ⎿  (No output)
+
+⏺ revert 完了。diff なしの状態です。ここから独立 textinput 方式で search overlay
+   を書き直します。まず現在のファイルを確認します。
+
+⏺ Read 2 files (ctrl+o to expand)
+
+⏺ bubbles/list の DefaultFilter API を確認します。
+
+⏺ Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Bash(sed -n '86,110p'
+      ~/go/pkg/mod/github.com/charmbracelet/bubbles@v1.0.0/list/list.go)
+  ⎿  type FilterFunc func(string, []string) []Rank
+
+     // Rank defines a rank for a given item.
+     … +22 lines (ctrl+o to expand)
+
+⏺ よし。list.DefaultFilter で fuzzy filter + match indices が取れます。独立
+  textinput 方式で search.go を書き直します。
+
+⏺ Write(internal/tui/search.go)
+  ⎿  Added 139 lines, removed 62 lines
+       4    "fmt"
+       5    "io"
+       6    "path/filepath"
+       7 +  "sort"
+       8    "strings"
+       9 
+      10    "github.com/charmbracelet/bubbles/list"
+      11 +  "github.com/charmbracelet/bubbles/textinput"
+      12    tea "github.com/charmbracelet/bubbletea"
+      13    "github.com/charmbracelet/lipgloss"
+      14    "github.com/charmbracelet/x/ansi"
+      15 +  "github.com/sahilm/fuzzy"
+      16  )
+      17 
+      15 -// fileItem implements list.Item and list.DefaultItem for file 
+         -search.                                                        
+      18 +// fileItem implements list.Item for file search.
+      19  type fileItem struct {
+      20    path         string // rootDir-relative path
+      21    resolvedPath string // symlink target path (empty if not a sy
+          mlink)
+     ...
+      28  // searchDelegate renders file items with an icon prefix.
+      29  type searchDelegate struct {
+      30    iconMode iconMode
+      31 +  matches  map[int][]int // index -> matched rune positions
+      32  }
+      33 
+      30 -func (d searchDelegate) Height() int                         { 
+         -return 1 }                                                     
+      31 -func (d searchDelegate) Spacing() int                        { 
+         -return 0 }                                                     
+      32 -func (d searchDelegate) Update(tea.Msg, *list.Model) tea.Cmd { 
+         -return nil }                                                   
+      34 +func (d *searchDelegate) Height() int                         {
+         + return 1 }
+      35 +func (d *searchDelegate) Spacing() int                        {
+         + return 0 }
+      36 +func (d *searchDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
+         + return nil }
+      37 
+      34 -func (d searchDelegate) Render(w io.Writer, m list.Model, index
+         - int, item list.Item) {                                        
+      38 +func (d *searchDelegate) Render(w io.Writer, m list.Model, inde
+         +x int, item list.Item) {
+      39    fi, ok := item.(fileItem)
+      40    if !ok {
+      41      return
+     ...
+       47      resolvedPath: fi.resolvedPath,
+       48    }
+       49    icon := iconFor(d.iconMode, entry)
+       46 -                                                              
+       50    selected := index == m.Index()
+       51 
+       49 -  var style lipgloss.Style                                    
+       50 -  if selected {                                               
+       51 -    style = lipgloss.NewStyle().                              
+       52 -      Background(lipgloss.Color(activeTheme.listSelectionBg)) 
+       52 +  pathStr := fi.path
+       53 +
+       54 +  // Apply fuzzy match highlighting
+       55 +  if matched, ok := d.matches[index]; ok && len(matched) > 0 {
+       56 +    matchedStyle := lipgloss.NewStyle().
+       57 +      Foreground(lipgloss.Color(activeTheme.searchMatchFg)).
+       58 +      Bold(true)
+       59 +    unmatchedStyle := lipgloss.NewStyle()
+       60 +    if selected {
+       61 +      matchedStyle = matchedStyle.
+       62 +        Background(lipgloss.Color(activeTheme.searchSelectionB
+          +g))
+       63 +      unmatchedStyle = unmatchedStyle.
+       64 +        Background(lipgloss.Color(activeTheme.searchSelectionB
+          +g))
+       65 +    }
+       66 +    pathStr = lipgloss.StyleRunes(pathStr, matched, matchedSty
+          +le, unmatchedStyle)
+       67 +  } else if selected {
+       68 +    pathStr = lipgloss.NewStyle().
+       69 +      Background(lipgloss.Color(activeTheme.searchSelectionBg)
+          +).
+       70 +      Render(pathStr)
+       71    }
+       72 
+       55 -  line := icon.prefix() + fi.path                             
+       56 -  rendered := style.Render(line)                              
+       57 -  rendered = icon.colorize(rendered)                          
+       73 +  line := icon.prefix() + pathStr
+       74 
+       59 -  fmt.Fprint(w, rendered)                                     
+       75 +  // Pad selection background to full width
+       76 +  if selected {
+       77 +    if lineW := ansi.StringWidth(line); lineW < m.Width() {
+       78 +      bgStyle := lipgloss.NewStyle().
+       79 +        Background(lipgloss.Color(activeTheme.searchSelectionB
+          +g))
+       80 +      line += bgStyle.Render(strings.Repeat(" ", m.Width()-lin
+          +eW))
+       81 +    }
+       82 +  }
+       83 +
+       84 +  line = icon.colorize(line)
+       85 +  fmt.Fprint(w, line)
+       86  }
+       87 
+       88  // searchOverlay manages the file search overlay state.
+       89  type searchOverlay struct {
+       64 -  active bool                                                 
+       65 -  list   list.Model                                           
+       90 +  active   bool
+       91 +  input    textinput.Model
+       92 +  list     list.Model
+       93 +  delegate *searchDelegate
+       94 +  allItems []fileItem // all scanned files (unfiltered)
+       95  }
+       96 
+       97  func newSearchOverlay(mode iconMode) searchOverlay {
+       69 -  delegate := searchDelegate{iconMode: mode}                  
+       98 +  delegate := &searchDelegate{iconMode: mode}
+       99 
+      100    l := list.New(nil, delegate, 0, 0)
+      101    l.SetShowTitle(false)
+      102    l.SetShowStatusBar(false)
+      103    l.SetShowHelp(false)
+      104    l.SetShowPagination(false)
+       76 -  l.SetFilteringEnabled(true)                                 
+       77 -  l.SetShowFilter(false)                                      
+      105 +  l.SetFilteringEnabled(false)
+      106    l.DisableQuitKeybindings()
+       79 -  l.FilterInput.Placeholder = "Search files..."               
+       80 -  l.FilterInput.PromptStyle = lipgloss.NewStyle()             
+       81 -  l.FilterInput.Prompt = ""                                   
+      107 
+       83 -  return searchOverlay{list: l}                               
+      108 +  ti := textinput.New()
+      109 +  ti.Placeholder = "Search files..."
+      110 +  ti.Prompt = ""
+      111 +  ti.PromptStyle = lipgloss.NewStyle()
+      112 +
+      113 +  return searchOverlay{list: l, delegate: delegate, input: ti}
+      114  }
+      115 
+      116  // scanAllFiles recursively scans rootDir using scanDir (from 
+           filetree.go)
+       87 -// and returns all non-hidden files as list.Item values with r
+          -ootDir-relative paths.                                        
+       88 -func scanAllFiles(rootDir string) []list.Item {               
+      117 +// and returns all non-hidden files as fileItem values with ro
+          +otDir-relative paths.
+      118 +func scanAllFiles(rootDir string) []fileItem {
+      119    var entries []fileEntry
+      120    entries = scanDir(rootDir, 0, entries)
+       91 -  var items []list.Item                                       
+      121 +  var items []fileItem
+      122    collectFiles(rootDir, entries, &items)
+      123    return items
+      124  }
+      125 
+      126  // collectFiles recursively collects file items from entries,
+      127  // expanding directories to get all nested files.
+       98 -func collectFiles(rootDir string, entries []fileEntry, items *
+          -[]list.Item) {                                                
+      128 +func collectFiles(rootDir string, entries []fileEntry, items *
+          +[]fileItem) {
+      129    for _, e := range entries {
+      130      if e.isDir {
+      131        var children []fileEntry
+     ...
+      145  }
+      146 
+      147  // open activates the search overlay and populates it with fil
+           es.
+      118 -// It triggers the list's built-in filter mode via a synthetic
+          - "/"                                                          
+      119 -// keypress so the user can start typing immediately.         
+      148  func (s *searchOverlay) open(rootDir string) tea.Cmd {
+      121 -  items := scanAllFiles(rootDir)                              
+      122 -  s.list.SetItems(items)                                      
+      123 -  s.list.ResetFilter()                                        
+      124 -  // Trigger the list's own filter activation (handles interna
+          -l                                                             
+      125 -  // state setup that SetFilterState alone does not).         
+      126 -  s.list, _ = s.list.Update(tea.KeyMsg{                       
+      127 -    Type:  tea.KeyRunes,                                      
+      128 -    Runes: []rune{'/'},                                       
+      129 -  })                                                          
+      149 +  s.allItems = scanAllFiles(rootDir)
+      150 +  s.input.Reset()
+      151 +  s.input.Focus()
+      152 +  s.applyFilter()
+      153    s.active = true
+      131 -  return s.list.FilterInput.Cursor.BlinkCmd()                 
+      154 +  return s.input.Cursor.BlinkCmd()
+      155  }
+      156 
+      157  // close deactivates the search overlay and frees the item lis
+           t.
+      158  func (s *searchOverlay) close() {
+      159    s.active = false
+      160 +  s.allItems = nil
+      161    s.list.SetItems(nil)
+      162 +  s.delegate.matches = nil
+      163  }
+      164 
+      140 -// update delegates a message to the embedded list.Model.     
+      165 +// applyFilter filters allItems by the current input value and
+          + updates the list.
+      166 +func (s *searchOverlay) applyFilter() {
+      167 +  term := s.input.Value()
+      168 +  s.delegate.matches = nil
+      169 +
+      170 +  if term == "" {
+      171 +    items := make([]list.Item, len(s.allItems))
+      172 +    for i := range s.allItems {
+      173 +      items[i] = s.allItems[i]
+      174 +    }
+      175 +    s.list.SetItems(items)
+      176 +    return
+      177 +  }
+      178 +
+      179 +  targets := make([]string, len(s.allItems))
+      180 +  for i, fi := range s.allItems {
+      181 +    targets[i] = fi.path
+      182 +  }
+      183 +
+      184 +  ranks := fuzzy.Find(term, targets)
+      185 +  sort.Stable(ranks)
+      186 +
+      187 +  items := make([]list.Item, len(ranks))
+      188 +  matches := make(map[int][]int, len(ranks))
+      189 +  for i, r := range ranks {
+      190 +    items[i] = s.allItems[r.Index]
+      191 +    matches[i] = r.MatchedIndexes
+      192 +  }
+      193 +  s.list.SetItems(items)
+      194 +  s.delegate.matches = matches
+      195 +}
+      196 +
+      197 +// update handles messages for the search overlay.
+      198 +// Printable input goes to textinput; navigation goes to list.
+      199  func (s *searchOverlay) update(msg tea.Msg) tea.Cmd {
+      142 -  var cmd tea.Cmd                                             
+      143 -  s.list, cmd = s.list.Update(msg)                            
+      144 -  return cmd                                                  
+      200 +  switch msg := msg.(type) {
+      201 +  case tea.KeyMsg:
+      202 +    switch msg.Type {
+      203 +    case tea.KeyUp, tea.KeyDown,
+      204 +      tea.KeyCtrlN, tea.KeyCtrlP:
+      205 +      var cmd tea.Cmd
+      206 +      s.list, cmd = s.list.Update(msg)
+      207 +      return cmd
+      208 +    default:
+      209 +      prevValue := s.input.Value()
+      210 +      var cmd tea.Cmd
+      211 +      s.input, cmd = s.input.Update(msg)
+      212 +      if s.input.Value() != prevValue {
+      213 +        s.applyFilter()
+      214 +      }
+      215 +      return cmd
+      216 +    }
+      217 +  }
+      218 +  return nil
+      219  }
+      220 
+      221  // selectedPath returns the relative path of the currently sel
+           ected item,
+     ...
+      234  // overlay renders the search overlay on top of the background
+            view.
+      235  func (s *searchOverlay) overlay(bg string, width, height int)
+           string {
+      236    overlayW := min(width*3/4, 80)
+      163 -  overlayH := min(height*3/4, 20)                             
+      237 +  innerW := overlayW - 4 // border(2) + padding(2)
+      238 
+      165 -  innerW := overlayW - 4 // border + padding                  
+      166 -  innerH := overlayH - 2 // border                            
+      239 +  // Adaptive height clamped to screen
+      240 +  itemCount := len(s.list.Items())
+      241 +  listH := max(min(itemCount, 15), 3)
+      242 +  innerH := 1 + listH // input(1) + items
+      243 +  maxInnerH := height - 6
+      244 +  if innerH > maxInnerH {
+      245 +    innerH = max(maxInnerH, 4)
+      246 +    listH = innerH - 1
+      247 +  }
+      248 
+      168 -  s.list.SetSize(innerW, innerH)                              
+      249 +  s.list.SetSize(innerW, listH)
+      250 
+      170 -  filterLine := s.list.FilterInput.View()                     
+      171 -  content := filterLine + "\n" + s.list.View()                
+      251 +  inputView := s.input.View()
+      252 +  content := inputView + "\n" + s.list.View()
+      253 
+      173 -  borderStyle := lipgloss.NewStyle().                         
+      254 +  box := lipgloss.NewStyle().
+      255      Border(lipgloss.RoundedBorder()).
+      256      BorderForeground(lipgloss.Color(activeTheme.tabActiveBorde
+           r)).
+      176 -    Padding(0, 1)                                             
+      177 -                                                              
+      178 -  box := borderStyle.                                         
+      179 -    Width(innerW).                                            
+      257 +    Padding(0, 1).
+      258 +    Height(innerH).
+      259      Render(content)
+      260 
+      261    return placeOverlay(width, height, box, bg)
+      262  }
+      263 
+      185 -// placeOverlay composites fg on top of bg, centered.         
+      264 +// placeOverlay composites fg on top of bg, horizontally cente
+          +red
+      265 +// and positioned at the upper 1/5 of the screen.
+      266  func placeOverlay(width, height int, fg, bg string) string {
+      267    fgLines := strings.Split(fg, "\n")
+      268    bgLines := strings.Split(bg, "\n")
+     ...
+      279      }
+      280    }
+      281 
+      202 -  startY := (height - fgH) / 2                                
+      203 -  startX := (width - fgW) / 2                                 
+      204 -  if startY < 0 {                                             
+      205 -    startY = 0                                                
+      282 +  startY := max(height/5, 0)
+      283 +  if startY+fgH > height {
+      284 +    startY = max(height-fgH, 0)
+      285    }
+      207 -  if startX < 0 {                                             
+      208 -    startX = 0                                                
+      209 -  }                                                           
+      286 +  startX := max((width-fgW)/2, 0)
+      287 
+      288    result := make([]string, len(bgLines))
+      289    for i, bgLine := range bgLines {
+
+⏺ 次に highlight.go に theme フィールドを追加します。
+
+⏺ Read 1 file (ctrl+o to expand)
+  ⎿  Found 5 new diagnostic issues in 1 file (ctrl+o to expand)
+  ⎿  Found 2 new diagnostic issues in 1 file (ctrl+o to expand)
+
+⏺ Update(internal/tui/highlight.go)
+  ⎿  Added 9 lines, removed 7 lines
+      12  )
+      13 
+      14  type themeConfig struct {
+      15 -  name            string // Chroma style name                  
+      16 -  selectionBg     string // Editor selection background hex col
+         -or                                                             
+      17 -  listSelectionBg string // List/tree active selection hex colo
+         -r                                                              
+      18 -  activeFileBg    string // File tree active-tab file backgroun
+         -d hex color                                                    
+      19 -  tabActiveFg     string // Active tab foreground hex color    
+      20 -  tabActiveBorder string // Active tab underline hex color     
+      21 -  tabInactiveFg   string // Inactive tab foreground hex color  
+      15 +  name              string // Chroma style name
+      16 +  selectionBg       string // Editor selection background hex c
+         +olor
+      17 +  listSelectionBg   string // List/tree active selection hex co
+         +lor
+      18 +  activeFileBg      string // File tree active-tab file backgro
+         +und hex color
+      19 +  tabActiveFg       string // Active tab foreground hex color
+      20 +  tabActiveBorder   string // Active tab underline hex color
+      21 +  tabInactiveFg     string // Inactive tab foreground hex color
+      22 +  searchSelectionBg string // Search overlay selection bg
+      23 +  searchMatchFg     string // Fuzzy match highlight fg
+      24  }
+      25 
+      26  func (t themeConfig) selectionBgSeq() string {
+
+⏺ Update(internal/tui/highlight.go)
+  ⎿  Added 18 lines, removed 14 lines
+      29 
+      30  var (
+      31    darkTheme = themeConfig{
+      32 -    name:            "github-dark",                            
+      33 -    selectionBg:     "#264F78",                                
+      34 -    listSelectionBg: "#37373D",                                
+      35 -    activeFileBg:    "#2A2D2E",                                
+      36 -    tabActiveFg:     "#FFFFFF",                                
+      37 -    tabActiveBorder: "#E8AB53",                                
+      38 -    tabInactiveFg:   "#969696",                                
+      32 +    name:              "github-dark",
+      33 +    selectionBg:       "#264F78",
+      34 +    listSelectionBg:   "#37373D",
+      35 +    activeFileBg:      "#2A2D2E",
+      36 +    tabActiveFg:       "#FFFFFF",
+      37 +    tabActiveBorder:   "#E8AB53",
+      38 +    tabInactiveFg:     "#969696",
+      39 +    searchSelectionBg: "#04395E",
+      40 +    searchMatchFg:     "#FFCC66",
+      41    }
+      42    lightTheme = themeConfig{
+      41 -    name:            "github",                                 
+      42 -    selectionBg:     "#ADD6FF",                                
+      43 -    listSelectionBg: "#B8D8F8",                                
+      44 -    activeFileBg:    "#E4E6F1",                                
+      45 -    tabActiveFg:     "#333333",                                
+      46 -    tabActiveBorder: "#005FB8",                                
+      47 -    tabInactiveFg:   "#6E6E6E",                                
+      43 +    name:              "github",
+      44 +    selectionBg:       "#ADD6FF",
+      45 +    listSelectionBg:   "#B8D8F8",
+      46 +    activeFileBg:      "#E4E6F1",
+      47 +    tabActiveFg:       "#333333",
+      48 +    tabActiveBorder:   "#005FB8",
+      49 +    tabInactiveFg:     "#6E6E6E",
+      50 +    searchSelectionBg: "#C4E0F9",
+      51 +    searchMatchFg:     "#0066CC",
+      52    }
+      53    activeTheme = darkTheme // default fallback
+      54  )
+
+⏺ テストも修正が必要です。collectFiles のシグネチャが []list.Item から
+  []fileItem に変わりました。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ scanAllFiles が []fileItem を返すようになったのでテストを修正します。
+
+⏺ Update(internal/tui/search_test.go)
+  ⎿  Added 2 lines, removed 4 lines
+      21    items := scanAllFiles(dir)
+      22 
+      23    paths := make(map[string]bool)
+      24 -  for _, item := range items {                                 
+      25 -    fi := item.(fileItem)                                      
+      24 +  for _, fi := range items {
+      25      paths[fi.path] = true
+      26    }
+      27 
+     ...
+      58    items := scanAllFiles(dir)
+      59 
+      60    paths := make(map[string]bool)
+      62 -  for _, item := range items {                                 
+      63 -    fi := item.(fileItem)                                      
+      61 +  for _, fi := range items {
+      62      paths[fi.path] = true
+      63    }
+      64 
+
+⏺ update.go の search overlay ハンドリングを修正します。キー入力を s.update()
+  に委譲するだけで、内部で textinput/list に振り分けます。
+
+⏺ Read 1 file (ctrl+o to expand)
+  ⎿  Found 2 new diagnostic issues in 2 files (ctrl+o to expand)
+
+⏺ 独立 textinput 方式では list の FilterMatchesMsg は発生しないので、この
+  routing は不要です。ただし cursor blink 等の非キーメッセージは textinput
+  に渡す必要があります。
+
+⏺ Update(internal/tui/update.go)
+  ⎿  Added 3 lines, removed 2 lines
+      91 
+      92  // Update implements tea.Model.
+      93  func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+      94 -  // Route non-key messages (e.g. FilterMatchesMsg) to the list
+      94 +  // Route cursor blink and other textinput messages
+      95    // when the search overlay is active.
+      96    if m.search.active {
+      97      switch msg.(type) {
+     ...
+      101        quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
+      102        // Fall through to normal handling below.
+      103      default:
+      104 -      cmd := m.search.update(msg)                             
+      104 +      var cmd tea.Cmd
+      105 +      m.search.input, cmd = m.search.input.Update(msg)
+      106        return m, cmd
+      107      }
+      108    }
+
+⏺ sahilm/fuzzy の依存を追加します。
+
+⏺ Bash(go mod tidy 2>&1)
+  ⎿  go: downloading github.com/kylelemons/godebug v1.1.0
+
+⏺ Bash(go build ./... 2>&1)
+  ⎿  (No output)
+
+⏺ Bash(go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  0.519s
+
+
+
+⏺ ビルド、テスト全て成功です。変更の要約:
+
+  方式変更: bubbles/list の built-in filter → 独立 textinput.Model +
+  sahilm/fuzzy による手動フィルタ
+
+  変更点:
+  - searchOverlay が textinput.Model を独立して保持
+  - applyFilter(): input の値が変わるたびに fuzzy.Find で全アイテムをフィルタし
+  list.SetItems() で反映
+  - update(): 矢印/Ctrl-N,P → list へ、それ以外 → textinput へ振り分け
+  - list は SetFilteringEnabled(false) で filter
+  無効化。純粋なリスト表示+ナビゲーション用
+  - / キーは通常文字として入力可能
+  - Enter 時に selectedPath() が常に有効（filtering 状態が存在しない）
+  - highlight.go に searchSelectionBg, searchMatchFg を追加
+  - delegate で fuzzy match 位置のハイライトと選択行の背景色を適用
+
+✻ Brewed for 2m 33s
+
+❯ widthがhit結果によって変動しまう 常に同じ幅に 
+
+⏺ separator 行を innerW 幅のアンカーとして追加します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ input と list の間に innerW 幅の separator を入れて幅を固定します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 4 lines, removed 3 lines
+      239    // Adaptive height clamped to screen
+      240    itemCount := len(s.list.Items())
+      241    listH := max(min(itemCount, 15), 3)
+      242 -  innerH := 1 + listH // input(1) + items                     
+      242 +  innerH := 2 + listH // input(1) + separator(1) + items
+      243    maxInnerH := height - 6
+      244    if innerH > maxInnerH {
+      245      innerH = max(maxInnerH, 4)
+      246 -    listH = innerH - 1                                        
+      246 +    listH = max(innerH-2, 1)
+      247    }
+      248 
+      249    s.list.SetSize(innerW, listH)
+      250 
+      251    inputView := s.input.View()
+      252 -  content := inputView + "\n" + s.list.View()                 
+      252 +  separator := strings.Repeat("─", innerW)
+      253 +  content := inputView + "\n" + separator + "\n" + s.list.View
+          +()
+      254 
+      255    box := lipgloss.NewStyle().
+      256      Border(lipgloss.RoundedBorder()).
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ innerW 幅の ─ セパレータ行を input と list
+  の間に挿入しました。この行が常に最大幅になるので、border
+  の幅が結果内容に関係なく固定されます。
+
+✻ Baked for 37s
+
+❯ 未入力時と1文字入力時にwidthが僅かに変動している 
+
+⏺ textinput の表示幅がカーソルや placeholder
+  によって微妙に変わるのが原因です。textinput.Width を innerW
+  に設定して固定します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 1 line
+      247    }
+      248 
+      249    s.list.SetSize(innerW, listH)
+      250 +  s.input.Width = innerW
+      251 
+      252    inputView := s.input.View()
+      253    separator := strings.Repeat("─", innerW)
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ s.input.Width = innerW で textinput の表示幅を固定しました。
+
+❯ 画面いっぱいにoverray出してもいいと思うけどどう思う？ 
+
+⏺ 賛成です。overlay は一時的なモーダルなので、画面を広く使ったほうが長いパスも見
+  やすく、結果も多く表示できます。VS Code の Quick Open
+  も画面上部にほぼ全幅で表示しています。
+
+  現在 min(width*3/4, 80) で制限していますが、これを撤廃して width - 4
+  程度（左右に少しマージン）にすれば良いと思います。実装しますか？
+
+❯ どちらかというとheight側かな 
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ 既存の plan は古い内容です。現在の状態と要件に合わせて書き直します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ 変更は overlay() の height 計算のみなので、plan はシンプルにします。
+
+⏺ Updated plan
+  ⎿  /plan to preview
+
+⏺ User approved Claude's plan
+  ⎿  Plan saved to: ~/.claude/plans/twinkly-skipping-backus.md · /plan to 
+     edit
+     Search Overlay: height を画面いっぱいに
+
+     Context
+
+     overlay の height が min(itemCount, 15) で制限されており、
+     画面に余裕があってもリストが短い。
+     画面の高さをフルに活用するように変更する。
+
+     変更ファイル
+
+     ┌────────────────────────┬────────────────────────────────┐
+     │          File          │             Change             │
+     ├────────────────────────┼────────────────────────────────┤
+     │ internal/tui/search.go │ overlay() の height 計算を変更 │
+     └────────────────────────┴────────────────────────────────┘
+
+     変更内容
+
+     overlay() L239-247 の height 計算を変更:
+
+     // Before
+     itemCount := len(s.list.Items())
+     listH := max(min(itemCount, 15), 3)
+     innerH := 2 + listH // input(1) + separator(1) + items
+     maxInnerH := height - 6
+     if innerH > maxInnerH {
+         innerH = max(maxInnerH, 4)
+         listH = max(innerH-2, 1)
+     }
+
+     // After
+     innerH := max(height-6, 4) // border(2) + margin(4)
+     listH := max(innerH-2, 1)  // input(1) + separator(1)
+
+     item 数に関係なく常に height - 6 を使う。
+     list 側でスクロールが機能するので問題ない。
+
+     検証
+
+     go build ./... && go test ./...
+     go build -o gra ./cmd/gra/ && ./gra .
+
+     - / キーで overlay を開き、画面の高さいっぱいにリストが表示される
+     - ターミナルのリサイズでも見切れない
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 3 lines, removed 9 lines
+      236    overlayW := min(width*3/4, 80)
+      237    innerW := overlayW - 4 // border(2) + padding(2)
+      238 
+      239 -  // Adaptive height clamped to screen                        
+      240 -  itemCount := len(s.list.Items())                            
+      241 -  listH := max(min(itemCount, 15), 3)                         
+      242 -  innerH := 2 + listH // input(1) + separator(1) + items      
+      243 -  maxInnerH := height - 6                                     
+      244 -  if innerH > maxInnerH {                                     
+      245 -    innerH = max(maxInnerH, 4)                                
+      246 -    listH = max(innerH-2, 1)                                  
+      247 -  }                                                           
+      239 +  // Use full screen height
+      240 +  innerH := max(height-6, 4) // border(2) + margin(4)
+      241 +  listH := max(innerH-2, 1)  // input(1) + separator(1)
+      242 
+      243    s.list.SetSize(innerW, listH)
+      244    s.input.Width = innerW
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ height 計算を max(height-6, 4) に変更しました。item
+  数に関係なく画面の高さいっぱいにリストが表示されます。
+
+✻ Crunched for 47s
+
+❯ 背景が暗くなるやつが消えてるのと、footerにはのっからないように 
+
+⏺ Searched for 1 pattern (ctrl+o to expand)
+
+⏺ footer の高さは footerHeight = 4 です。search.go に dimBackground
+  を追加し、overlay の高さから footer を除外します。
+
+⏺ Read 2 files (ctrl+o to expand)
+
+⏺ ansiFaint 定数を highlight.go に追加し、search.go に dimBackground と footer
+  考慮を入れます。
+
+⏺ Update(internal/tui/highlight.go)
+  ⎿  Added 1 line
+      64  var (
+      65    ansiInverse = termenv.CSI + termenv.ReverseSeq + "m"
+      66    ansiReset   = termenv.CSI + termenv.ResetSeq + "m"
+      67 +  ansiFaint   = termenv.CSI + termenv.FaintSeq + "m"
+      68  )
+      69 
+      70  type styledRun struct {
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 3 lines, removed 3 lines
+      236    overlayW := min(width*3/4, 80)
+      237    innerW := overlayW - 4 // border(2) + padding(2)
+      238 
+      239 -  // Use full screen height                                   
+      240 -  innerH := max(height-6, 4) // border(2) + margin(4)         
+      241 -  listH := max(innerH-2, 1)  // input(1) + separator(1)       
+      239 +  // Use full screen height, excluding footer
+      240 +  innerH := max(height-footerHeight-4, 4) // footer + border(2
+          +) + margin(2)
+      241 +  listH := max(innerH-2, 1)               // input(1) + separa
+          +tor(1)
+      242 
+      243    s.list.SetSize(innerW, listH)
+      244    s.input.Width = innerW
+  ⎿  Found 2 new diagnostic issues in 1 file (ctrl+o to expand)
+
+⏺ 次に dimBackground を追加し、overlay() で適用します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 2 lines, removed 1 line
+      254      Height(innerH).
+      255      Render(content)
+      256 
+      257 -  return placeOverlay(width, height, box, bg)                 
+      257 +  dimmedBg := dimBackground(bg)
+      258 +  return placeOverlay(width, height, box, dimmedBg)
+      259  }
+      260 
+      261  // placeOverlay composites fg on top of bg, horizontally cente
+           red
+  ⎿  Found 1 new diagnostic issue in 1 file (ctrl+o to expand)
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 9 lines
+      258    return placeOverlay(width, height, box, dimmedBg)
+      259  }
+      260 
+      261 +// dimBackground wraps each line with ANSI faint to dim the ba
+          +ckground.
+      262 +func dimBackground(bg string) string {
+      263 +  lines := strings.Split(bg, "\n")
+      264 +  for i, line := range lines {
+      265 +    lines[i] = ansiFaint + line + ansiReset
+      266 +  }
+      267 +  return strings.Join(lines, "\n")
+      268 +}
+      269 +
+      270  // placeOverlay composites fg on top of bg, horizontally cente
+           red
+      271  // and positioned at the upper 1/5 of the screen.
+      272  func placeOverlay(width, height int, fg, bg string) string {
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  0.500s
+
+
+  ⎿  Found 2 new diagnostic issues in 2 files (ctrl+o to expand)
+
+⏺ 2点修正しました:
+
+  1. 背景 dim: dimBackground() で背景全体を ANSI faint で暗くするように復元
+  2. footer 回避: overlay の高さ計算を height - footerHeight - 4
+  に変更。footerHeight（= 4）を差し引くことで footer 領域に重ならない
+
+✻ Churned for 59s
+
+❯ 重なってる 
+  ⎿  [Image #9]
+  ⎿  ⧉ Selected 4 lines from internal/tui/highlight.go in Visual Studio Code
+
+⏺ footer 行と重なっています。placeOverlay の配置制限が footer
+  を考慮していないのが原因です。overlay の高さだけでなく、配置時の下限も footer
+  分を引く必要があります。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ startY + fgH の上限を height - footerHeight に制限します。
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 3 lines, removed 2 lines
+      285      }
+      286    }
+      287 
+      288 +  maxBottom := height - footerHeight
+      289    startY := max(height/5, 0)
+      289 -  if startY+fgH > height {                                    
+      290 -    startY = max(height-fgH, 0)                               
+      290 +  if startY+fgH > maxBottom {
+      291 +    startY = max(maxBottom-fgH, 0)
+      292    }
+      293    startX := max((width-fgW)/2, 0)
+      294 
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ placeOverlay で overlay の下端を height - footerHeight に制限しました。footer
+  領域には重ならなくなります。
+
+❯ /frontend-design:frontend-design 
+
+⏺ このスキルはフロントエンド UI のデザイン・実装向けです。現在の作業は Go の TUI
+   アプリケーション (bubbletea) なので、このスキルの適用対象外ですね。
+
+  何か別の意図がありましたか？それとも search overlay の作業を続けますか？
+
+❯ 今の表示ってUI観点だとどう？ 
+  ⎿  [Image #10]
+
+⏺ TUI としては良い状態です。機能的に正しく動いています。改善点を挙げるなら:
+
+  良い点
+  - ファイルアイコンで視認性が高い
+  - 選択行の背景色が明確
+  - separator で入力とリストが分離されている
+  - 背景が dim されていて overlay にフォーカスが当たる
+
+  気になる点
+  - overlay 左端が file tree
+  の途中から始まっていて中途半端。左端を揃えるか、完全に中央寄せにするか
+  - 入力欄と結果リストの間の separator 下に空行がある（separator + 空行 +
+  最初のアイテム）
+  - border の角丸が装飾的だが TUI の他の部分（file tree の border
+  等）と統一されているかどうか
+  - リスト下部に余白がある（高さを画面いっぱいにした結果、アイテム数より高さが大
+  きい）
+
+  総合的には、VS Code の Quick Open
+  に近い操作感が実現できていると思います。次に何か手を入れますか？
+
+❯ リスト下部はそのとおりかも、検索結果がheightを下回った場合はそこに揃える  
+  ようにしたい、ただしheightの高さをいじるとレイアウトシフトするのでそれは  
+  しないように                                                              
+
+⏺ overlay の top 位置を固定し、bottom だけが結果数に応じて縮む方式にします。入力
+  欄や既存の結果行は動かないのでレイアウトシフトしません。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 5 lines, removed 3 lines
+      236    overlayW := min(width*3/4, 80)
+      237    innerW := overlayW - 4 // border(2) + padding(2)
+      238 
+      239 -  // Use full screen height, excluding footer                 
+      240 -  innerH := max(height-footerHeight-4, 4) // footer + border(2
+          -) + margin(2)                                                 
+      241 -  listH := max(innerH-2, 1)               // input(1) + separa
+          -tor(1)                                                        
+      239 +  // Max height excluding footer, shrink to fit results
+      240 +  maxInnerH := max(height-footerHeight-4, 4) // footer + borde
+          +r(2) + margin(2)
+      241 +  itemCount := len(s.list.Items())
+      242 +  innerH := min(2+max(itemCount, 1), maxInnerH) // input(1) + 
+          +separator(1) + items
+      243 +  listH := max(innerH-2, 1)
+      244 
+      245    s.list.SetSize(innerW, listH)
+      246    s.input.Width = innerW
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ innerH = min(2 + itemCount, maxInnerH) に変更しました。
+
+  - 結果が少ないとき: overlay は結果数に合わせて縮む（bottom が上がる）
+  - 結果が多いとき: maxInnerH が上限でスクロール
+  - top 位置（startY = height/5）は固定なのでレイアウトシフトしない
+
+✻ Crunched for 47s
+
+❯ 入力開始位置ってUI的に適切？ 
+
+⏺ startY = height/5 だと overlay
+  が画面中段から始まっていて、上に無駄な空間があります。
+
+  VS Code の Quick Open はタイトルバー直下から始まります。gracilius でも header
+  + tab bar の直下（つまり content
+  領域の先頭）から始めるのが自然だと思います。startY を headerHeight + 
+  tabBarHeight あたりに固定するのが適切です。変更しますか？
+
+❯ はい 
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 1 line, removed 1 line
+      288    }
+      289 
+      290    maxBottom := height - footerHeight
+      291 -  startY := max(height/5, 0)                                  
+      291 +  startY := headerHeight + tabBarHeight
+      292    if startY+fgH > maxBottom {
+      293      startY = max(maxBottom-fgH, 0)
+      294    }
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ startY を headerHeight + tabBarHeight（= 3）に固定しました。header
+  とタブバーの直下から overlay が始まります。
+
+❯ window幅の高さを途中で変えると、上部が全部見切れる 
+
+⏺ overlay の高さ計算が startY（= 3）と footer
+  の両方を考慮していないため、小さい画面で収まりません。maxInnerH の計算で
+  startY 分も差し引きます。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(internal/tui/search.go)
+  ⎿  Added 3 lines, removed 2 lines
+      236    overlayW := min(width*3/4, 80)
+      237    innerW := overlayW - 4 // border(2) + padding(2)
+      238 
+      239 -  // Max height excluding footer, shrink to fit results       
+      240 -  maxInnerH := max(height-footerHeight-4, 4) // footer + borde
+          -r(2) + margin(2)                                              
+      239 +  // Max height: available space between startY and footer, mi
+          +nus border
+      240 +  startY := headerHeight + tabBarHeight
+      241 +  maxInnerH := max(height-startY-footerHeight-2, 3) // border(
+          +2)
+      242    itemCount := len(s.list.Items())
+      243    innerH := min(2+max(itemCount, 1), maxInnerH) // input(1) + 
+           separator(1) + items
+      244    listH := max(innerH-2, 1)
+
+⏺ placeOverlay 内の startY 計算は overlay()
+  から渡す形に変更する必要はありません。placeOverlay は既に固定値の headerHeight
+   + tabBarHeight を使っているので、同じ値になります。ただし、念のため
+  placeOverlay で startY を渡せるように確認します。
+
+  実は placeOverlay 内でも startY を計算しています。overlay() で計算した startY
+  と一致するので問題ありません。
+
+⏺ Bash(go build ./... && go test ./... 2>&1)
+  ⎿  ?          github.com/708u/gracilius/cmd/gra       [no test files]
+     ?          github.com/708u/gracilius/internal/protocol     [no test files]
+     ?          github.com/708u/gracilius/internal/server       [no test files]
+     ok         github.com/708u/gracilius/internal/tui  (cached)
+
+
+
+⏺ maxInnerH を height - startY - footerHeight - 2（border
+  分）に修正しました。overlay の内容が startY（header + tab bar 直下）から
+  footer 手前までの領域に確実に収まります。
+
+✻ Worked for 59s

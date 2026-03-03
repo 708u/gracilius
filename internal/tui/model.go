@@ -69,6 +69,7 @@ type Model struct {
 	// mouse
 	lastMouseLine int
 	lastMouseChar int
+	mouseDown     bool
 	resizingPane  bool
 	treeWidth     int
 
@@ -98,9 +99,12 @@ type Model struct {
 	search searchOverlay
 }
 
-// activeTabState returns the active tab.
-func (m *Model) activeTabState() *tab {
-	return m.tabs[m.activeTab]
+// activeTabState returns the active tab and whether it exists.
+func (m *Model) activeTabState() (*tab, bool) {
+	if len(m.tabs) == 0 {
+		return nil, false
+	}
+	return m.tabs[m.activeTab], true
 }
 
 // findTabByPath returns the index of the tab with the given file path,
@@ -120,7 +124,7 @@ func (m *Model) openFileByPath(absPath string) {
 	if i := m.findTabByPath(absPath); i >= 0 {
 		m.activeTab = i
 	} else {
-		cur := m.activeTabState()
+		cur, _ := m.activeTabState()
 		if cur.kind == fileTab && cur.filePath == "" {
 			if err := m.loadFileIntoTab(cur, absPath); err != nil {
 				m.statusMsg = fmt.Sprintf(
@@ -183,7 +187,7 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 		focusPane:  paneTree,
 		watcher:    watcher,
 		dirWatcher: dirWatcher,
-		tabs:       []*tab{newFileTab()},
+		tabs:       []*tab{},
 		treeWidth:  30,
 		keys:       newKeyMap(),
 		help:       help.New(),
