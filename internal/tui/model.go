@@ -93,6 +93,7 @@ type Model struct {
 }
 
 // activeTabState returns the active tab, or nil if no tabs exist.
+// TODO: return with bool
 func (m *Model) activeTabState() *tab {
 	if len(m.tabs) == 0 {
 		return nil
