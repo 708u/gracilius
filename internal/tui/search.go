@@ -205,6 +205,19 @@ func (s *searchOverlay) applyFilter() {
 	s.list.SetItems(items)
 }
 
+// setListFocused toggles focus between input and list.
+// The textinput stays focused (never Blur) so the cursor remains
+// in the input field and IME composition works correctly.
+func (s *searchOverlay) setListFocused(v bool) {
+	s.listFocused = v
+	s.delegate.listFocused = v
+	if v {
+		s.input.Prompt = "  "
+	} else {
+		s.input.Prompt = "> "
+	}
+}
+
 // update handles messages for the search overlay.
 // Tab toggles focus between input and list.
 // In list focus, j/k navigate; printable keys auto-switch back to input.
@@ -212,17 +225,10 @@ func (s *searchOverlay) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Tab toggles focus
+		// Tab toggles focus (input stays focused to keep cursor for IME)
 		if msg.Type == tea.KeyTab {
-			s.listFocused = !s.listFocused
-			s.delegate.listFocused = s.listFocused
-			if s.listFocused {
-				s.input.Prompt = "  "
-				s.input.Blur()
-			} else {
-				s.input.Prompt = "> "
-				s.input.Focus()
-			}
-			return s.input.Cursor.BlinkCmd()
+			s.setListFocused(!s.listFocused)
+			return nil
 		}
 
 		// Arrow keys and Ctrl+N/P always navigate the list
@@ -245,9 +251,12 @@ func (s *searchOverlay) update(msg tea.Msg) tea.Cmd {
 					var cmd tea.Cmd
 					s.list, cmd = s.list.Update(tea.KeyMsg{Type: tea.KeyUp})
 					return cmd
+				default:
+					s.setListFocused(false)
 				}
+			} else {
+				return nil
 			}
-			return nil
 		}
 
 		// Input focus: route to textinput
