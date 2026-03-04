@@ -30,30 +30,34 @@ func styleTreeCursor(theme themeConfig) lipgloss.Style {
 }
 
 // newView returns a tea.View with the base terminal settings.
-func newView(content string) tea.View {
+func newView(content, title string) tea.View {
 	var v tea.View
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
+	v.WindowTitle = title
 	v.SetContent(content)
 	return v
 }
 
 // View implements tea.Model.
 func (m *Model) View() tea.View {
+	title := fmt.Sprintf("gracilius - Port %d", m.server.Port())
+
 	if m.err != nil {
-		return newView(fmt.Sprintf("Error: %v\n\nPress Ctrl+C to quit.", m.err))
+		return newView(fmt.Sprintf("Error: %v\n\nPress Ctrl+C to quit.", m.err), title)
 	}
 
 	if m.width == 0 || m.height == 0 {
-		return newView("")
+		return newView("", title)
 	}
 
 	t, hasTab := m.activeTabState()
 
 	// header
-	header := fmt.Sprintf("gracilius - Port %d", m.server.Port())
+	header := title
 	if hasTab && t.filePath != "" {
 		header += fmt.Sprintf(" | %s", t.filePath)
+		title = fmt.Sprintf("gracilius - %s", filepath.Base(t.filePath))
 	}
 	// content
 	lo := m.computeLayout()
@@ -97,9 +101,9 @@ func (m *Model) View() tea.View {
 	)
 
 	if m.openFile.active {
-		return newView(m.openFile.overlay(base, m.width, m.height))
+		return newView(m.openFile.overlay(base, m.width, m.height), title)
 	}
-	return newView(base)
+	return newView(base, title)
 }
 
 // renderTabBar generates the tab bar (2 lines: labels + underline).
