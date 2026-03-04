@@ -12,15 +12,17 @@ import (
 )
 
 type themeConfig struct {
-	name            string // Chroma style name
-	selectionBg     string // Editor selection background hex color
-	listSelectionBg string // List/tree active selection hex color
-	activeFileBg    string // File tree active-tab file background hex color
-	tabActiveFg     string // Active tab foreground hex color
-	tabActiveBorder string // Active tab underline hex color
-	tabInactiveFg   string // Inactive tab foreground hex color
-	logoLeaf        string // Welcome logo top color (green/leaf)
-	logoTrunk       string // Welcome logo bottom color (brown/trunk)
+	name                string // Chroma style name
+	selectionBg         string // Editor selection background hex color
+	listSelectionBg     string // List/tree active selection hex color
+	activeFileBg        string // File tree active-tab file background hex color
+	tabActiveFg         string // Active tab foreground hex color
+	tabActiveBorder     string // Active tab underline hex color
+	tabInactiveFg       string // Inactive tab foreground hex color
+	openFileSelectionBg string // Open-file overlay selection bg
+	openFileMatchFg     string // Fuzzy match highlight fg
+	logoLeaf            string // Welcome logo top color (green/leaf)
+	logoTrunk           string // Welcome logo bottom color (brown/trunk)
 }
 
 func (t themeConfig) selectionBgSeq() string {
@@ -29,26 +31,30 @@ func (t themeConfig) selectionBgSeq() string {
 
 var (
 	darkTheme = themeConfig{
-		name:            "github-dark",
-		selectionBg:     "#264F78",
-		listSelectionBg: "#37373D",
-		activeFileBg:    "#2A2D2E",
-		tabActiveFg:     "#FFFFFF",
-		tabActiveBorder: "#E8AB53",
-		tabInactiveFg:   "#969696",
-		logoLeaf:        "#73C991",
-		logoTrunk:       "#CE9178",
+		name:                "github-dark",
+		selectionBg:         "#264F78",
+		listSelectionBg:     "#37373D",
+		activeFileBg:        "#2A2D2E",
+		tabActiveFg:         "#FFFFFF",
+		tabActiveBorder:     "#E8AB53",
+		tabInactiveFg:       "#969696",
+		openFileSelectionBg: "#04395E",
+		openFileMatchFg:     "#FFCC66",
+		logoLeaf:            "#73C991",
+		logoTrunk:           "#CE9178",
 	}
 	lightTheme = themeConfig{
-		name:            "github",
-		selectionBg:     "#ADD6FF",
-		listSelectionBg: "#B8D8F8",
-		activeFileBg:    "#E4E6F1",
-		tabActiveFg:     "#333333",
-		tabActiveBorder: "#005FB8",
-		tabInactiveFg:   "#6E6E6E",
-		logoLeaf:        "#1B7F37",
-		logoTrunk:       "#795E26",
+		name:                "github",
+		selectionBg:         "#ADD6FF",
+		listSelectionBg:     "#B8D8F8",
+		activeFileBg:        "#E4E6F1",
+		tabActiveFg:         "#333333",
+		tabActiveBorder:     "#005FB8",
+		tabInactiveFg:       "#6E6E6E",
+		openFileSelectionBg: "#C4E0F9",
+		openFileMatchFg:     "#0066CC",
+		logoLeaf:            "#1B7F37",
+		logoTrunk:           "#795E26",
 	}
 	activeTheme = darkTheme // default fallback
 )
@@ -64,6 +70,7 @@ func init() {
 var (
 	ansiInverse = termenv.CSI + termenv.ReverseSeq + "m"
 	ansiReset   = termenv.CSI + termenv.ResetSeq + "m"
+	ansiFaint   = termenv.CSI + termenv.FaintSeq + "m"
 )
 
 type styledRun struct {

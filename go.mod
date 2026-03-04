@@ -14,6 +14,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/muesli/termenv v0.16.0
+	github.com/sahilm/fuzzy v0.1.1
 )
 
 require (
