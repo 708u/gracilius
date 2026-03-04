@@ -9,7 +9,6 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/atotto/clipboard"
 )
 
 // handleKeyPress dispatches key press events to the appropriate handler.
@@ -258,13 +257,12 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Copy):
 		if hasTab && m.focusPane == paneEditor && t.selecting {
 			text := t.selectedText()
-			if err := clipboard.WriteAll(text); err != nil {
-				m.statusMsg = fmt.Sprintf("Copy failed: %v", err)
-			} else {
-				n := strings.Count(text, "\n") + 1
-				m.statusMsg = fmt.Sprintf("Copied %d lines", n)
-			}
-			return m, statusTickCmd()
+			n := strings.Count(text, "\n") + 1
+			m.statusMsg = fmt.Sprintf("Copied %d lines", n)
+			return m, tea.Batch(
+				tea.SetClipboard(text),
+				statusTickCmd(),
+			)
 		}
 	case key.Matches(msg, m.keys.ClearAll):
 		if hasTab && m.focusPane == paneEditor {
