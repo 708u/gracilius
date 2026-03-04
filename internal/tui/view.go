@@ -361,11 +361,12 @@ func (m *Model) renderEditor(lo layout) []string {
 
 				// Render segment content.
 				var segSB strings.Builder
-				if segSC < segEC {
+				switch {
+				case segSC < segEC:
 					renderStyledLineWithSelection(&segSB, segRuns, segSC, segEC, selBgSeq)
-				} else if cursorOff >= 0 {
+				case cursorOff >= 0:
 					renderStyledLineWithCursor(&segSB, segRuns, cursorOff)
-				} else {
+				default:
 					for _, r := range segRuns {
 						writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
 					}
