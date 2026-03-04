@@ -14,6 +14,8 @@ type keyMap struct {
 	Down          key.Binding
 	Left          key.Binding
 	Right         key.Binding
+	WordLeft      key.Binding
+	WordRight     key.Binding
 	CharSelect    key.Binding
 	LineSelect    key.Binding
 	Copy          key.Binding
@@ -63,6 +65,14 @@ func newKeyMap() keyMap {
 		Right: key.NewBinding(
 			key.WithKeys("right", "l"),
 			key.WithHelp("→/l", "right"),
+		),
+		WordLeft: key.NewBinding(
+			key.WithKeys("alt+left", "alt+h"),
+			key.WithHelp("Alt+←/h", "word left"),
+		),
+		WordRight: key.NewBinding(
+			key.WithKeys("alt+right", "alt+l"),
+			key.WithHelp("Alt+→/l", "word right"),
 		),
 		CharSelect: key.NewBinding(
 			key.WithKeys("v"),
@@ -134,7 +144,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 // FullHelp returns key bindings for the full help view.
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Left, k.Right, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown},
+		{k.Up, k.Down, k.Left, k.Right, k.WordLeft, k.WordRight, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown},
 		{k.Enter, k.SwitchPane, k.PrevTab, k.NextTab, k.CloseTab},
 		{k.CharSelect, k.LineSelect, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.Cancel, k.Quit},
 	}
@@ -152,6 +162,8 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km.ClearAll.SetEnabled(hasTab && m.focusPane == paneEditor)
 	km.NextTab.SetEnabled(hasTab)
 	km.PrevTab.SetEnabled(hasTab)
+	km.WordLeft.SetEnabled(hasTab && m.focusPane == paneEditor)
+	km.WordRight.SetEnabled(hasTab && m.focusPane == paneEditor)
 	km.CloseTab.SetEnabled(hasTab)
 	km.SwitchPane.SetEnabled(hasTab)
 	return km

@@ -37,6 +37,125 @@ const (
 	dirDown direction = 1
 )
 
+// charClass categorizes runes for word movement (VS Code 3-class model).
+type charClass int
+
+const (
+	classSpace charClass = iota
+	classWord
+	classSep
+)
+
+// runeClass returns the character class of a rune.
+func runeClass(r rune) charClass {
+	switch {
+	case unicode.IsSpace(r):
+		return classSpace
+	case unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_':
+		return classWord
+	default:
+		return classSep
+	}
+}
+
+// moveWordLeft moves the cursor one word to the left.
+func (m *Model) moveWordLeft() {
+	t, hasTab := m.activeTabState()
+	if !hasTab || m.focusPane != paneEditor || len(t.lines) == 0 {
+		return
+	}
+	runes := []rune(t.lines[t.cursorLine])
+	pos := t.cursorChar
+
+	// At line start, move to previous line end.
+	if pos == 0 {
+		if t.cursorLine > 0 {
+			t.cursorLine--
+			t.cursorChar = t.lineLen(t.cursorLine)
+			t.syncAnchorToCursor()
+			m.notifySelectionChanged()
+		}
+		return
+	}
+
+	pos--
+
+	// Skip whitespace backward.
+	for pos > 0 && runeClass(runes[pos]) == classSpace {
+		pos--
+	}
+	if runeClass(runes[pos]) == classSpace {
+		// Entire prefix was whitespace; move to previous line end.
+		if t.cursorLine > 0 {
+			t.cursorLine--
+			t.cursorChar = t.lineLen(t.cursorLine)
+		} else {
+			t.cursorChar = 0
+		}
+		t.syncAnchorToCursor()
+		m.notifySelectionChanged()
+		return
+	}
+
+	// Skip same-class characters backward.
+	cls := runeClass(runes[pos])
+	for pos > 0 && runeClass(runes[pos-1]) == cls {
+		pos--
+	}
+	t.cursorChar = pos
+	t.syncAnchorToCursor()
+	m.notifySelectionChanged()
+}
+
+// moveWordRight moves the cursor one word to the right.
+func (m *Model) moveWordRight() {
+	t, hasTab := m.activeTabState()
+	if !hasTab || m.focusPane != paneEditor || len(t.lines) == 0 {
+		return
+	}
+	runes := []rune(t.lines[t.cursorLine])
+	lineLen := len(runes)
+	pos := t.cursorChar
+
+	// At line end, move to next line start.
+	if pos >= lineLen {
+		if t.cursorLine < len(t.lines)-1 {
+			t.cursorLine++
+			t.cursorChar = 0
+			t.syncAnchorToCursor()
+			m.notifySelectionChanged()
+		}
+		return
+	}
+
+	// Skip current class forward.
+	cls := runeClass(runes[pos])
+	for pos < lineLen && runeClass(runes[pos]) == cls {
+		pos++
+	}
+
+	// Skip whitespace forward.
+	for pos < lineLen && runeClass(runes[pos]) == classSpace {
+		pos++
+	}
+	if pos >= lineLen {
+		// Reached line end; move to next line start.
+		if t.cursorLine < len(t.lines)-1 {
+			t.cursorLine++
+			t.cursorChar = 0
+		} else {
+			t.cursorChar = lineLen
+		}
+		t.syncAnchorToCursor()
+		m.notifySelectionChanged()
+		return
+	}
+
+	t.cursorChar = pos
+	t.syncAnchorToCursor()
+	m.notifySelectionChanged()
+}
+
 // isBlankLine returns true if the line contains only whitespace.
 func isBlankLine(s string) bool {
 	return !strings.ContainsFunc(s, func(r rune) bool {
@@ -392,6 +511,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focusPane == paneTree && len(m.fileTree) > 0 {
 				m.toggleTreeEntry(m.treeCursor)
 			}
+		case key.Matches(msg, m.keys.WordLeft):
+			m.moveWordLeft()
+		case key.Matches(msg, m.keys.WordRight):
+			m.moveWordRight()
 		case key.Matches(msg, m.keys.Left):
 			if m.focusPane == paneTree {
 				if len(m.fileTree) > 0 {
