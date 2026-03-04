@@ -10,7 +10,6 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/atotto/clipboard"
 )
 
 const (
@@ -515,15 +514,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Copy):
 			if hasTab && m.focusPane == paneEditor && t.selecting {
 				text := t.selectedText()
-				if err := clipboard.WriteAll(text); err != nil {
-					m.statusMsg = fmt.Sprintf("Copy failed: %v", err)
-				} else {
-					n := strings.Count(text, "\n") + 1
-					m.statusMsg = fmt.Sprintf("Copied %d lines", n)
-				}
-				return m, tea.Tick(statusClearTimeout, func(time.Time) tea.Msg {
-					return statusClearMsg{}
-				})
+				n := strings.Count(text, "\n") + 1
+				m.statusMsg = fmt.Sprintf("Copied %d lines", n)
+				return m, tea.Batch(
+					tea.SetClipboard(text),
+					tea.Tick(statusClearTimeout, func(time.Time) tea.Msg {
+						return statusClearMsg{}
+					}),
+				)
 			}
 		case key.Matches(msg, m.keys.ClearAll):
 			if hasTab && m.focusPane == paneEditor {
