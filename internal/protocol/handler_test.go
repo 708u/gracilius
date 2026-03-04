@@ -57,7 +57,7 @@ func TestHandleOpenDiff_Blocking(t *testing.T) {
 	h := NewHandler([]string{"/workspace"})
 
 	var cbCalled bool
-	h.SetOpenDiffCallback(func(filePath, contents, tabName string, responder *DiffResponder) {
+	h.SetOpenDiffCallback(func(filePath, contents, tabName string, accept func(string), reject func()) {
 		cbCalled = true
 	})
 
@@ -196,9 +196,8 @@ func TestDiffResponder_DoubleCall(t *testing.T) {
 func TestPendingDiffs_RejectAll(t *testing.T) {
 	h := NewHandler([]string{"/workspace"})
 
-	var responders []*DiffResponder
-	h.SetOpenDiffCallback(func(filePath, contents, tabName string, responder *DiffResponder) {
-		responders = append(responders, responder)
+	var deferredChs []<-chan *Response
+	h.SetOpenDiffCallback(func(filePath, contents, tabName string, accept func(string), reject func()) {
 	})
 
 	// Create multiple pending diffs
@@ -219,27 +218,28 @@ func TestPendingDiffs_RejectAll(t *testing.T) {
 			Method:  "tools/call",
 			Params:  params,
 		}
-		h.HandleMessage(req)
+		_, ch := h.HandleMessage(req)
+		deferredChs = append(deferredChs, ch)
 	}
 
-	if len(responders) != 3 {
-		t.Fatalf("expected 3 responders, got %d", len(responders))
+	if len(deferredChs) != 3 {
+		t.Fatalf("expected 3 deferred channels, got %d", len(deferredChs))
 	}
 
 	h.RejectAllPendingDiffs()
 
-	// All responders should have sent DIFF_REJECTED
-	for i, r := range responders {
+	// All deferred channels should have received DIFF_REJECTED
+	for i, ch := range deferredChs {
 		select {
-		case resp := <-r.ch:
+		case resp := <-ch:
 			data, _ := json.Marshal(resp.Result)
 			var mcpResult MCPResult
 			json.Unmarshal(data, &mcpResult)
 			if len(mcpResult.Content) == 0 || mcpResult.Content[0].Text != diffResultRejected {
-				t.Fatalf("responder %d: expected DIFF_REJECTED, got %v", i, mcpResult.Content)
+				t.Fatalf("channel %d: expected DIFF_REJECTED, got %v", i, mcpResult.Content)
 			}
 		case <-time.After(time.Second):
-			t.Fatalf("responder %d: timed out", i)
+			t.Fatalf("channel %d: timed out", i)
 		}
 	}
 }
@@ -247,9 +247,7 @@ func TestPendingDiffs_RejectAll(t *testing.T) {
 func TestCloseTab_RejectsPending(t *testing.T) {
 	h := NewHandler([]string{"/workspace"})
 
-	var responder *DiffResponder
-	h.SetOpenDiffCallback(func(filePath, contents, tabName string, r *DiffResponder) {
-		responder = r
+	h.SetOpenDiffCallback(func(filePath, contents, tabName string, accept func(string), reject func()) {
 	})
 	h.SetCloseTabCallback(func() {})
 
@@ -269,7 +267,7 @@ func TestCloseTab_RejectsPending(t *testing.T) {
 		Method:  "tools/call",
 		Params:  params,
 	}
-	h.HandleMessage(req)
+	_, deferredCh := h.HandleMessage(req)
 
 	// Call close_tab
 	closeParams, _ := json.Marshal(ToolCallParams{Name: "close_tab"})
@@ -284,9 +282,9 @@ func TestCloseTab_RejectsPending(t *testing.T) {
 		t.Fatal("close_tab should return immediate response")
 	}
 
-	// Responder should have been rejected
+	// Deferred channel should have received DIFF_REJECTED
 	select {
-	case r := <-responder.ch:
+	case r := <-deferredCh:
 		data, _ := json.Marshal(r.Result)
 		var mcpResult MCPResult
 		json.Unmarshal(data, &mcpResult)
@@ -301,9 +299,7 @@ func TestCloseTab_RejectsPending(t *testing.T) {
 func TestCloseAllDiffTabs_RejectsPending(t *testing.T) {
 	h := NewHandler([]string{"/workspace"})
 
-	var responder *DiffResponder
-	h.SetOpenDiffCallback(func(filePath, contents, tabName string, r *DiffResponder) {
-		responder = r
+	h.SetOpenDiffCallback(func(filePath, contents, tabName string, accept func(string), reject func()) {
 	})
 	h.SetCloseTabCallback(func() {})
 
@@ -322,7 +318,7 @@ func TestCloseAllDiffTabs_RejectsPending(t *testing.T) {
 		Method:  "tools/call",
 		Params:  params,
 	}
-	h.HandleMessage(req)
+	_, deferredCh := h.HandleMessage(req)
 
 	// Call closeAllDiffTabs
 	closeParams, _ := json.Marshal(ToolCallParams{Name: "closeAllDiffTabs"})
@@ -338,7 +334,7 @@ func TestCloseAllDiffTabs_RejectsPending(t *testing.T) {
 	}
 
 	select {
-	case r := <-responder.ch:
+	case r := <-deferredCh:
 		data, _ := json.Marshal(r.Result)
 		var mcpResult MCPResult
 		json.Unmarshal(data, &mcpResult)

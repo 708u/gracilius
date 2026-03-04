@@ -87,7 +87,8 @@ type OpenDiffArgs struct {
 }
 
 // OpenDiffCallback is called when openDiff is received.
-type OpenDiffCallback func(filePath, contents, tabName string, responder *DiffResponder)
+// accept and reject are bound to the DiffResponder's methods.
+type OpenDiffCallback func(filePath, contents, tabName string, accept func(string), reject func())
 
 // CloseTabCallback is called when close_tab is received.
 type CloseTabCallback func()
@@ -137,14 +138,13 @@ type DiffResponder struct {
 	cleanup func()
 }
 
-// Accept sends a FILE_SAVED response with saved file contents.
-// Claude Code expects content[1].text to contain the saved contents.
-func (r *DiffResponder) Accept(savedContents string) {
+// respond sends a two-element MCP result exactly once, then runs cleanup.
+func (r *DiffResponder) respond(status, payload string) {
 	r.once.Do(func() {
 		result := MCPResult{
 			Content: []MCPContent{
-				{Type: "text", Text: diffResultAccepted},
-				{Type: "text", Text: savedContents},
+				{Type: "text", Text: status},
+				{Type: "text", Text: payload},
 			},
 		}
 		r.ch <- NewResponse(r.id, result)
@@ -154,21 +154,14 @@ func (r *DiffResponder) Accept(savedContents string) {
 	})
 }
 
+// Accept sends a FILE_SAVED response with saved file contents.
+func (r *DiffResponder) Accept(savedContents string) {
+	r.respond(diffResultAccepted, savedContents)
+}
+
 // Reject sends a DIFF_REJECTED response with the tab name.
-// Claude Code expects content[1].text to contain the diff label.
 func (r *DiffResponder) Reject() {
-	r.once.Do(func() {
-		result := MCPResult{
-			Content: []MCPContent{
-				{Type: "text", Text: diffResultRejected},
-				{Type: "text", Text: r.tabName},
-			},
-		}
-		r.ch <- NewResponse(r.id, result)
-		if r.cleanup != nil {
-			r.cleanup()
-		}
-	})
+	r.respond(diffResultRejected, r.tabName)
 }
 
 // Handler processes JSON-RPC messages.
@@ -361,7 +354,9 @@ func (h *Handler) handleToolsCall(req *Request) (*Response, <-chan *Response) {
 		h.diffMu.Unlock()
 
 		if h.onOpenDiff != nil {
-			h.onOpenDiff(args.NewFilePath, args.NewFileContents, args.TabName, responder)
+			h.onOpenDiff(args.NewFilePath, args.NewFileContents, args.TabName, responder.Accept, responder.Reject)
+		} else {
+			responder.Reject()
 		}
 
 		return nil, ch

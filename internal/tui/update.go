@@ -554,15 +554,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if hasTab && t.kind == diffTab && t.onAccept != nil && m.focusPane == paneEditor {
 				contents := strings.Join(t.lines, "\n")
 				t.onAccept(contents)
-				// Clear before closeTab to prevent double-call
-				t.clearCallbacks()
+				t.onAccept = nil
+				t.onReject = nil
 				m.closeTab(m.activeTab)
 			}
 		case key.Matches(msg, m.keys.RejectDiff):
 			if hasTab && t.kind == diffTab && t.onReject != nil && m.focusPane == paneEditor {
-				t.onReject()
-				// Clear before closeTab to prevent double-call
-				t.clearCallbacks()
+				t.rejectAndClear()
 				m.closeTab(m.activeTab)
 			}
 		case key.Matches(msg, m.keys.CloseTab):
@@ -618,9 +616,8 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 // closeTab removes the tab at idx and adjusts activeTab.
 func (m *Model) closeTab(idx int) {
 	t := m.tabs[idx]
-	if t.kind == diffTab && t.onReject != nil {
-		t.onReject()
-		t.clearCallbacks()
+	if t.kind == diffTab {
+		t.rejectAndClear()
 	}
 	if t.filePath != "" && t.kind == fileTab && m.watcher != nil {
 		_ = m.watcher.Remove(t.filePath)
@@ -639,10 +636,7 @@ func (m *Model) closeDiffTabs() {
 	tabs := make([]*tab, 0, len(m.tabs))
 	for _, t := range m.tabs {
 		if t.kind == diffTab {
-			if t.onReject != nil {
-				t.onReject()
-				t.clearCallbacks()
-			}
+			t.rejectAndClear()
 		} else {
 			tabs = append(tabs, t)
 		}

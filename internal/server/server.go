@@ -39,6 +39,20 @@ type wsClient struct {
 	mu       sync.Mutex // protects writes to conn
 }
 
+func (c *wsClient) writeResponse(resp *protocol.Response) {
+	data, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("Error marshaling response: %v", err)
+		return
+	}
+	c.mu.Lock()
+	err = c.conn.WriteMessage(websocket.TextMessage, data)
+	c.mu.Unlock()
+	if err != nil {
+		log.Printf("Error sending response: %v", err)
+	}
+}
+
 // Server is a WebSocket server for Claude Code integration.
 type Server struct {
 	port             int
@@ -451,6 +465,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		close(pingDone)
 		_ = conn.Close()
+		// Resolve pending openDiff channels so waiting goroutines can exit.
 		s.handler.RejectAllPendingDiffs()
 		s.mu.Lock()
 		for i, c := range s.clients {
@@ -481,20 +496,6 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) writeResponse(client *wsClient, resp *protocol.Response) {
-	data, err := json.Marshal(resp)
-	if err != nil {
-		log.Printf("Error marshaling response: %v", err)
-		return
-	}
-	client.mu.Lock()
-	err = client.conn.WriteMessage(websocket.TextMessage, data)
-	client.mu.Unlock()
-	if err != nil {
-		log.Printf("Error sending response: %v", err)
-	}
-}
-
 func (s *Server) handleMessage(client *wsClient, message []byte) {
 	var req protocol.Request
 	if err := json.Unmarshal(message, &req); err != nil {
@@ -507,14 +508,14 @@ func (s *Server) handleMessage(client *wsClient, message []byte) {
 	resp, deferredCh := s.handler.HandleMessage(&req)
 
 	if resp != nil {
-		s.writeResponse(client, resp)
+		client.writeResponse(resp)
 		log.Printf("Sent response for: %s", req.Method)
 	}
 
 	if deferredCh != nil {
 		go func() {
 			if r := <-deferredCh; r != nil {
-				s.writeResponse(client, r)
+				client.writeResponse(r)
 				log.Printf("Sent deferred response for: %s", req.Method)
 			}
 		}()

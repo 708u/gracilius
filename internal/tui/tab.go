@@ -79,8 +79,11 @@ func newDiffTab(filePath, tabName string, lines []string, onAccept func(string),
 	}
 }
 
-// clearCallbacks resets diff accept/reject callbacks.
-func (t *tab) clearCallbacks() {
+// rejectAndClear calls onReject if set and clears both callbacks.
+func (t *tab) rejectAndClear() {
+	if t.onReject != nil {
+		t.onReject()
+	}
 	t.onAccept = nil
 	t.onReject = nil
 }

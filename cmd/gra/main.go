@@ -11,7 +11,6 @@ import (
 	"syscall"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/708u/gracilius/internal/protocol"
 	"github.com/708u/gracilius/internal/server"
 	"github.com/708u/gracilius/internal/tui"
 	"github.com/fsnotify/fsnotify"
@@ -119,7 +118,7 @@ func run() int {
 	)
 
 	// Register callbacks
-	srv.SetOpenDiffCallback(func(filePath, contents, tabName string, responder *protocol.DiffResponder) {
+	srv.SetOpenDiffCallback(func(filePath, contents, tabName string, accept func(string), reject func()) {
 		log.Printf("openDiff callback: %s", filePath)
 		p.Send(tui.OpenDiffMsg{
 			FilePath: filePath,
@@ -127,11 +126,11 @@ func run() int {
 			TabName:  tabName,
 			Accept: func(newContents string) {
 				log.Printf("diff accepted: %s", filePath)
-				responder.Accept(newContents)
+				accept(newContents)
 			},
 			Reject: func() {
 				log.Printf("diff rejected: %s", filePath)
-				responder.Reject()
+				reject()
 			},
 		})
 	})
