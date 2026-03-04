@@ -11,6 +11,8 @@ const (
 	maxTreeWidthPercent = 70
 	contentStartY       = headerHeight + tabBarHeight
 	minContentHeight    = 5
+	commentBlockMargin  = 4 // left/right padding around comment block
+	commentBorderChars  = 3 // "│ " (2) + "│" (1)
 )
 
 // layout holds all derived dimensions for a single render frame.

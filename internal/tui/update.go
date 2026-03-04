@@ -498,7 +498,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				lo := m.computeLayout()
 				t.commentInput.SetWidth(
-					lo.editorWidth - lo.lineNumWidth - 4 - 3)
+					lo.editorWidth - lo.lineNumWidth - commentBlockMargin - commentBorderChars)
 				t.commentInput.SetHeight(3)
 				t.commentInput.Reset()
 				if idx := t.findComment(t.inputStart); idx >= 0 {

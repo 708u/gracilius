@@ -268,7 +268,7 @@ func (m *Model) renderEditor(lo layout) []string {
 
 	startLine, startChar, endLine, endChar := t.normalizedSelection()
 	offset := t.scrollOffset
-	commentBodyWidth := width - lnw - 4
+	commentBodyWidth := width - lnw - commentBlockMargin
 	lnPad := strings.Repeat(" ", lnw)
 	digitWidth := lnw - 2 // subtract marker and trailing space
 	normalFmt := fmt.Sprintf(" %%%dd ", digitWidth)
