@@ -388,7 +388,7 @@ func renderBlock(text, label string, width int, borderStyle, bodyStyle lipgloss.
 	topLabel += "\u256e"
 	rows = append(rows, borderStyle.Render(topLabel))
 
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		content := "\u2502 " + bodyStyle.Render(line)
 		content = padRight(content, width-1)
 		rows = append(rows, borderStyle.Render(content+"\u2502"))
