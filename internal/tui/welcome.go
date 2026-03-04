@@ -53,18 +53,18 @@ var welcomeHelp = []helpSection{
 
 // renderWelcome generates the welcome screen as a []string
 // of exactly height lines, each padded to width.
-func renderWelcome(width, height int) []string {
+func renderWelcome(width, height int, theme themeConfig) []string {
 	stylePrimary := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(activeTheme.tabActiveFg))
+		Foreground(lipgloss.Color(theme.tabActiveFg))
 	styleSecondary := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(activeTheme.tabInactiveFg))
+		Foreground(lipgloss.Color(theme.tabInactiveFg))
 	styleSection := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(activeTheme.tabActiveBorder))
+		Foreground(lipgloss.Color(theme.tabActiveBorder))
 
 	styleLeaf := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(activeTheme.logoLeaf))
+		Foreground(lipgloss.Color(theme.logoLeaf))
 	styleTrunk := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(activeTheme.logoTrunk))
+		Foreground(lipgloss.Color(theme.logoTrunk))
 
 	// Build content lines with relative indentation.
 	var raw []string

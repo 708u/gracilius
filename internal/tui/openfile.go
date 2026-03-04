@@ -57,7 +57,7 @@ func (d *openFileDelegate) Render(w io.Writer, m list.Model, index int, item lis
 		ms := d.matchStyle
 		us := lipgloss.Style{}
 		if selected {
-			ms = ms.Background(lipgloss.Color(activeTheme.openFileSelectionBg))
+			ms = ms.Background(d.selBgStyle.GetBackground())
 			us = d.selBgStyle
 		}
 		pathStr = lipgloss.StyleRunes(pathStr, fi.matchedRunes, ms, us)
@@ -90,16 +90,18 @@ type openFileOverlay struct {
 	list     list.Model
 	allItems []fileItem // all scanned files (unfiltered)
 	targets  []string   // cached paths for fuzzy matching
+	iconMode iconMode
+	theme    themeConfig
 }
 
-func newOpenFileOverlay(mode iconMode) openFileOverlay {
+func newOpenFileOverlay(mode iconMode, theme themeConfig) openFileOverlay {
 	delegate := &openFileDelegate{
 		iconMode: mode,
 		matchStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(activeTheme.openFileMatchFg)).
+			Foreground(lipgloss.Color(theme.openFileMatchFg)).
 			Bold(true),
 		selBgStyle: lipgloss.NewStyle().
-			Background(lipgloss.Color(activeTheme.openFileSelectionBg)),
+			Background(lipgloss.Color(theme.openFileSelectionBg)),
 	}
 
 	l := list.New(nil, delegate, 0, 0)
@@ -115,7 +117,21 @@ func newOpenFileOverlay(mode iconMode) openFileOverlay {
 	ti.Placeholder = "Open file..."
 	ti.Prompt = "⌕ "
 
-	return openFileOverlay{list: l, input: ti}
+	return openFileOverlay{list: l, input: ti, iconMode: mode, theme: theme}
+}
+
+// updateTheme updates the overlay's theme and rebuilds the delegate styles.
+func (s *openFileOverlay) updateTheme(theme themeConfig) {
+	s.theme = theme
+	d := &openFileDelegate{
+		iconMode: s.iconMode,
+		matchStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(theme.openFileMatchFg)).
+			Bold(true),
+		selBgStyle: lipgloss.NewStyle().
+			Background(lipgloss.Color(theme.openFileSelectionBg)),
+	}
+	s.list.SetDelegate(d)
 }
 
 // scanAllFiles recursively scans rootDir using scanDir (from filetree.go)
@@ -331,7 +347,7 @@ func (s *openFileOverlay) overlay(bg string, width, height int) string {
 
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(activeTheme.tabActiveBorder)).
+		BorderForeground(lipgloss.Color(s.theme.tabActiveBorder)).
 		Padding(0, 1).
 		Width(g.innerW + overlayBorderW + overlayPaddingW).
 		Height(g.innerH).

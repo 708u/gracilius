@@ -18,7 +18,7 @@ func main() {
 	fmt.Println("hello")
 }
 `
-	result := highlightFile("main.go", source)
+	result := highlightFile("main.go", source, darkTheme)
 	if result == nil {
 		t.Fatal("highlightFile returned nil for valid Go source")
 	}
@@ -116,11 +116,12 @@ func TestRenderStyledLineWithSelection(t *testing.T) {
 	}
 
 	var sb strings.Builder
-	renderStyledLineWithSelection(&sb, runs, 2, 7) // select "llo w"
+	selBgSeq := darkTheme.selectionBgSeq()
+	renderStyledLineWithSelection(&sb, runs, 2, 7, selBgSeq) // select "llo w"
 	output := sb.String()
 
-	// Selection should use the active theme's selectionBg, not inverse video
-	if !strings.Contains(output, activeTheme.selectionBgSeq()) {
+	// Selection should use the theme's selectionBg, not inverse video
+	if !strings.Contains(output, selBgSeq) {
 		t.Error("expected selection background color in output")
 	}
 
@@ -130,8 +131,8 @@ func TestRenderStyledLineWithSelection(t *testing.T) {
 	}
 
 	// Check that selection contains the right text
-	selBgIdx := strings.Index(output, activeTheme.selectionBgSeq())
-	afterSelBg := output[selBgIdx+len(activeTheme.selectionBgSeq()):]
+	selBgIdx := strings.Index(output, selBgSeq)
+	afterSelBg := output[selBgIdx+len(selBgSeq):]
 	before, _, ok := strings.Cut(afterSelBg, "\033[0m")
 	if !ok {
 		t.Fatal("expected reset after selection background")
@@ -226,7 +227,7 @@ func TestSelRange(t *testing.T) {
 
 func TestHighlightFileUnknownExtension(t *testing.T) {
 	source := "some random content\nline two"
-	result := highlightFile("file.unknownext12345", source)
+	result := highlightFile("file.unknownext12345", source, darkTheme)
 	if result == nil {
 		t.Error("expected non-nil result for unknown extension (fallback lexer)")
 	}
@@ -235,7 +236,7 @@ func TestHighlightFileUnknownExtension(t *testing.T) {
 func TestHighlightFileMultilineToken(t *testing.T) {
 	// Go raw string literal spans multiple lines
 	source := "package main\n\nvar s = `line1\nline2\nline3`\n"
-	result := highlightFile("main.go", source)
+	result := highlightFile("main.go", source, darkTheme)
 	if result == nil {
 		t.Fatal("highlightFile returned nil")
 	}

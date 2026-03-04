@@ -102,6 +102,10 @@ type Model struct {
 
 	// open-file overlay
 	openFile openFileOverlay
+
+	// theme
+	isDark bool
+	theme  themeConfig
 }
 
 // lineKind distinguishes the type of a visual row.
@@ -196,6 +200,7 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 
 	ft := buildFileTree(absRootDir)
 
+	im := detectIconMode()
 	return &Model{
 		server:     srv,
 		rootDir:    absRootDir,
@@ -208,7 +213,9 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 		treeWidth:  30,
 		keys:       newKeyMap(),
 		help:       help.New(),
-		iconMode:   detectIconMode(),
-		openFile:   newOpenFileOverlay(detectIconMode()),
+		iconMode:   im,
+		openFile:   newOpenFileOverlay(im, darkTheme),
+		isDark:     true,
+		theme:      darkTheme,
 	}, nil
 }
