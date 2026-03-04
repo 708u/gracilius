@@ -128,10 +128,10 @@ const (
 	diffResultRejected = "DIFF_REJECTED"
 )
 
-// DiffResponder holds the channel and request ID for a pending diff response.
-// Accept or Reject sends the response exactly once via sync.Once.
+// DiffResponder holds the send function and request ID for a pending
+// diff response. Accept or Reject sends the response exactly once.
 type DiffResponder struct {
-	ch      chan *Response
+	send    func(*Response)
 	id      json.RawMessage
 	tabName string
 	once    sync.Once
@@ -147,7 +147,7 @@ func (r *DiffResponder) respond(status, payload string) {
 				{Type: "text", Text: payload},
 			},
 		}
-		r.ch <- NewResponse(r.id, result)
+		r.send(NewResponse(r.id, result))
 		if r.cleanup != nil {
 			r.cleanup()
 		}
@@ -210,31 +210,29 @@ func (h *Handler) RejectAllPendingDiffs() {
 	}
 }
 
-// HandleMessage processes a JSON-RPC request and returns a response.
-// For blocking operations (openDiff), resp is nil and deferredCh
-// provides the response when the operation completes.
-func (h *Handler) HandleMessage(req *Request) (resp *Response, deferredCh <-chan *Response) {
+// HandleMessage processes a JSON-RPC request.
+// send is called with the response when it is ready.
+// For blocking operations (openDiff), send is called asynchronously.
+func (h *Handler) HandleMessage(req *Request, send func(*Response)) {
 	switch req.Method {
 	case "initialize":
-		return h.handleInitialize(req), nil
+		send(h.handleInitialize(req))
 	case "tools/call":
-		return h.handleToolsCall(req)
+		h.handleToolsCall(req, send)
 	case "notifications/initialized":
-		return nil, nil
+		// no response
 	case "prompts/list":
-		return NewResponse(req.ID, map[string][]any{"prompts": {}}), nil
+		send(NewResponse(req.ID, map[string][]any{"prompts": {}}))
 	case "tools/list":
-		return h.handleToolsList(req), nil
+		send(h.handleToolsList(req))
 	case "ide_connected":
 		if h.onIdeConnected != nil {
 			h.onIdeConnected()
 		}
-		return nil, nil
 	default:
 		if len(req.ID) > 0 {
-			return NewErrorResponse(req.ID, codeMethodNotFound, "Method not found: "+req.Method), nil
+			send(NewErrorResponse(req.ID, codeMethodNotFound, "Method not found: "+req.Method))
 		}
-		return nil, nil
 	}
 }
 
@@ -303,10 +301,11 @@ func fileURI(path string) string {
 	return (&url.URL{Scheme: "file", Path: path}).String()
 }
 
-func (h *Handler) handleToolsCall(req *Request) (*Response, <-chan *Response) {
+func (h *Handler) handleToolsCall(req *Request, send func(*Response)) {
 	var params ToolCallParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return NewErrorResponse(req.ID, codeInvalidParams, "Invalid params"), nil
+		send(NewErrorResponse(req.ID, codeInvalidParams, "Invalid params"))
+		return
 	}
 
 	switch params.Name {
@@ -329,17 +328,17 @@ func (h *Handler) handleToolsCall(req *Request) (*Response, <-chan *Response) {
 			RootPath: rootPath,
 		}
 		resultJSON, _ := json.Marshal(result)
-		return NewResponse(req.ID, NewMCPResult(string(resultJSON))), nil
+		send(NewResponse(req.ID, NewMCPResult(string(resultJSON))))
 	case "openDiff":
 		var args OpenDiffArgs
 		if err := json.Unmarshal(params.Arguments, &args); err != nil {
-			return NewErrorResponse(req.ID, codeInvalidParams, "Invalid openDiff arguments"), nil
+			send(NewErrorResponse(req.ID, codeInvalidParams, "Invalid openDiff arguments"))
+			return
 		}
 
-		ch := make(chan *Response, 1)
 		idKey := string(req.ID)
 		responder := &DiffResponder{
-			ch:      ch,
+			send:    send,
 			id:      req.ID,
 			tabName: args.TabName,
 			cleanup: func() {
@@ -358,23 +357,21 @@ func (h *Handler) handleToolsCall(req *Request) (*Response, <-chan *Response) {
 		} else {
 			responder.Reject()
 		}
-
-		return nil, ch
 	case "getDiagnostics":
-		return NewResponse(req.ID, NewMCPResultEmpty()), nil
+		send(NewResponse(req.ID, NewMCPResultEmpty()))
 	case "closeAllDiffTabs":
 		h.RejectAllPendingDiffs()
 		if h.onCloseTab != nil {
 			h.onCloseTab()
 		}
-		return NewResponse(req.ID, NewMCPResult("CLOSED_DIFF_TABS")), nil
+		send(NewResponse(req.ID, NewMCPResult("CLOSED_DIFF_TABS")))
 	case "close_tab":
 		h.RejectAllPendingDiffs()
 		if h.onCloseTab != nil {
 			h.onCloseTab()
 		}
-		return NewResponse(req.ID, NewMCPResult("TAB_CLOSED")), nil
+		send(NewResponse(req.ID, NewMCPResult("TAB_CLOSED")))
 	default:
-		return NewErrorResponse(req.ID, codeMethodNotFound, "Method not found: "+params.Name), nil
+		send(NewErrorResponse(req.ID, codeMethodNotFound, "Method not found: "+params.Name))
 	}
 }

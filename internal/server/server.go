@@ -505,19 +505,8 @@ func (s *Server) handleMessage(client *wsClient, message []byte) {
 
 	log.Printf("Received: %s", string(message))
 
-	resp, deferredCh := s.handler.HandleMessage(&req)
-
-	if resp != nil {
+	s.handler.HandleMessage(&req, func(resp *protocol.Response) {
 		client.writeResponse(resp)
 		log.Printf("Sent response for: %s", req.Method)
-	}
-
-	if deferredCh != nil {
-		go func() {
-			if r := <-deferredCh; r != nil {
-				client.writeResponse(r)
-				log.Printf("Sent deferred response for: %s", req.Method)
-			}
-		}()
-	}
+	})
 }

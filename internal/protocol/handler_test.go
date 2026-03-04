@@ -11,6 +11,13 @@ func testID() json.RawMessage {
 	return json.RawMessage(`1`)
 }
 
+// collectSend returns a send function and a channel that receives
+// responses passed to it. Useful for verifying HandleMessage output.
+func collectSend() (func(*Response), <-chan *Response) {
+	ch := make(chan *Response, 8)
+	return func(r *Response) { ch <- r }, ch
+}
+
 func TestHandleInitialize_Capabilities(t *testing.T) {
 	h := NewHandler([]string{"/workspace"})
 	req := &Request{
@@ -20,36 +27,35 @@ func TestHandleInitialize_Capabilities(t *testing.T) {
 		Params:  json.RawMessage(`{"protocolVersion":"2025-11-25"}`),
 	}
 
-	resp, deferred := h.HandleMessage(req)
-	if deferred != nil {
-		t.Fatal("initialize should not return deferred channel")
-	}
-	if resp == nil {
-		t.Fatal("initialize should return a response")
-	}
+	send, ch := collectSend()
+	h.HandleMessage(req, send)
 
-	data, err := json.Marshal(resp.Result)
-	if err != nil {
-		t.Fatalf("failed to marshal result: %v", err)
-	}
-
-	var result map[string]json.RawMessage
-	if err := json.Unmarshal(data, &result); err != nil {
-		t.Fatalf("failed to unmarshal result: %v", err)
-	}
-
-	capsData, ok := result["capabilities"]
-	if !ok {
-		t.Fatal("capabilities field missing")
-	}
-
-	var caps map[string]json.RawMessage
-	if err := json.Unmarshal(capsData, &caps); err != nil {
-		t.Fatalf("failed to unmarshal capabilities: %v", err)
-	}
-
-	if _, ok := caps["tools"]; !ok {
-		t.Fatal("capabilities should contain 'tools' field")
+	select {
+	case resp := <-ch:
+		if resp == nil {
+			t.Fatal("initialize should return a response")
+		}
+		data, err := json.Marshal(resp.Result)
+		if err != nil {
+			t.Fatalf("failed to marshal result: %v", err)
+		}
+		var result map[string]json.RawMessage
+		if err := json.Unmarshal(data, &result); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+		capsData, ok := result["capabilities"]
+		if !ok {
+			t.Fatal("capabilities field missing")
+		}
+		var caps map[string]json.RawMessage
+		if err := json.Unmarshal(capsData, &caps); err != nil {
+			t.Fatalf("failed to unmarshal capabilities: %v", err)
+		}
+		if _, ok := caps["tools"]; !ok {
+			t.Fatal("capabilities should contain 'tools' field")
+		}
+	default:
+		t.Fatal("expected a response from initialize")
 	}
 }
 
@@ -79,12 +85,14 @@ func TestHandleOpenDiff_Blocking(t *testing.T) {
 		Params:  params,
 	}
 
-	resp, deferred := h.HandleMessage(req)
-	if resp != nil {
+	send, ch := collectSend()
+	h.HandleMessage(req, send)
+
+	// openDiff should not send an immediate response
+	select {
+	case <-ch:
 		t.Fatal("openDiff should not return immediate response")
-	}
-	if deferred == nil {
-		t.Fatal("openDiff should return deferred channel")
+	default:
 	}
 	if !cbCalled {
 		t.Fatal("openDiff callback should have been called")
@@ -92,10 +100,10 @@ func TestHandleOpenDiff_Blocking(t *testing.T) {
 }
 
 func TestDiffResponder_Accept(t *testing.T) {
-	ch := make(chan *Response, 1)
+	send, ch := collectSend()
 	r := &DiffResponder{
-		ch: ch,
-		id: testID(),
+		send: send,
+		id:   testID(),
 	}
 
 	r.Accept("saved content")
@@ -106,9 +114,6 @@ func TestDiffResponder_Accept(t *testing.T) {
 			t.Fatal("expected non-nil response")
 		}
 		data, _ := json.Marshal(resp.Result)
-		if string(data) == "" {
-			t.Fatal("expected result data")
-		}
 		var mcpResult MCPResult
 		if err := json.Unmarshal(data, &mcpResult); err != nil {
 			t.Fatalf("failed to unmarshal MCP result: %v", err)
@@ -128,9 +133,9 @@ func TestDiffResponder_Accept(t *testing.T) {
 }
 
 func TestDiffResponder_Reject(t *testing.T) {
-	ch := make(chan *Response, 1)
+	send, ch := collectSend()
 	r := &DiffResponder{
-		ch:      ch,
+		send:    send,
 		id:      testID(),
 		tabName: "test.go",
 	}
@@ -162,10 +167,10 @@ func TestDiffResponder_Reject(t *testing.T) {
 }
 
 func TestDiffResponder_DoubleCall(t *testing.T) {
-	ch := make(chan *Response, 1)
+	send, ch := collectSend()
 	r := &DiffResponder{
-		ch: ch,
-		id: testID(),
+		send: send,
+		id:   testID(),
 	}
 
 	r.Accept("content")
@@ -184,7 +189,7 @@ func TestDiffResponder_DoubleCall(t *testing.T) {
 		t.Fatal("timed out")
 	}
 
-	// Channel should have only one message
+	// send should have been called only once
 	select {
 	case <-ch:
 		t.Fatal("should not receive second response")
@@ -196,7 +201,7 @@ func TestDiffResponder_DoubleCall(t *testing.T) {
 func TestPendingDiffs_RejectAll(t *testing.T) {
 	h := NewHandler([]string{"/workspace"})
 
-	var deferredChs []<-chan *Response
+	var chs []<-chan *Response
 	h.SetOpenDiffCallback(func(filePath, contents, tabName string, accept func(string), reject func()) {
 	})
 
@@ -218,18 +223,15 @@ func TestPendingDiffs_RejectAll(t *testing.T) {
 			Method:  "tools/call",
 			Params:  params,
 		}
-		_, ch := h.HandleMessage(req)
-		deferredChs = append(deferredChs, ch)
-	}
-
-	if len(deferredChs) != 3 {
-		t.Fatalf("expected 3 deferred channels, got %d", len(deferredChs))
+		send, ch := collectSend()
+		h.HandleMessage(req, send)
+		chs = append(chs, ch)
 	}
 
 	h.RejectAllPendingDiffs()
 
-	// All deferred channels should have received DIFF_REJECTED
-	for i, ch := range deferredChs {
+	// All channels should have received DIFF_REJECTED
+	for i, ch := range chs {
 		select {
 		case resp := <-ch:
 			data, _ := json.Marshal(resp.Result)
@@ -267,7 +269,8 @@ func TestCloseTab_RejectsPending(t *testing.T) {
 		Method:  "tools/call",
 		Params:  params,
 	}
-	_, deferredCh := h.HandleMessage(req)
+	diffSend, diffCh := collectSend()
+	h.HandleMessage(req, diffSend)
 
 	// Call close_tab
 	closeParams, _ := json.Marshal(ToolCallParams{Name: "close_tab"})
@@ -277,14 +280,22 @@ func TestCloseTab_RejectsPending(t *testing.T) {
 		Method:  "tools/call",
 		Params:  closeParams,
 	}
-	resp, _ := h.HandleMessage(closeReq)
-	if resp == nil {
+	closeSend, closeCh := collectSend()
+	h.HandleMessage(closeReq, closeSend)
+
+	// close_tab should return immediate response
+	select {
+	case resp := <-closeCh:
+		if resp == nil {
+			t.Fatal("close_tab should return immediate response")
+		}
+	default:
 		t.Fatal("close_tab should return immediate response")
 	}
 
-	// Deferred channel should have received DIFF_REJECTED
+	// Pending diff should have been rejected via diffSend
 	select {
-	case r := <-deferredCh:
+	case r := <-diffCh:
 		data, _ := json.Marshal(r.Result)
 		var mcpResult MCPResult
 		json.Unmarshal(data, &mcpResult)
@@ -318,7 +329,8 @@ func TestCloseAllDiffTabs_RejectsPending(t *testing.T) {
 		Method:  "tools/call",
 		Params:  params,
 	}
-	_, deferredCh := h.HandleMessage(req)
+	diffSend, diffCh := collectSend()
+	h.HandleMessage(req, diffSend)
 
 	// Call closeAllDiffTabs
 	closeParams, _ := json.Marshal(ToolCallParams{Name: "closeAllDiffTabs"})
@@ -328,13 +340,20 @@ func TestCloseAllDiffTabs_RejectsPending(t *testing.T) {
 		Method:  "tools/call",
 		Params:  closeParams,
 	}
-	resp, _ := h.HandleMessage(closeReq)
-	if resp == nil {
+	closeSend, closeCh := collectSend()
+	h.HandleMessage(closeReq, closeSend)
+
+	select {
+	case resp := <-closeCh:
+		if resp == nil {
+			t.Fatal("closeAllDiffTabs should return immediate response")
+		}
+	default:
 		t.Fatal("closeAllDiffTabs should return immediate response")
 	}
 
 	select {
-	case r := <-deferredCh:
+	case r := <-diffCh:
 		data, _ := json.Marshal(r.Result)
 		var mcpResult MCPResult
 		json.Unmarshal(data, &mcpResult)
@@ -347,10 +366,10 @@ func TestCloseAllDiffTabs_RejectsPending(t *testing.T) {
 }
 
 func TestDiffResponder_ConcurrentSafety(t *testing.T) {
-	ch := make(chan *Response, 1)
+	send, ch := collectSend()
 	r := &DiffResponder{
-		ch: ch,
-		id: testID(),
+		send: send,
+		id:   testID(),
 	}
 
 	var wg sync.WaitGroup
@@ -364,7 +383,7 @@ func TestDiffResponder_ConcurrentSafety(t *testing.T) {
 	}
 	wg.Wait()
 
-	// Exactly one response should be in the channel
+	// Exactly one response should have been sent
 	select {
 	case <-ch:
 	default:
