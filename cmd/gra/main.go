@@ -127,9 +127,6 @@ func run() int {
 			TabName:  tabName,
 			Accept: func(newContents string) {
 				log.Printf("diff accepted: %s", filePath)
-				if err := os.WriteFile(filePath, []byte(newContents), 0644); err != nil {
-					log.Printf("Failed to write file on accept: %v", err)
-				}
 				responder.Accept(newContents)
 			},
 			Reject: func() {
