@@ -97,10 +97,20 @@ func TestKeyNavigation_UpDown(t *testing.T) {
 	tab := m.tabs[0]
 	tab.cursorLine = 0
 
+	srv := m.server.(*mockServer)
+
 	// Move down.
 	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if tab.cursorLine != 1 {
 		t.Errorf("expected cursorLine=1 after down, got %d", tab.cursorLine)
+	}
+
+	n, ok := srv.lastNotification()
+	if !ok {
+		t.Fatal("expected notification after cursor move")
+	}
+	if n.startLine != 1 {
+		t.Errorf("expected notification startLine=1, got %d", n.startLine)
 	}
 
 	// Move up.
