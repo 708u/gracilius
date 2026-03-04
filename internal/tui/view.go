@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -284,25 +285,18 @@ func (m *Model) renderEditor(lo layout) []string {
 
 	startLine, startChar, endLine, endChar := t.normalizedSelection()
 	selBgSeq := m.theme.selectionBgSeq()
-	offset := t.scrollOffset
+	offset := t.vp.YOffset()
 	commentBodyWidth := width - lnw - commentBlockMargin
-	lnPad := strings.Repeat(" ", lnw)
-	digitWidth := lnw - 2 // subtract marker and trailing space
-	normalFmt := fmt.Sprintf(" %%%dd ", digitWidth)
-	barFmt := fmt.Sprintf("%%%dd ", digitWidth)
+	total := len(t.lines)
+	gutterCtx := viewport.GutterContext{TotalLines: total}
 
 	for i := offset; i < len(t.lines) && len(lines) < height; i++ {
 		lineContent := t.lines[i]
 
-		// Build line number prefix
-		var lnSB strings.Builder
-		if t.findComment(i) >= 0 {
-			lnSB.WriteString(styleComment.Render("\u258e"))
-			fmt.Fprintf(&lnSB, barFmt, i+1)
-		} else {
-			fmt.Fprintf(&lnSB, normalFmt, i+1)
-		}
-		lineNumStr := lnSB.String()
+		// Build line number prefix via LeftGutterFunc
+		gutterCtx.Index = i
+		gutterCtx.Soft = false
+		lineNumStr := t.vp.LeftGutterFunc(gutterCtx)
 
 		// Build content and emit visual rows
 		isCursorLine := m.focusPane == paneEditor && i == t.cursorLine
@@ -374,6 +368,8 @@ func (m *Model) renderEditor(lo layout) []string {
 
 				seg := segSB.String()
 				if si > 0 {
+					gutterCtx.Soft = true
+					lnPad := t.vp.LeftGutterFunc(gutterCtx)
 					lines = append(lines, padRight(lnPad+seg+ansiReset, width))
 				} else {
 					lines = append(lines, padRight(lineNumStr+seg+ansiReset, width))
@@ -428,6 +424,8 @@ func (m *Model) renderEditor(lo layout) []string {
 		}
 
 		if t.inputMode && i == t.inputEnd {
+			gutterCtx.Soft = true
+			lnPad := t.vp.LeftGutterFunc(gutterCtx)
 			label := fmt.Sprintf("comment (%s: save, Esc: cancel)",
 				m.keys.CommentSubmit.Help().Key)
 			blockRows := renderBlock(
@@ -441,6 +439,8 @@ func (m *Model) renderEditor(lo layout) []string {
 					visualEntry{logicalLine: i, kind: lineKindInput})
 			}
 		} else if c := t.commentEndingAt(i); c != nil {
+			gutterCtx.Soft = true
+			lnPad := t.vp.LeftGutterFunc(gutterCtx)
 			label := formatCommentLabel(c)
 			blockRows := renderBlock(
 				c.text, label, commentBodyWidth, styleComment, styleBodyWhite)

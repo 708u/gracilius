@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	scrollAmount       = 3
 	quitTimeout        = 750 * time.Millisecond
 	statusClearTimeout = 2 * time.Second
 )
@@ -130,6 +129,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case fileChangedMsg:
 		if hasTab {
 			t.lines = msg.lines
+			t.syncContent(msg.lines)
 			t.highlightedLines = highlightFile(
 				t.filePath, strings.Join(msg.lines, "\n"), m.theme,
 			)
@@ -155,6 +155,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case OpenDiffMsg:
 		lines := splitLines([]byte(msg.Contents))
 		dt := newDiffTab(msg.FilePath, lines, msg.Accept, msg.Reject)
+		dt.syncContent(lines)
 		dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents, m.theme)
 		m.tabs = append(m.tabs, dt)
 		m.activeTab = len(m.tabs) - 1
@@ -180,6 +181,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		maxWidth := m.width * maxTreeWidthPercent / 100
 		if m.treeWidth > maxWidth {
 			m.treeWidth = maxWidth
+		}
+		lo := m.computeLayout()
+		for _, tab := range m.tabs {
+			tab.vp.SetWidth(lo.editorWidth)
+			tab.vp.SetHeight(lo.contentHeight)
 		}
 		if hasTab && t.filePath != "" && len(t.lines) > 0 && m.focusPane == paneEditor {
 			m.notifySelectionChanged()
@@ -292,18 +298,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		lo := m.computeLayout()
 		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
-			switch msg.Button {
-			case tea.MouseWheelUp:
-				t.scrollOffset -= scrollAmount
-				if t.scrollOffset < 0 {
-					t.scrollOffset = 0
-				}
-			case tea.MouseWheelDown:
-				t.scrollOffset += scrollAmount
-				maxOffset := t.maxScrollOffset(lo.contentHeight, lo.textWidth)
-				if t.scrollOffset > maxOffset {
-					t.scrollOffset = maxOffset
-				}
+			t.vp, _ = t.vp.Update(msg)
+			maxOff := t.maxScrollOffset(lo.contentHeight, lo.textWidth)
+			if t.vp.YOffset() > maxOff {
+				t.vp.SetYOffset(maxOff)
 			}
 		}
 		return m, nil
@@ -611,7 +609,7 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 	editorX := mouseX - lo.editorStartX - lo.lineNumWidth
 	editorY := mouseY - contentStartY
 
-	targetLine := t.scrollOffset + editorY
+	targetLine := t.vp.YOffset() + editorY
 	if editorY >= 0 && editorY < len(m.lastMapping) {
 		targetLine = m.lastMapping[editorY].logicalLine
 	}
