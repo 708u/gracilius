@@ -115,6 +115,7 @@ const (
 type visualEntry struct {
 	logicalLine int
 	kind        lineKind
+	wrapOffset  int // rune offset in the logical line where this wrap segment starts
 }
 
 // activeTabState returns the active tab and whether it exists.

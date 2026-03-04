@@ -228,6 +228,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			targetChar := max(editorX, 0)
+			if editorY >= 0 && editorY < len(m.lastMapping) {
+				targetChar += m.lastMapping[editorY].wrapOffset
+			}
 			if targetLine < len(t.lines) {
 				runeLen := len([]rune(t.lines[targetLine]))
 				if targetChar > runeLen {
@@ -279,7 +282,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case msg.Button == tea.MouseButtonWheelDown:
 				t.scrollOffset += scrollAmount
-				maxOffset := t.maxScrollOffset(lo.contentHeight)
+				maxOffset := t.maxScrollOffset(lo.contentHeight, lo.textWidth)
 				if t.scrollOffset > maxOffset {
 					t.scrollOffset = maxOffset
 				}
@@ -563,7 +566,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.focusPane == paneTree {
 		m.adjustTreeScroll(lo.contentHeight)
 	} else if hasTab && len(t.lines) > 0 {
-		t.adjustScrollForCursor(lo.contentHeight)
+		t.adjustScrollForCursor(lo.contentHeight, lo.textWidth)
 	}
 
 	return m, nil
