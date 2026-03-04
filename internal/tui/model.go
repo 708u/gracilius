@@ -95,8 +95,8 @@ type Model struct {
 	// icon display mode
 	iconMode iconMode
 
-	// file search overlay
-	search searchOverlay
+	// open-file overlay
+	openFile openFileOverlay
 }
 
 // activeTabState returns the active tab and whether it exists.
@@ -188,6 +188,6 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 		keys:       newKeyMap(),
 		help:       help.New(),
 		iconMode:   detectIconMode(),
-		search:     newSearchOverlay(detectIconMode()),
+		openFile:   newOpenFileOverlay(detectIconMode()),
 	}, nil
 }

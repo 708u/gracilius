@@ -91,9 +91,9 @@ func (m *Model) adjustTreeScroll(contentHeight int) {
 
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Route non-key messages (e.g. cursor blink) to the search overlay
+	// Route non-key messages (e.g. cursor blink) to the open-file overlay
 	// when it is active.
-	if m.search.active {
+	if m.openFile.active {
 		switch msg.(type) {
 		case tea.KeyMsg, tea.MouseMsg, tea.WindowSizeMsg,
 			fileChangedMsg, treeChangedMsg,
@@ -101,7 +101,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
 			// Fall through to normal handling below.
 		default:
-			cmd := m.search.update(msg)
+			cmd := m.openFile.update(msg)
 			return m, cmd
 		}
 	}
@@ -167,15 +167,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notifySelectionChanged()
 		}
 	case tea.MouseMsg:
-		if m.search.active {
+		if m.openFile.active {
 			if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
-				path, closeOverlay := m.search.handleClick(msg.X, msg.Y, m.width, m.height)
+				path, closeOverlay := m.openFile.handleClick(msg.X, msg.Y, m.width, m.height)
 				if path != "" {
 					absPath := filepath.Join(m.rootDir, path)
-					m.search.close()
+					m.openFile.close()
 					m.openFileByPath(absPath)
 				} else if closeOverlay {
-					m.search.close()
+					m.openFile.close()
 				}
 			}
 			return m, nil
@@ -332,20 +332,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.search.active {
+		if m.openFile.active {
 			switch {
 			case key.Matches(msg, m.keys.Cancel):
-				m.search.close()
+				m.openFile.close()
 				return m, nil
 			case msg.Type == tea.KeyEnter:
-				if p := m.search.selectedPath(); p != "" {
+				if p := m.openFile.selectedPath(); p != "" {
 					absPath := filepath.Join(m.rootDir, p)
-					m.search.close()
+					m.openFile.close()
 					m.openFileByPath(absPath)
 				}
 				return m, nil
 			default:
-				cmd = m.search.update(msg)
+				cmd = m.openFile.update(msg)
 				return m, cmd
 			}
 		}
@@ -520,8 +520,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.GoTop):
 			m.gPending = true
-		case key.Matches(msg, m.keys.Search):
-			return m, m.search.open(m.rootDir)
+		case key.Matches(msg, m.keys.OpenFile):
+			return m, m.openFile.open(m.rootDir)
 		}
 	}
 

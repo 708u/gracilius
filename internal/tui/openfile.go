@@ -15,7 +15,7 @@ import (
 	"github.com/sahilm/fuzzy"
 )
 
-// fileItem implements list.Item for file search.
+// fileItem implements list.Item for the open-file overlay.
 type fileItem struct {
 	path         string // rootDir-relative path
 	resolvedPath string // symlink target path (empty if not a symlink)
@@ -26,18 +26,18 @@ func (f fileItem) Title() string       { return f.path }
 func (f fileItem) Description() string { return "" }
 func (f fileItem) FilterValue() string { return f.path }
 
-// searchDelegate renders file items with an icon prefix.
-type searchDelegate struct {
+// openFileDelegate renders file items with an icon prefix.
+type openFileDelegate struct {
 	iconMode   iconMode
 	matchStyle lipgloss.Style // bold + match fg color
 	selBgStyle lipgloss.Style // selection background
 }
 
-func (d *searchDelegate) Height() int                         { return 1 }
-func (d *searchDelegate) Spacing() int                        { return 0 }
-func (d *searchDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
+func (d *openFileDelegate) Height() int                         { return 1 }
+func (d *openFileDelegate) Spacing() int                        { return 0 }
+func (d *openFileDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
 
-func (d *searchDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+func (d *openFileDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	fi, ok := item.(fileItem)
 	if !ok {
 		return
@@ -57,7 +57,7 @@ func (d *searchDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		ms := d.matchStyle
 		us := lipgloss.Style{}
 		if selected {
-			ms = ms.Background(lipgloss.Color(activeTheme.searchSelectionBg))
+			ms = ms.Background(lipgloss.Color(activeTheme.openFileSelectionBg))
 			us = d.selBgStyle
 		}
 		pathStr = lipgloss.StyleRunes(pathStr, fi.matchedRunes, ms, us)
@@ -83,8 +83,8 @@ func (d *searchDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	fmt.Fprint(w, line)
 }
 
-// searchOverlay manages the file search overlay state.
-type searchOverlay struct {
+// openFileOverlay manages the file search overlay state.
+type openFileOverlay struct {
 	active   bool
 	input    textinput.Model
 	list     list.Model
@@ -92,14 +92,14 @@ type searchOverlay struct {
 	targets  []string   // cached paths for fuzzy matching
 }
 
-func newSearchOverlay(mode iconMode) searchOverlay {
-	delegate := &searchDelegate{
+func newOpenFileOverlay(mode iconMode) openFileOverlay {
+	delegate := &openFileDelegate{
 		iconMode: mode,
 		matchStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(activeTheme.searchMatchFg)).
+			Foreground(lipgloss.Color(activeTheme.openFileMatchFg)).
 			Bold(true),
 		selBgStyle: lipgloss.NewStyle().
-			Background(lipgloss.Color(activeTheme.searchSelectionBg)),
+			Background(lipgloss.Color(activeTheme.openFileSelectionBg)),
 	}
 
 	l := list.New(nil, delegate, 0, 0)
@@ -112,11 +112,11 @@ func newSearchOverlay(mode iconMode) searchOverlay {
 	l.DisableQuitKeybindings()
 
 	ti := textinput.New()
-	ti.Placeholder = "Search files..."
+	ti.Placeholder = "Open file..."
 	ti.Prompt = "⌕ "
 	ti.PromptStyle = lipgloss.NewStyle()
 
-	return searchOverlay{list: l, input: ti}
+	return openFileOverlay{list: l, input: ti}
 }
 
 // scanAllFiles recursively scans rootDir using scanDir (from filetree.go)
@@ -150,8 +150,8 @@ func collectFiles(rootDir string, entries []fileEntry, items *[]fileItem) {
 	}
 }
 
-// open activates the search overlay and populates it with files.
-func (s *searchOverlay) open(rootDir string) tea.Cmd {
+// open activates the open-file overlay and populates it with files.
+func (s *openFileOverlay) open(rootDir string) tea.Cmd {
 	s.allItems = scanAllFiles(rootDir)
 	s.targets = make([]string, len(s.allItems))
 	for i, fi := range s.allItems {
@@ -164,8 +164,8 @@ func (s *searchOverlay) open(rootDir string) tea.Cmd {
 	return s.input.Cursor.BlinkCmd()
 }
 
-// close deactivates the search overlay and frees the item list.
-func (s *searchOverlay) close() {
+// close deactivates the open-file overlay and frees the item list.
+func (s *openFileOverlay) close() {
 	s.active = false
 	s.allItems = nil
 	s.targets = nil
@@ -173,7 +173,7 @@ func (s *searchOverlay) close() {
 }
 
 // applyFilter filters allItems by the current input value and updates the list.
-func (s *searchOverlay) applyFilter() {
+func (s *openFileOverlay) applyFilter() {
 	term := s.input.Value()
 
 	if term == "" {
@@ -197,9 +197,9 @@ func (s *searchOverlay) applyFilter() {
 	s.list.SetItems(items)
 }
 
-// update handles messages for the search overlay.
+// update handles messages for the open-file overlay.
 // Arrow keys navigate the list; all other input goes to textinput.
-func (s *searchOverlay) update(msg tea.Msg) tea.Cmd {
+func (s *openFileOverlay) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -224,8 +224,8 @@ func (s *searchOverlay) update(msg tea.Msg) tea.Cmd {
 	}
 }
 
-// searchLayout holds the computed layout for the search overlay.
-type searchLayout struct {
+// openFileLayout holds the computed layout for the search overlay.
+type openFileLayout struct {
 	overlayW int // total overlay width
 	innerW   int // content width (overlayW - border - padding)
 	startX   int // horizontal start position
@@ -248,7 +248,7 @@ const (
 )
 
 // computeLayout calculates the overlay layout from terminal dimensions.
-func (s *searchOverlay) computeLayout(width, height int) searchLayout {
+func (s *openFileOverlay) computeLayout(width, height int) openFileLayout {
 	overlayW := min(width*overlayWidthRatio/4, overlayMaxW)
 	innerW := overlayW - overlayBorderW - overlayPaddingW
 
@@ -267,7 +267,7 @@ func (s *searchOverlay) computeLayout(width, height int) searchLayout {
 
 	startX := max((width-overlayW)/2, 0)
 
-	return searchLayout{
+	return openFileLayout{
 		overlayW: overlayW,
 		innerW:   innerW,
 		startX:   startX,
@@ -278,10 +278,10 @@ func (s *searchOverlay) computeLayout(width, height int) searchLayout {
 	}
 }
 
-// handleClick processes a mouse click within the search overlay.
+// handleClick processes a mouse click within the open-file overlay.
 // It returns the relative path of the clicked item (empty if none)
 // and whether the overlay should be closed.
-func (s *searchOverlay) handleClick(mouseX, mouseY, width, height int) (path string, closeOverlay bool) {
+func (s *openFileOverlay) handleClick(mouseX, mouseY, width, height int) (path string, closeOverlay bool) {
 	g := s.computeLayout(width, height)
 
 	// Click outside overlay: close
@@ -308,7 +308,7 @@ func (s *searchOverlay) handleClick(mouseX, mouseY, width, height int) (path str
 
 // selectedPath returns the relative path of the currently selected item,
 // or empty string if nothing is selected.
-func (s *searchOverlay) selectedPath() string {
+func (s *openFileOverlay) selectedPath() string {
 	item := s.list.SelectedItem()
 	if item == nil {
 		return ""
@@ -319,8 +319,8 @@ func (s *searchOverlay) selectedPath() string {
 	return ""
 }
 
-// overlay renders the search overlay on top of the background view.
-func (s *searchOverlay) overlay(bg string, width, height int) string {
+// overlay renders the open-file overlay on top of the background view.
+func (s *openFileOverlay) overlay(bg string, width, height int) string {
 	g := s.computeLayout(width, height)
 
 	s.list.SetSize(g.innerW, g.listH)

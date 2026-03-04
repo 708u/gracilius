@@ -82,8 +82,8 @@ func (m *Model) View() string {
 		footerRendered,
 	)
 
-	if m.search.active {
-		return m.search.overlay(base, m.width, m.height)
+	if m.openFile.active {
+		return m.openFile.overlay(base, m.width, m.height)
 	}
 
 	return base
