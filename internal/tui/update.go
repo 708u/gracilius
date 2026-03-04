@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -90,6 +91,21 @@ func (m *Model) adjustTreeScroll(contentHeight int) {
 
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Route non-key messages (e.g. cursor blink) to the open-file overlay
+	// when it is active.
+	if m.openFile.active {
+		switch msg.(type) {
+		case tea.KeyMsg, tea.MouseMsg, tea.WindowSizeMsg,
+			fileChangedMsg, treeChangedMsg,
+			OpenDiffMsg, CloseDiffMsg,
+			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
+			// Fall through to normal handling below.
+		default:
+			cmd := m.openFile.update(msg)
+			return m, cmd
+		}
+	}
+
 	t, hasTab := m.activeTabState()
 
 	switch msg := msg.(type) {
@@ -151,6 +167,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notifySelectionChanged()
 		}
 	case tea.MouseMsg:
+		if m.openFile.active {
+			if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+				path, closeOverlay := m.openFile.handleClick(msg.X, msg.Y, m.width, m.height)
+				if path != "" {
+					absPath := filepath.Join(m.rootDir, path)
+					m.openFile.close()
+					m.openFileByPath(absPath)
+				} else if closeOverlay {
+					m.openFile.close()
+				}
+			}
+			return m, nil
+		}
 		lo := m.computeLayout()
 
 		borderX := lo.treeWidth
@@ -300,6 +329,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.notifySelectionChanged()
 				}
 				break
+			}
+		}
+
+		if m.openFile.active {
+			switch {
+			case key.Matches(msg, m.keys.Cancel):
+				m.openFile.close()
+				return m, nil
+			case msg.Type == tea.KeyEnter:
+				if p := m.openFile.selectedPath(); p != "" {
+					absPath := filepath.Join(m.rootDir, p)
+					m.openFile.close()
+					m.openFileByPath(absPath)
+				}
+				return m, nil
+			default:
+				cmd = m.openFile.update(msg)
+				return m, cmd
 			}
 		}
 
@@ -473,6 +520,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.GoTop):
 			m.gPending = true
+		case key.Matches(msg, m.keys.OpenFile):
+			return m, m.openFile.open(m.rootDir)
 		}
 	}
 

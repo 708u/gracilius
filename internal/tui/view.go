@@ -74,13 +74,19 @@ func (m *Model) View() string {
 
 	tabBar := m.renderTabBar(lo.editorStartX)
 
-	return lipgloss.JoinVertical(
+	base := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		tabBar,
 		content,
 		footerRendered,
 	)
+
+	if m.openFile.active {
+		return m.openFile.overlay(base, m.width, m.height)
+	}
+
+	return base
 }
 
 // renderTabBar generates the tab bar (2 lines: labels + underline).
@@ -241,11 +247,11 @@ func (m *Model) renderTree(width, height int) []string {
 
 // renderEditor generates the editor pane lines.
 func (m *Model) renderEditor(width, height int) []string {
-	t, _ := m.activeTabState()
+	t, hasTab := m.activeTabState()
 
 	lines := make([]string, 0, height)
 
-	if len(t.lines) == 0 {
+	if !hasTab || len(t.lines) == 0 {
 		emptyMsg := "No file selected"
 		lines = append(lines, padRight(emptyMsg, width))
 		for len(lines) < height {

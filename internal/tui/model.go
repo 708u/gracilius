@@ -94,6 +94,9 @@ type Model struct {
 
 	// icon display mode
 	iconMode iconMode
+
+	// open-file overlay
+	openFile openFileOverlay
 }
 
 // activeTabState returns the active tab and whether it exists.
@@ -115,6 +118,32 @@ func (m *Model) findTabByPath(path string) int {
 	return -1
 }
 
+// openFileByPath opens a file by absolute path in a tab.
+// If a tab with the same path already exists, it switches to it.
+func (m *Model) openFileByPath(absPath string) {
+	if i := m.findTabByPath(absPath); i >= 0 {
+		m.activeTab = i
+	} else {
+		var target *tab
+		cur, hasTab := m.activeTabState()
+		if hasTab && cur.kind == fileTab && cur.filePath == "" {
+			target = cur
+		} else {
+			target = newFileTab()
+		}
+		if err := m.loadFileIntoTab(target, absPath); err != nil {
+			m.statusMsg = fmt.Sprintf("Cannot open: %v", err)
+			return
+		}
+		if target != cur {
+			m.tabs = append(m.tabs, target)
+			m.activeTab = len(m.tabs) - 1
+		}
+	}
+	m.focusPane = paneEditor
+	m.notifySelectionChanged()
+}
+
 // toggleTreeEntry handles expanding/collapsing dirs or loading files.
 func (m *Model) toggleTreeEntry(idx int) {
 	if idx < 0 || idx >= len(m.fileTree) {
@@ -133,21 +162,7 @@ func (m *Model) toggleTreeEntry(idx int) {
 			m.statusMsg = fmt.Sprintf("Cannot open: %v", err)
 			return
 		}
-		if i := m.findTabByPath(absPath); i >= 0 {
-			m.activeTab = i
-		} else {
-			t := newFileTab()
-			if err := m.loadFileIntoTab(t, entry.path); err != nil {
-				m.statusMsg = fmt.Sprintf(
-					"Cannot open: %v", err,
-				)
-				return
-			}
-			m.tabs = append(m.tabs, t)
-			m.activeTab = len(m.tabs) - 1
-		}
-		m.focusPane = paneEditor
-		m.notifySelectionChanged()
+		m.openFileByPath(absPath)
 	}
 }
 
@@ -173,5 +188,6 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 		keys:       newKeyMap(),
 		help:       help.New(),
 		iconMode:   detectIconMode(),
+		openFile:   newOpenFileOverlay(detectIconMode()),
 	}, nil
 }
