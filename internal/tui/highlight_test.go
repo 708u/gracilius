@@ -77,39 +77,6 @@ func TestNewHighlightedLine(t *testing.T) {
 	}
 }
 
-func TestRenderStyledLineWithCursor(t *testing.T) {
-	runs := []styledRun{
-		{Text: "hello", ANSI: "\033[38;5;148m"},
-	}
-
-	var sb strings.Builder
-	renderStyledLineWithCursor(&sb, runs, 2) // cursor on 'l'
-	output := sb.String()
-
-	// Check that the cursor character is exactly "l"
-	invIdx := strings.Index(output, "\033[7m")
-	if invIdx < 0 {
-		t.Fatal("expected inverse video for cursor")
-	}
-	resetIdx := strings.Index(output[invIdx:], "\033[0m")
-	if resetIdx < 0 {
-		t.Fatal("expected reset after inverse")
-	}
-	cursorText := output[invIdx+len("\033[7m") : invIdx+resetIdx]
-	if cursorText != "l" {
-		t.Errorf("expected cursor on 'l', got %q", cursorText)
-	}
-
-	// Cursor past end of line
-	sb.Reset()
-	renderStyledLineWithCursor(&sb, runs, 10)
-	output = sb.String()
-
-	if !strings.Contains(output, "\033[7m \033[0m") {
-		t.Error("expected inverse space for EOL cursor")
-	}
-}
-
 func TestRenderStyledLineWithSelection(t *testing.T) {
 	runs := []styledRun{
 		{Text: "hello world", ANSI: "\033[38;5;148m"},

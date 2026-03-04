@@ -99,7 +99,68 @@ func (m *Model) View() tea.View {
 	if m.openFile.active {
 		return newView(m.openFile.overlay(base, m.width, m.height))
 	}
-	return newView(base)
+	v := newView(base)
+	if hasTab && !t.inputMode {
+		if x, y, ok := m.cursorScreenPos(lo); ok {
+			v.Cursor = tea.NewCursor(x, y)
+		}
+	}
+	return v
+}
+
+// cursorScreenPos computes the screen coordinates for the editor cursor
+// using lastMapping (which must be populated by renderEditor before this call).
+func (m *Model) cursorScreenPos(lo layout) (x, y int, visible bool) {
+	t, ok := m.activeTabState()
+	if !ok || m.focusPane != paneEditor ||
+		len(t.lines) == 0 || len(m.lastMapping) == 0 {
+		return 0, 0, false
+	}
+
+	visualRow := -1
+	for i, ve := range m.lastMapping {
+		if ve.kind != lineKindCode {
+			continue
+		}
+		if ve.logicalLine != t.cursorLine {
+			continue
+		}
+
+		segEnd := t.lineLen(t.cursorLine)
+		for j := i + 1; j < len(m.lastMapping); j++ {
+			next := m.lastMapping[j]
+			if next.logicalLine == t.cursorLine &&
+				next.kind == lineKindCode {
+				segEnd = next.wrapOffset
+				break
+			}
+			if next.logicalLine != t.cursorLine {
+				break
+			}
+		}
+
+		if t.cursorChar >= ve.wrapOffset &&
+			t.cursorChar < segEnd {
+			visualRow = i
+			break
+		}
+		if t.cursorChar >= ve.wrapOffset {
+			visualRow = i
+		}
+	}
+
+	if visualRow < 0 {
+		return 0, 0, false
+	}
+
+	y = contentStartY + visualRow
+	x = lo.editorStartX + lo.lineNumWidth +
+		displayWidthRange(
+			t.lines[t.cursorLine],
+			m.lastMapping[visualRow].wrapOffset,
+			t.cursorChar,
+		)
+	return x, y, true
 }
 
 // renderTabBar generates the tab bar (2 lines: labels + underline).
@@ -305,7 +366,6 @@ func (m *Model) renderEditor(lo layout) []string {
 		lineNumStr := lnSB.String()
 
 		// Build content and emit visual rows
-		isCursorLine := m.focusPane == paneEditor && i == t.cursorLine
 		isSelected := m.focusPane == paneEditor && t.selecting && i >= startLine && i <= endLine
 
 		bp := wrapBreakpoints(lineContent, textWidth)
@@ -340,15 +400,6 @@ func (m *Model) renderEditor(lo layout) []string {
 					segLen += len([]rune(r.Text))
 				}
 
-				// Determine cursor offset within this segment (-1 = not here).
-				cursorOff := -1
-				if isCursorLine {
-					lastSeg := si == len(segRunsList)-1
-					if t.cursorChar >= wrapOff && (t.cursorChar < wrapOff+segLen || lastSeg) {
-						cursorOff = t.cursorChar - wrapOff
-					}
-				}
-
 				// Clamp selection range to this segment.
 				segSC, segEC := 0, 0
 				if isSelected && sc < ec {
@@ -364,8 +415,6 @@ func (m *Model) renderEditor(lo layout) []string {
 				switch {
 				case segSC < segEC:
 					renderStyledLineWithSelection(&segSB, segRuns, segSC, segEC, selBgSeq)
-				case cursorOff >= 0:
-					renderStyledLineWithCursor(&segSB, segRuns, cursorOff)
 				default:
 					for _, r := range segRuns {
 						writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
@@ -388,25 +437,6 @@ func (m *Model) renderEditor(lo layout) []string {
 			var contentSB strings.Builder
 
 			switch {
-			case isCursorLine && isSelected:
-				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
-				if sc == ec {
-					if hl := t.getHighlightedLine(i); hl != nil {
-						renderStyledLineWithCursor(&contentSB, hl.runs, t.cursorChar)
-					} else {
-						renderLineWithCursor(&contentSB, lineContent, t.cursorChar)
-					}
-				} else if hl := t.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec, selBgSeq)
-				} else {
-					renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec, selBgSeq)
-				}
-			case isCursorLine:
-				if hl := t.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithCursor(&contentSB, hl.runs, t.cursorChar)
-				} else {
-					renderLineWithCursor(&contentSB, lineContent, t.cursorChar)
-				}
 			case isSelected:
 				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
 				if hl := t.getHighlightedLine(i); hl != nil {
@@ -508,12 +538,6 @@ func selRange(line, startLine, endLine, startChar, endChar int, content string) 
 		ec = endChar
 	}
 	return sc, ec
-}
-
-// renderLineWithCursor renders a line with an inverted cursor.
-func renderLineWithCursor(sb *strings.Builder, line string, cursorChar int) {
-	runs := []styledRun{{Text: line}}
-	renderStyledLineWithCursor(sb, runs, cursorChar)
 }
 
 // renderLineWithCursorAndSelection renders a line with selection highlight.
