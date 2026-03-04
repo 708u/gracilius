@@ -210,6 +210,7 @@ func (m *Model) renderFooter() string {
 // renderTree generates the tree pane lines.
 func (m *Model) renderTree(width, height int) []string {
 	lines := make([]string, 0, height)
+	contentWidth := width - scrollbarWidth
 
 	var activeFilePath string
 	if t, ok := m.activeTabState(); ok {
@@ -237,8 +238,8 @@ func (m *Model) renderTree(width, height int) []string {
 		icon := iconFor(m.iconMode, entry)
 
 		line := indent + arrow + icon.prefix() + entry.name
-		displayLine := ansi.Truncate(line, width, "...")
-		displayLine = padRight(displayLine, width)
+		displayLine := ansi.Truncate(line, contentWidth, "...")
+		displayLine = padRight(displayLine, contentWidth)
 
 		switch {
 		case isCursor:
@@ -255,8 +256,10 @@ func (m *Model) renderTree(width, height int) []string {
 	}
 
 	for len(lines) < height {
-		lines = append(lines, padRight("", width))
+		lines = append(lines, padRight("", contentWidth))
 	}
+
+	appendScrollbar(lines, renderScrollbar(height, len(m.fileTree), m.treeScrollOffset, m.scrollbarBlock))
 
 	return lines
 }
@@ -268,16 +271,18 @@ func (m *Model) renderEditor(lo layout) []string {
 	height := lo.contentHeight
 	lnw := lo.lineNumWidth
 	textWidth := lo.textWidth
+	contentWidth := width - scrollbarWidth
 
 	lines := make([]string, 0, height)
 	var mapping []visualEntry
 
 	if !hasTab || len(t.lines) == 0 {
 		emptyMsg := emptyStateMsg
-		lines = append(lines, padRight(emptyMsg, width))
+		lines = append(lines, padRight(emptyMsg, contentWidth))
 		for len(lines) < height {
-			lines = append(lines, padRight("", width))
+			lines = append(lines, padRight("", contentWidth))
 		}
+		appendScrollbar(lines, renderScrollbar(height, 0, 0, m.scrollbarBlock))
 		m.lastMapping = nil
 		return lines
 	}
@@ -374,9 +379,9 @@ func (m *Model) renderEditor(lo layout) []string {
 
 				seg := segSB.String()
 				if si > 0 {
-					lines = append(lines, padRight(lnPad+seg+ansiReset, width))
+					lines = append(lines, padRight(lnPad+seg+ansiReset, contentWidth))
 				} else {
-					lines = append(lines, padRight(lineNumStr+seg+ansiReset, width))
+					lines = append(lines, padRight(lineNumStr+seg+ansiReset, contentWidth))
 				}
 				mapping = append(mapping, visualEntry{
 					logicalLine: i,
@@ -423,7 +428,7 @@ func (m *Model) renderEditor(lo layout) []string {
 			}
 
 			content := contentSB.String()
-			lines = append(lines, padRight(lineNumStr+content+ansiReset, width))
+			lines = append(lines, padRight(lineNumStr+content+ansiReset, contentWidth))
 			mapping = append(mapping, visualEntry{logicalLine: i})
 		}
 
@@ -436,7 +441,7 @@ func (m *Model) renderEditor(lo layout) []string {
 				if len(lines) >= height {
 					break
 				}
-				lines = append(lines, lnPad+r)
+				lines = append(lines, padRight(lnPad+r, contentWidth))
 				mapping = append(mapping,
 					visualEntry{logicalLine: i, kind: lineKindInput})
 			}
@@ -448,7 +453,7 @@ func (m *Model) renderEditor(lo layout) []string {
 				if len(lines) >= height {
 					break
 				}
-				lines = append(lines, lnPad+r)
+				lines = append(lines, padRight(lnPad+r, contentWidth))
 				mapping = append(mapping,
 					visualEntry{logicalLine: i, kind: lineKindComment})
 			}
@@ -456,8 +461,10 @@ func (m *Model) renderEditor(lo layout) []string {
 	}
 
 	for len(lines) < height {
-		lines = append(lines, padRight("", width))
+		lines = append(lines, padRight("", contentWidth))
 	}
+
+	appendScrollbar(lines, renderScrollbar(height, len(t.lines), t.scrollOffset, m.scrollbarBlock))
 
 	m.lastMapping = mapping
 	return lines

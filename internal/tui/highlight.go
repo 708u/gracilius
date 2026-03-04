@@ -22,6 +22,7 @@ type themeConfig struct {
 	openFileMatchFg     string // Fuzzy match highlight fg
 	logoLeaf            string // Welcome logo top color (green/leaf)
 	logoTrunk           string // Welcome logo bottom color (brown/trunk)
+	scrollbarThumbFg    string // Scrollbar thumb foreground hex color
 }
 
 func (t themeConfig) selectionBgSeq() string {
@@ -41,6 +42,7 @@ var (
 		openFileMatchFg:     "#FFCC66",
 		logoLeaf:            "#73C991",
 		logoTrunk:           "#CE9178",
+		scrollbarThumbFg:    "#424242",
 	}
 	lightTheme = themeConfig{
 		name:                "github",
@@ -54,6 +56,7 @@ var (
 		openFileMatchFg:     "#0066CC",
 		logoLeaf:            "#1B7F37",
 		logoTrunk:           "#795E26",
+		scrollbarThumbFg:    "#C0C0C0",
 	}
 )
 

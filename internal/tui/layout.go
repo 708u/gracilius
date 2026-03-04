@@ -35,10 +35,10 @@ const (
 //
 // Horizontal:
 //
-//	|<-treeWidth->|<sep>|<----editorWidth-------->|
-//	|             | (3) |<-lnw->|<----text------->|
-//	              ^             ^
-//	              editorStartX  editorStartX + lineNumberWidth
+//	|<-treeWidth->|<sep>|<-------editorWidth---------->|
+//	|          |sb| (3) |<-lnw->|<----text------->|sb|
+//	           ^  ^             ^                  ^
+//	     scrollbar editorStartX  lineNumWidth   scrollbar
 type layout struct {
 	contentHeight int // usable rows for tree and editor panes
 	treeWidth     int // file tree pane width
@@ -92,6 +92,6 @@ func (m *Model) computeLayout() layout {
 		editorStartX:  tw + separatorWidth,
 		editorWidth:   ew,
 		lineNumWidth:  lnw,
-		textWidth:     ew - lnw,
+		textWidth:     ew - lnw - scrollbarWidth,
 	}
 }

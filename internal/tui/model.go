@@ -104,8 +104,9 @@ type Model struct {
 	openFile openFileOverlay
 
 	// theme
-	isDark bool
-	theme  themeConfig
+	isDark         bool
+	theme          themeConfig
+	scrollbarBlock string // cached styled thumb character
 }
 
 // lineKind distinguishes the type of a visual row.
@@ -202,20 +203,21 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 
 	im := detectIconMode()
 	return &Model{
-		server:     srv,
-		rootDir:    absRootDir,
-		fileTree:   ft,
-		treeCursor: 0,
-		focusPane:  paneTree,
-		watcher:    watcher,
-		dirWatcher: dirWatcher,
-		tabs:       []*tab{},
-		treeWidth:  30,
-		keys:       newKeyMap(),
-		help:       help.New(),
-		iconMode:   im,
-		openFile:   newOpenFileOverlay(im, darkTheme),
-		isDark:     true,
-		theme:      darkTheme,
+		server:         srv,
+		rootDir:        absRootDir,
+		fileTree:       ft,
+		treeCursor:     0,
+		focusPane:      paneTree,
+		watcher:        watcher,
+		dirWatcher:     dirWatcher,
+		tabs:           []*tab{},
+		treeWidth:      30,
+		keys:           newKeyMap(),
+		help:           help.New(),
+		iconMode:       im,
+		openFile:       newOpenFileOverlay(im, darkTheme),
+		isDark:         true,
+		theme:          darkTheme,
+		scrollbarBlock: scrollbarBlock(darkTheme.scrollbarThumbFg),
 	}, nil
 }

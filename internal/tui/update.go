@@ -117,6 +117,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.theme = lightTheme
 		}
+		m.scrollbarBlock = scrollbarBlock(m.theme.scrollbarThumbFg)
 		m.help.Styles = help.DefaultStyles(m.isDark)
 		m.openFile.updateTheme(m.theme)
 		for _, tab := range m.tabs {
@@ -287,10 +288,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.openFile.active {
 			return m, nil
 		}
+		lo := m.computeLayout()
+		if msg.X < lo.treeWidth && msg.Y >= contentStartY {
+			switch msg.Button {
+			case tea.MouseWheelUp:
+				m.treeScrollOffset -= scrollAmount
+				if m.treeScrollOffset < 0 {
+					m.treeScrollOffset = 0
+				}
+			case tea.MouseWheelDown:
+				m.treeScrollOffset += scrollAmount
+				maxOff := max(len(m.fileTree)-lo.contentHeight, 0)
+				if m.treeScrollOffset > maxOff {
+					m.treeScrollOffset = maxOff
+				}
+			}
+			return m, nil
+		}
 		if !hasTab || len(t.lines) == 0 {
 			return m, nil
 		}
-		lo := m.computeLayout()
 		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
 			switch msg.Button {
 			case tea.MouseWheelUp:
