@@ -163,7 +163,7 @@ func TestDiffResponder_DoubleCall(t *testing.T) {
 	case resp := <-ch:
 		data, _ := json.Marshal(resp.Result)
 		var mcpResult MCPResult
-		json.Unmarshal(data, &mcpResult) //nolint:errcheck
+		json.Unmarshal(data, &mcpResult)
 		if len(mcpResult.Content) == 0 || mcpResult.Content[0].Text != diffResultAccepted {
 			t.Fatalf("first call should win, got %v", mcpResult.Content)
 		}
@@ -221,7 +221,7 @@ func TestPendingDiffs_RejectAll(t *testing.T) {
 		case resp := <-r.ch:
 			data, _ := json.Marshal(resp.Result)
 			var mcpResult MCPResult
-			json.Unmarshal(data, &mcpResult) //nolint:errcheck
+			json.Unmarshal(data, &mcpResult)
 			if len(mcpResult.Content) == 0 || mcpResult.Content[0].Text != diffResultRejected {
 				t.Fatalf("responder %d: expected DIFF_REJECTED, got %v", i, mcpResult.Content)
 			}
@@ -276,7 +276,7 @@ func TestCloseTab_RejectsPending(t *testing.T) {
 	case r := <-responder.ch:
 		data, _ := json.Marshal(r.Result)
 		var mcpResult MCPResult
-		json.Unmarshal(data, &mcpResult) //nolint:errcheck
+		json.Unmarshal(data, &mcpResult)
 		if len(mcpResult.Content) == 0 || mcpResult.Content[0].Text != diffResultRejected {
 			t.Fatalf("expected DIFF_REJECTED, got %v", mcpResult.Content)
 		}
@@ -328,7 +328,7 @@ func TestCloseAllDiffTabs_RejectsPending(t *testing.T) {
 	case r := <-responder.ch:
 		data, _ := json.Marshal(r.Result)
 		var mcpResult MCPResult
-		json.Unmarshal(data, &mcpResult) //nolint:errcheck
+		json.Unmarshal(data, &mcpResult)
 		if len(mcpResult.Content) == 0 || mcpResult.Content[0].Text != diffResultRejected {
 			t.Fatalf("expected DIFF_REJECTED, got %v", mcpResult.Content)
 		}
