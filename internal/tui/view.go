@@ -96,18 +96,27 @@ func (m *Model) View() tea.View {
 		footerRendered,
 	)
 
+	var cx, cy int
+	var cursorOK bool
+
 	if m.openFile.active {
 		v := newView(m.openFile.overlay(base, m.width, m.height))
-		v.Cursor = m.openFile.cursorPos(m.width, m.height)
+		cx, cy, cursorOK = m.openFile.cursorPos(m.width, m.height)
+		if cursorOK {
+			v.Cursor = tea.NewCursor(cx, cy)
+		}
 		return v
 	}
+
 	v := newView(base)
-	if hasTab && t.inputMode {
-		v.Cursor = m.commentCursorScreenPos(lo)
-	} else if hasTab {
-		if x, y, ok := m.cursorScreenPos(lo); ok {
-			v.Cursor = tea.NewCursor(x, y)
-		}
+	switch {
+	case hasTab && t.inputMode:
+		cx, cy, cursorOK = m.commentCursorScreenPos(lo)
+	case hasTab:
+		cx, cy, cursorOK = m.cursorScreenPos(lo)
+	}
+	if cursorOK {
+		v.Cursor = tea.NewCursor(cx, cy)
 	}
 	return v
 }
@@ -167,16 +176,16 @@ func (m *Model) cursorScreenPos(lo layout) (x, y int, visible bool) {
 	return x, y, true
 }
 
-// commentCursorScreenPos computes the screen-space cursor for the
+// commentCursorScreenPos computes the screen-space cursor position for the
 // comment textarea by finding its input block in lastMapping.
-func (m *Model) commentCursorScreenPos(lo layout) *tea.Cursor {
-	t, ok := m.activeTabState()
-	if !ok || !t.inputMode {
-		return nil
+func (m *Model) commentCursorScreenPos(lo layout) (x, y int, ok bool) {
+	t, hasTab := m.activeTabState()
+	if !hasTab || !t.inputMode {
+		return 0, 0, false
 	}
 	c := t.commentInput.Cursor()
 	if c == nil {
-		return nil
+		return 0, 0, false
 	}
 
 	// Find the first lineKindInput entry in lastMapping.
@@ -188,14 +197,14 @@ func (m *Model) commentCursorScreenPos(lo layout) *tea.Cursor {
 		}
 	}
 	if blockStart < 0 {
-		return nil
+		return 0, 0, false
 	}
 
 	// renderBlock layout: row 0 = top border, row 1+ = body.
 	// Body rows have "│ " (2 display chars) prefix.
-	x := lo.editorStartX + lo.lineNumWidth + 2 + c.X
-	y := contentStartY + blockStart + 1 + c.Y
-	return tea.NewCursor(x, y)
+	x = lo.editorStartX + lo.lineNumWidth + 2 + c.X
+	y = contentStartY + blockStart + 1 + c.Y
+	return x, y, true
 }
 
 // renderTabBar generates the tab bar (2 lines: labels + underline).

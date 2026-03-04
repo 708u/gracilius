@@ -335,17 +335,19 @@ func (s *openFileOverlay) selectedPath() string {
 	return ""
 }
 
-// overlay renders the open-file overlay on top of the background view.
-// cursorPos returns the screen-space cursor for the overlay's text input.
-func (s *openFileOverlay) cursorPos(width, height int) *tea.Cursor {
+// cursorPos returns the screen-space cursor position for the overlay's text input.
+func (s *openFileOverlay) cursorPos(width, height int) (x, y int, ok bool) {
 	c := s.input.Cursor()
 	if c == nil {
-		return nil
+		return 0, 0, false
 	}
 	g := s.computeLayout(width, height)
-	// offset by box border (1) + padding (1)
-	return tea.NewCursor(g.startX+2+c.X, g.startY+1+c.Y)
+	x = g.startX + overlayBorderW/2 + overlayPaddingW/2 + c.X
+	y = g.startY + overlayBorderH/2 + c.Y
+	return x, y, true
 }
+
+// overlay renders the open-file overlay on top of the background view.
 
 func (s *openFileOverlay) overlay(bg string, width, height int) string {
 	g := s.computeLayout(width, height)
