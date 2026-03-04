@@ -132,24 +132,39 @@ const (
 type DiffResponder struct {
 	ch      chan *Response
 	id      json.RawMessage
+	tabName string
 	once    sync.Once
 	cleanup func()
 }
 
-// Accept sends a FILE_SAVED response.
-func (r *DiffResponder) Accept() {
+// Accept sends a FILE_SAVED response with saved file contents.
+// Claude Code expects content[1].text to contain the saved contents.
+func (r *DiffResponder) Accept(savedContents string) {
 	r.once.Do(func() {
-		r.ch <- NewResponse(r.id, NewMCPResult(diffResultAccepted))
+		result := MCPResult{
+			Content: []MCPContent{
+				{Type: "text", Text: diffResultAccepted},
+				{Type: "text", Text: savedContents},
+			},
+		}
+		r.ch <- NewResponse(r.id, result)
 		if r.cleanup != nil {
 			r.cleanup()
 		}
 	})
 }
 
-// Reject sends a DIFF_REJECTED response.
+// Reject sends a DIFF_REJECTED response with the tab name.
+// Claude Code expects content[1].text to contain the diff label.
 func (r *DiffResponder) Reject() {
 	r.once.Do(func() {
-		r.ch <- NewResponse(r.id, NewMCPResult(diffResultRejected))
+		result := MCPResult{
+			Content: []MCPContent{
+				{Type: "text", Text: diffResultRejected},
+				{Type: "text", Text: r.tabName},
+			},
+		}
+		r.ch <- NewResponse(r.id, result)
 		if r.cleanup != nil {
 			r.cleanup()
 		}
@@ -331,8 +346,9 @@ func (h *Handler) handleToolsCall(req *Request) (*Response, <-chan *Response) {
 		ch := make(chan *Response, 1)
 		idKey := string(req.ID)
 		responder := &DiffResponder{
-			ch: ch,
-			id: req.ID,
+			ch:      ch,
+			id:      req.ID,
+			tabName: args.TabName,
 			cleanup: func() {
 				h.diffMu.Lock()
 				delete(h.pendingDiffs, idKey)

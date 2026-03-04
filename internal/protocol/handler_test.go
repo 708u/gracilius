@@ -98,7 +98,7 @@ func TestDiffResponder_Accept(t *testing.T) {
 		id: testID(),
 	}
 
-	r.Accept()
+	r.Accept("saved content")
 
 	select {
 	case resp := <-ch:
@@ -113,8 +113,14 @@ func TestDiffResponder_Accept(t *testing.T) {
 		if err := json.Unmarshal(data, &mcpResult); err != nil {
 			t.Fatalf("failed to unmarshal MCP result: %v", err)
 		}
-		if len(mcpResult.Content) == 0 || mcpResult.Content[0].Text != diffResultAccepted {
-			t.Fatalf("expected FILE_SAVED, got %v", mcpResult.Content)
+		if len(mcpResult.Content) < 2 {
+			t.Fatalf("expected 2 content items, got %d", len(mcpResult.Content))
+		}
+		if mcpResult.Content[0].Text != diffResultAccepted {
+			t.Fatalf("expected FILE_SAVED, got %v", mcpResult.Content[0].Text)
+		}
+		if mcpResult.Content[1].Text != "saved content" {
+			t.Fatalf("expected saved content, got %v", mcpResult.Content[1].Text)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for response")
@@ -124,8 +130,9 @@ func TestDiffResponder_Accept(t *testing.T) {
 func TestDiffResponder_Reject(t *testing.T) {
 	ch := make(chan *Response, 1)
 	r := &DiffResponder{
-		ch: ch,
-		id: testID(),
+		ch:      ch,
+		id:      testID(),
+		tabName: "test.go",
 	}
 
 	r.Reject()
@@ -140,8 +147,14 @@ func TestDiffResponder_Reject(t *testing.T) {
 		if err := json.Unmarshal(data, &mcpResult); err != nil {
 			t.Fatalf("failed to unmarshal MCP result: %v", err)
 		}
-		if len(mcpResult.Content) == 0 || mcpResult.Content[0].Text != diffResultRejected {
-			t.Fatalf("expected DIFF_REJECTED, got %v", mcpResult.Content)
+		if len(mcpResult.Content) < 2 {
+			t.Fatalf("expected 2 content items, got %d", len(mcpResult.Content))
+		}
+		if mcpResult.Content[0].Text != diffResultRejected {
+			t.Fatalf("expected DIFF_REJECTED, got %v", mcpResult.Content[0].Text)
+		}
+		if mcpResult.Content[1].Text != "test.go" {
+			t.Fatalf("expected tab name, got %v", mcpResult.Content[1].Text)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for response")
@@ -155,9 +168,9 @@ func TestDiffResponder_DoubleCall(t *testing.T) {
 		id: testID(),
 	}
 
-	r.Accept()
-	r.Accept() // should be safe (no-op)
-	r.Reject() // should be safe (no-op)
+	r.Accept("content")
+	r.Accept("content") // should be safe (no-op)
+	r.Reject()          // should be safe (no-op)
 
 	select {
 	case resp := <-ch:
@@ -349,7 +362,7 @@ func TestDiffResponder_ConcurrentSafety(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r.Accept()
+			r.Accept("content")
 		}()
 		wg.Add(1)
 		go func() {

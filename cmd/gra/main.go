@@ -130,7 +130,7 @@ func run() int {
 				if err := os.WriteFile(filePath, []byte(newContents), 0644); err != nil {
 					log.Printf("Failed to write file on accept: %v", err)
 				}
-				responder.Accept()
+				responder.Accept(newContents)
 			},
 			Reject: func() {
 				log.Printf("diff rejected: %s", filePath)
