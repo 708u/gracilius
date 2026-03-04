@@ -200,10 +200,8 @@ func (m *Model) commentCursorScreenPos(lo layout) (x, y int, ok bool) {
 		return 0, 0, false
 	}
 
-	// renderBlock layout: row 0 = top border, row 1+ = body.
-	// Body rows have "│ " (2 display chars) prefix.
-	x = lo.editorStartX + lo.lineNumWidth + 2 + c.X
-	y = contentStartY + blockStart + 1 + c.Y
+	x = lo.editorStartX + lo.lineNumWidth + blockBorderLeft + c.X
+	y = contentStartY + blockStart + blockBorderTop + c.Y
 	return x, y, true
 }
 
