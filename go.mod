@@ -16,6 +16,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.4.0
 	github.com/muesli/termenv v0.16.0
 	github.com/sahilm/fuzzy v0.1.1
+	github.com/sergi/go-diff v1.4.0
 )
 
 require (
