@@ -41,7 +41,8 @@ func newView(content, title string) tea.View {
 
 // View implements tea.Model.
 func (m *Model) View() tea.View {
-	title := fmt.Sprintf("gracilius - Port %d", m.server.Port())
+	project := filepath.Base(m.rootDir)
+	title := fmt.Sprintf("gracilius - %s", project)
 
 	if m.err != nil {
 		return newView(fmt.Sprintf("Error: %v\n\nPress Ctrl+C to quit.", m.err), title)
@@ -54,10 +55,10 @@ func (m *Model) View() tea.View {
 	t, hasTab := m.activeTabState()
 
 	// header
-	header := title
+	header := fmt.Sprintf("gracilius - Port %d", m.server.Port())
 	if hasTab && t.filePath != "" {
 		header += fmt.Sprintf(" | %s", t.filePath)
-		title = fmt.Sprintf("gracilius - %s", filepath.Base(t.filePath))
+		title = fmt.Sprintf("gracilius - %s - %s", project, filepath.Base(t.filePath))
 	}
 	// content
 	lo := m.computeLayout()
