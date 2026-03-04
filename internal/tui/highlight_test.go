@@ -131,8 +131,7 @@ func TestRenderStyledLineWithSelection(t *testing.T) {
 	}
 
 	// Check that selection contains the right text
-	selBgIdx := strings.Index(output, selBgSeq)
-	afterSelBg := output[selBgIdx+len(selBgSeq):]
+	_, afterSelBg, _ := strings.Cut(output, selBgSeq)
 	before, _, ok := strings.Cut(afterSelBg, "\033[0m")
 	if !ok {
 		t.Fatal("expected reset after selection background")
