@@ -6,26 +6,27 @@ import (
 )
 
 type keyMap struct {
-	Quit       key.Binding
-	Cancel     key.Binding
-	SwitchPane key.Binding
-	Enter      key.Binding
-	Up         key.Binding
-	Down       key.Binding
-	Left       key.Binding
-	Right      key.Binding
-	CharSelect key.Binding
-	LineSelect key.Binding
-	Copy       key.Binding
-	Comment    key.Binding
-	ClearAll   key.Binding
-	GoTop      key.Binding
-	GoBottom   key.Binding
-	BlockUp    key.Binding
-	BlockDown  key.Binding
-	NextTab    key.Binding
-	PrevTab    key.Binding
-	CloseTab   key.Binding
+	Quit          key.Binding
+	Cancel        key.Binding
+	SwitchPane    key.Binding
+	Enter         key.Binding
+	Up            key.Binding
+	Down          key.Binding
+	Left          key.Binding
+	Right         key.Binding
+	CharSelect    key.Binding
+	LineSelect    key.Binding
+	Copy          key.Binding
+	Comment       key.Binding
+	CommentSubmit key.Binding
+	ClearAll      key.Binding
+	GoTop         key.Binding
+	GoBottom      key.Binding
+	BlockUp       key.Binding
+	BlockDown     key.Binding
+	NextTab       key.Binding
+	PrevTab       key.Binding
+	CloseTab      key.Binding
 }
 
 func newKeyMap() keyMap {
@@ -77,6 +78,10 @@ func newKeyMap() keyMap {
 		Comment: key.NewBinding(
 			key.WithKeys("i"),
 			key.WithHelp("i", "comment"),
+		),
+		CommentSubmit: key.NewBinding(
+			key.WithKeys("ctrl+s"),
+			key.WithHelp("Ctrl+S", "save comment"),
 		),
 		ClearAll: key.NewBinding(
 			key.WithKeys("D"),

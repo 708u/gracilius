@@ -183,10 +183,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
-			editorX := msg.X - lo.editorStartX - lineNumberWidth
+			editorX := msg.X - lo.editorStartX - lo.lineNumWidth
 			editorY := msg.Y - contentStartY
-			offset := t.scrollOffset
-			targetLine := offset + editorY
+
+			targetLine := t.scrollOffset + editorY
+			if editorY >= 0 && editorY < len(m.lastMapping) {
+				targetLine = m.lastMapping[editorY].logicalLine
+			}
 
 			if targetLine >= len(t.lines) {
 				targetLine = len(t.lines) - 1
@@ -246,8 +249,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					t.scrollOffset = 0
 				}
 			case msg.Button == tea.MouseButtonWheelDown:
-				maxOffset := max(len(t.lines)-lo.contentHeight, 0)
 				t.scrollOffset += scrollAmount
+				maxOffset := t.maxScrollOffset(lo.contentHeight)
 				if t.scrollOffset > maxOffset {
 					t.scrollOffset = maxOffset
 				}
@@ -272,17 +275,33 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.inputMode = false
 				t.commentInput.Reset()
 				t.commentInput.Blur()
-			case msg.Type == tea.KeyEnter:
+			case key.Matches(msg, m.keys.CommentSubmit):
 				val := t.commentInput.Value()
+				idx := t.findComment(t.inputStart)
+				if idx >= 0 {
+					t.comments = slices.Delete(t.comments, idx, idx+1)
+				}
 				if val != "" {
-					t.comments[t.inputLine] = val
-					m.notifyComment(t.inputLine, val)
+					t.comments = append(t.comments, comment{
+						startLine: t.inputStart,
+						endLine:   t.inputEnd,
+						text:      val,
+					})
+					m.notifyComment(t.inputStart, t.inputEnd, val)
 				}
 				t.inputMode = false
 				t.commentInput.Reset()
 				t.commentInput.Blur()
 			default:
+				linesBefore := strings.Count(t.commentInput.Value(), "\n") + 1
+				if msg.Type == tea.KeyEnter && linesBefore >= t.commentInput.Height() {
+					t.commentInput.SetHeight(t.commentInput.Height() + 1)
+				}
 				t.commentInput, cmd = t.commentInput.Update(msg)
+				linesAfter := strings.Count(t.commentInput.Value(), "\n") + 1
+				if linesAfter < linesBefore && t.commentInput.Height() > 3 {
+					t.commentInput.SetHeight(max(linesAfter, 3))
+				}
 				return m, cmd
 			}
 			return m, nil
@@ -420,10 +439,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Comment):
 			if hasTab && m.focusPane == paneEditor && len(t.lines) > 0 {
 				t.inputMode = true
-				t.inputLine = t.cursorLine
+				if t.selecting {
+					s, _, e, _ := t.normalizedSelection()
+					t.inputStart = s
+					t.inputEnd = e
+					t.selecting = false
+					t.lineSelect = false
+				} else {
+					t.inputStart = t.cursorLine
+					t.inputEnd = t.cursorLine
+				}
+				lo := m.computeLayout()
+				t.commentInput.SetWidth(
+					lo.editorWidth - lo.lineNumWidth - 4 - 3)
+				t.commentInput.SetHeight(3)
 				t.commentInput.Reset()
-				if existing, ok := t.comments[t.cursorLine]; ok {
-					t.commentInput.SetValue(existing)
+				if idx := t.findComment(t.inputStart); idx >= 0 {
+					t.inputStart = t.comments[idx].startLine
+					t.inputEnd = t.comments[idx].endLine
+					t.commentInput.SetValue(t.comments[idx].text)
 				}
 				t.commentInput.Focus()
 			}
@@ -442,7 +476,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.ClearAll):
 			if hasTab && m.focusPane == paneEditor {
-				t.comments = make(map[int]string)
+				t.comments = nil
 			}
 		case key.Matches(msg, m.keys.NextTab):
 			if len(m.tabs) > 0 {

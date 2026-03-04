@@ -15,6 +15,7 @@ var separatorBorder = lipgloss.Border{
 
 var (
 	styleComment = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	styleInput   = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	styleFooter  = lipgloss.NewStyle().
 			BorderTop(true).
 			BorderStyle(separatorBorder)
@@ -50,7 +51,7 @@ func (m *Model) View() string {
 	if !hasTab {
 		editorLines = renderWelcome(lo.editorWidth, lo.contentHeight)
 	} else {
-		editorLines = m.renderEditor(lo.editorWidth, lo.contentHeight)
+		editorLines = m.renderEditor(lo)
 	}
 
 	sepLines := make([]string, lo.contentHeight)
@@ -150,9 +151,7 @@ func (m *Model) renderFooter() string {
 	}
 
 	if hasTab && t.inputMode {
-		sb.WriteString("[Editor] Comment (Enter: confirm, Esc: cancel)\n")
-		fmt.Fprintf(&sb, "Line %d: %s",
-			t.inputLine+1, t.commentInput.View())
+		sb.WriteString("[Comment] Ctrl+S: save, Esc: cancel")
 	} else {
 		m.help.Width = m.width
 		sb.WriteString(m.help.View(m.contextKeyMap()))
@@ -240,10 +239,14 @@ func (m *Model) renderTree(width, height int) []string {
 }
 
 // renderEditor generates the editor pane lines.
-func (m *Model) renderEditor(width, height int) []string {
+func (m *Model) renderEditor(lo layout) []string {
 	t, _ := m.activeTabState()
+	width := lo.editorWidth
+	height := lo.contentHeight
+	lnw := lo.lineNumWidth
 
 	lines := make([]string, 0, height)
+	var mapping []visualEntry
 
 	if len(t.lines) == 0 {
 		emptyMsg := "No file selected"
@@ -251,18 +254,29 @@ func (m *Model) renderEditor(width, height int) []string {
 		for len(lines) < height {
 			lines = append(lines, padRight("", width))
 		}
+		m.lastMapping = nil
 		return lines
 	}
 
 	startLine, startChar, endLine, endChar := t.normalizedSelection()
-
 	offset := t.scrollOffset
+	commentBodyWidth := width - lnw - 4
+	lnPad := strings.Repeat(" ", lnw)
+	digitWidth := lnw - 2 // lnw = marker(1) + digits + space(1)
+	normalFmt := fmt.Sprintf(" %%%dd ", digitWidth)
+	barFmt := fmt.Sprintf("%%%dd ", digitWidth)
 
 	for i := offset; i < len(t.lines) && len(lines) < height; i++ {
 		lineContent := t.lines[i]
 
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "%3d ", i+1)
+
+		if t.findComment(i) >= 0 {
+			sb.WriteString(styleComment.Render("\u258e"))
+			fmt.Fprintf(&sb, barFmt, i+1)
+		} else {
+			fmt.Fprintf(&sb, normalFmt, i+1)
+		}
 
 		isCursorLine := m.focusPane == paneEditor && i == t.cursorLine
 		isSelected := m.focusPane == paneEditor && t.selecting && i >= startLine && i <= endLine
@@ -302,18 +316,89 @@ func (m *Model) renderEditor(width, height int) []string {
 			}
 		}
 
-		if _, hasComment := t.comments[i]; hasComment {
-			sb.WriteString(" " + styleComment.Render("[C]"))
-		}
-
 		lines = append(lines, sb.String())
+		mapping = append(mapping, visualEntry{logicalLine: i})
+
+		if t.inputMode && i == t.inputEnd {
+			label := "comment (Ctrl+S: save, Esc: cancel)"
+			white := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+			blockRows := renderBlock(
+				t.commentInput.View(), label, commentBodyWidth, true, true, styleInput, &white)
+			for _, r := range blockRows {
+				if len(lines) >= height {
+					break
+				}
+				lines = append(lines, lnPad+r)
+				mapping = append(mapping,
+					visualEntry{logicalLine: i, kind: lineKindInput})
+			}
+		} else if c := t.commentEndingAt(i); c != nil {
+			label := formatCommentLabel(c)
+			white := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+			blockRows := renderBlock(
+				c.text, label, commentBodyWidth, true, true, styleComment, &white)
+			for _, r := range blockRows {
+				if len(lines) >= height {
+					break
+				}
+				lines = append(lines, lnPad+r)
+				mapping = append(mapping,
+					visualEntry{logicalLine: i, kind: lineKindComment})
+			}
+		}
 	}
 
 	for len(lines) < height {
 		lines = append(lines, padRight("", width))
 	}
 
+	m.lastMapping = mapping
 	return lines
+}
+
+// formatCommentLabel returns the label for a comment block header.
+func formatCommentLabel(c *comment) string {
+	if c.startLine == c.endLine {
+		return "comment"
+	}
+	return fmt.Sprintf("comment (L%d-%d)", c.startLine+1, c.endLine+1)
+}
+
+// renderBlock renders text inside a bordered block with a label header.
+// If padLines is true, each body line is right-padded to width.
+// bodyStyle, if set, is applied to the body text (not borders).
+func renderBlock(text, label string, width int, padLines, sideBorders bool, borderStyle lipgloss.Style, bodyStyle *lipgloss.Style) []string {
+	if width < 10 {
+		width = 10
+	}
+	var rows []string
+	topLabel := "\u256d\u2500 " + label + " "
+	remaining := width - len([]rune(topLabel)) - 1
+	if remaining > 0 {
+		topLabel += strings.Repeat("\u2500", remaining)
+	}
+	topLabel += "\u256e"
+	rows = append(rows, borderStyle.Render(topLabel))
+
+	for _, line := range strings.Split(text, "\n") {
+		body := line
+		if bodyStyle != nil {
+			body = bodyStyle.Render(line)
+		}
+		if sideBorders {
+			content := "\u2502 " + body
+			if padLines {
+				content = padRight(content, width-1)
+			}
+			rows = append(rows, borderStyle.Render(content+"\u2502"))
+		} else {
+			rows = append(rows, "  "+body)
+		}
+	}
+
+	bottom := "\u2570" + strings.Repeat("\u2500", width-2) + "\u256f"
+	rows = append(rows, borderStyle.Render(bottom))
+	return rows
 }
 
 // selRange computes selection start/end character positions for a line.

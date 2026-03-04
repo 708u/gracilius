@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textarea"
 )
 
 // tabKind distinguishes between file and diff tabs.
@@ -13,6 +13,13 @@ const (
 	fileTab tabKind = iota
 	diffTab
 )
+
+// comment holds a single inline comment attached to a line range.
+type comment struct {
+	startLine int
+	endLine   int
+	text      string
+}
 
 // tab holds all per-tab state.
 type tab struct {
@@ -29,38 +36,65 @@ type tab struct {
 	lineSelect       bool
 	scrollOffset     int
 
-	comments     map[int]string
-	commentInput textinput.Model
+	comments     []comment
+	commentInput textarea.Model
 	inputMode    bool
-	inputLine    int
+	inputStart   int
+	inputEnd     int
+}
+
+func newTextarea() textarea.Model {
+	ta := textarea.New()
+	ta.Placeholder = "Enter comment..."
+	ta.CharLimit = 2000
+	ta.SetHeight(3)
+	ta.ShowLineNumbers = false
+	ta.Prompt = ""
+	return ta
 }
 
 // newFileTab creates a new tab for file viewing.
 func newFileTab() *tab {
-	ti := textinput.New()
-	ti.Placeholder = "Enter comment..."
-	ti.CharLimit = 500
-
 	return &tab{
 		kind:         fileTab,
-		comments:     make(map[int]string),
-		commentInput: ti,
+		commentInput: newTextarea(),
 	}
 }
 
 // newDiffTab creates a new tab for diff viewing.
 func newDiffTab(filePath string, lines []string) *tab {
-	ti := textinput.New()
-	ti.Placeholder = "Enter comment..."
-	ti.CharLimit = 500
-
 	return &tab{
 		kind:         diffTab,
 		filePath:     filePath,
 		lines:        lines,
-		comments:     make(map[int]string),
-		commentInput: ti,
+		commentInput: newTextarea(),
 	}
+}
+
+// findComment returns the index of the comment covering line, or -1.
+func (t *tab) findComment(line int) int {
+	for i, c := range t.comments {
+		if line >= c.startLine && line <= c.endLine {
+			return i
+		}
+	}
+	return -1
+}
+
+// commentEndingAt returns the comment whose endLine is line, or nil.
+func (t *tab) commentEndingAt(line int) *comment {
+	for i := range t.comments {
+		if t.comments[i].endLine == line {
+			return &t.comments[i]
+		}
+	}
+	return nil
+}
+
+// commentDisplayRows returns the visual row count for a comment block.
+// (top border + content lines + bottom border)
+func commentDisplayRows(text string) int {
+	return strings.Count(text, "\n") + 1 + 2
 }
 
 // selectedText returns the text within the current selection range.
@@ -157,7 +191,7 @@ func (t *tab) resetEditorState() {
 	t.scrollOffset = 0
 	t.selecting = false
 	t.lineSelect = false
-	t.comments = make(map[int]string)
+	t.comments = nil
 	t.inputMode = false
 	t.commentInput.Reset()
 	t.commentInput.Blur()
@@ -167,19 +201,63 @@ func (t *tab) resetEditorState() {
 func (t *tab) adjustScrollForCursor(contentHeight int) {
 	margin := contentHeight / 5
 
+	// Cursor above visible area (logical check is sufficient)
 	if t.cursorLine < t.scrollOffset+margin {
 		t.scrollOffset = t.cursorLine - margin
 	}
 
-	if t.cursorLine >= t.scrollOffset+contentHeight-margin {
-		t.scrollOffset = t.cursorLine - contentHeight + margin + 1
+	// Cursor below visible area (visual-row aware)
+	if t.visualRowsBetween(t.scrollOffset, t.cursorLine) > contentHeight-margin {
+		t.scrollOffset = t.scrollOffsetFor(t.cursorLine, contentHeight-margin)
 	}
 
-	maxOffset := max(len(t.lines)-contentHeight, 0)
+	maxOffset := t.maxScrollOffset(contentHeight)
 	if t.scrollOffset > maxOffset {
 		t.scrollOffset = maxOffset
 	}
 	if t.scrollOffset < 0 {
 		t.scrollOffset = 0
 	}
+}
+
+// lineVisualRows returns the number of visual rows a single line occupies,
+// including any comment block or active input attached to it.
+func (t *tab) lineVisualRows(line int) int {
+	rows := 1
+	if c := t.commentEndingAt(line); c != nil {
+		rows += commentDisplayRows(c.text)
+	}
+	if t.inputMode && line == t.inputEnd {
+		rows += t.commentInput.Height() + 2
+	}
+	return rows
+}
+
+// visualRowsBetween returns the total visual rows from line 'from'
+// to line 'to' inclusive.
+func (t *tab) visualRowsBetween(from, to int) int {
+	rows := 0
+	for i := from; i <= to && i < len(t.lines); i++ {
+		rows += t.lineVisualRows(i)
+	}
+	return rows
+}
+
+// scrollOffsetFor finds the scroll offset (logical line) where targetLine
+// appears at approximately targetVisualRow from the top of the viewport.
+func (t *tab) scrollOffsetFor(targetLine, targetVisualRow int) int {
+	rows := 0
+	for i := targetLine; i >= 0; i-- {
+		rows += t.lineVisualRows(i)
+		if rows >= targetVisualRow {
+			return i
+		}
+	}
+	return 0
+}
+
+// maxScrollOffset returns the largest valid scrollOffset (logical line)
+// such that rendering from that line fills at least contentHeight visual rows.
+func (t *tab) maxScrollOffset(contentHeight int) int {
+	return t.scrollOffsetFor(len(t.lines)-1, contentHeight)
 }
