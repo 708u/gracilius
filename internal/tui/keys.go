@@ -112,8 +112,8 @@ func newKeyMap() keyMap {
 			key.WithHelp("q", "close tab"),
 		),
 		Search: key.NewBinding(
-			key.WithKeys("/"),
-			key.WithHelp("/", "search"),
+			key.WithKeys("o"),
+			key.WithHelp("o", "open file"),
 		),
 	}
 }
