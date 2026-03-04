@@ -451,6 +451,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		close(pingDone)
 		_ = conn.Close()
+		s.handler.RejectAllPendingDiffs()
 		s.mu.Lock()
 		for i, c := range s.clients {
 			if c == client {
@@ -480,6 +481,20 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) writeResponse(client *wsClient, resp *protocol.Response) {
+	data, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("Error marshaling response: %v", err)
+		return
+	}
+	client.mu.Lock()
+	err = client.conn.WriteMessage(websocket.TextMessage, data)
+	client.mu.Unlock()
+	if err != nil {
+		log.Printf("Error sending response: %v", err)
+	}
+}
+
 func (s *Server) handleMessage(client *wsClient, message []byte) {
 	var req protocol.Request
 	if err := json.Unmarshal(message, &req); err != nil {
@@ -489,24 +504,19 @@ func (s *Server) handleMessage(client *wsClient, message []byte) {
 
 	log.Printf("Received: %s", string(message))
 
-	resp := s.handler.HandleMessage(&req)
+	resp, deferredCh := s.handler.HandleMessage(&req)
 
 	if resp != nil {
-		data, err := json.Marshal(resp)
-		if err != nil {
-			log.Printf("Error marshaling response: %v", err)
-			return
-		}
-		client.mu.Lock()
-		err = client.conn.WriteMessage(websocket.TextMessage, data)
-		client.mu.Unlock()
-		if err != nil {
-			log.Printf("Error sending response: %v", err)
-			return
-		}
+		s.writeResponse(client, resp)
 		log.Printf("Sent response for: %s", req.Method)
 	}
 
-	// Note: The initialized notification is sent by the client (Claude Code).
-	// The server only receives notifications/initialized.
+	if deferredCh != nil {
+		go func() {
+			if r := <-deferredCh; r != nil {
+				s.writeResponse(client, r)
+				log.Printf("Sent deferred response for: %s", req.Method)
+			}
+		}()
+	}
 }

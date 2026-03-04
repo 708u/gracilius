@@ -30,6 +30,9 @@ type MCPServer interface {
 type OpenDiffMsg struct {
 	FilePath string
 	Contents string
+	TabName  string
+	Accept   func(string) // called with new file contents on accept
+	Reject   func()       // called on reject
 }
 
 // CloseDiffMsg notifies the TUI to close diff tab(s).

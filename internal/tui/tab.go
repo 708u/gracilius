@@ -26,6 +26,7 @@ type tab struct {
 	kind tabKind
 
 	filePath         string
+	tabName          string
 	lines            []string
 	highlightedLines []highlightedLine
 	cursorLine       int
@@ -41,6 +42,10 @@ type tab struct {
 	inputMode    bool
 	inputStart   int
 	inputEnd     int
+
+	// diff accept/reject callbacks (diffTab only)
+	onAccept func(string)
+	onReject func()
 }
 
 func newTextarea() textarea.Model {
@@ -62,13 +67,22 @@ func newFileTab() *tab {
 }
 
 // newDiffTab creates a new tab for diff viewing.
-func newDiffTab(filePath string, lines []string) *tab {
+func newDiffTab(filePath, tabName string, lines []string, onAccept func(string), onReject func()) *tab {
 	return &tab{
 		kind:         diffTab,
 		filePath:     filePath,
+		tabName:      tabName,
 		lines:        lines,
 		commentInput: newTextarea(),
+		onAccept:     onAccept,
+		onReject:     onReject,
 	}
+}
+
+// clearCallbacks resets diff accept/reject callbacks.
+func (t *tab) clearCallbacks() {
+	t.onAccept = nil
+	t.onReject = nil
 }
 
 // findComment returns the index of the comment covering line, or -1.

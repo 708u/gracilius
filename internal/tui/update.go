@@ -136,7 +136,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case OpenDiffMsg:
 		lines := splitLines([]byte(msg.Contents))
-		dt := newDiffTab(msg.FilePath, lines)
+		dt := newDiffTab(msg.FilePath, msg.TabName, lines, msg.Accept, msg.Reject)
 		dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents)
 		m.tabs = append(m.tabs, dt)
 		m.activeTab = len(m.tabs) - 1
@@ -550,6 +550,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveToParagraphBoundary(dirUp)
 		case key.Matches(msg, m.keys.BlockDown):
 			m.moveToParagraphBoundary(dirDown)
+		case key.Matches(msg, m.keys.AcceptDiff):
+			if hasTab && t.kind == diffTab && t.onAccept != nil && m.focusPane == paneEditor {
+				contents := strings.Join(t.lines, "\n")
+				t.onAccept(contents)
+				// Clear before closeTab to prevent double-call
+				t.clearCallbacks()
+				m.closeTab(m.activeTab)
+			}
+		case key.Matches(msg, m.keys.RejectDiff):
+			if hasTab && t.kind == diffTab && t.onReject != nil && m.focusPane == paneEditor {
+				t.onReject()
+				// Clear before closeTab to prevent double-call
+				t.clearCallbacks()
+				m.closeTab(m.activeTab)
+			}
 		case key.Matches(msg, m.keys.CloseTab):
 			if len(m.tabs) > 0 {
 				m.closeTab(m.activeTab)
@@ -603,6 +618,10 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 // closeTab removes the tab at idx and adjusts activeTab.
 func (m *Model) closeTab(idx int) {
 	t := m.tabs[idx]
+	if t.kind == diffTab && t.onReject != nil {
+		t.onReject()
+		t.clearCallbacks()
+	}
 	if t.filePath != "" && t.kind == fileTab && m.watcher != nil {
 		_ = m.watcher.Remove(t.filePath)
 	}
@@ -619,7 +638,12 @@ func (m *Model) closeTab(idx int) {
 func (m *Model) closeDiffTabs() {
 	tabs := make([]*tab, 0, len(m.tabs))
 	for _, t := range m.tabs {
-		if t.kind != diffTab {
+		if t.kind == diffTab {
+			if t.onReject != nil {
+				t.onReject()
+				t.clearCallbacks()
+			}
+		} else {
 			tabs = append(tabs, t)
 		}
 	}
