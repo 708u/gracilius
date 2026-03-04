@@ -81,8 +81,8 @@ func newKeyMap() keyMap {
 			key.WithHelp("i", "comment"),
 		),
 		CommentSubmit: key.NewBinding(
-			key.WithKeys("ctrl+s"),
-			key.WithHelp("Ctrl+S", "save comment"),
+			key.WithKeys("ctrl+d"),
+			key.WithHelp("Ctrl+D", "save comment"),
 		),
 		ClearAll: key.NewBinding(
 			key.WithKeys("D"),

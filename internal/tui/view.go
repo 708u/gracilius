@@ -157,7 +157,7 @@ func (m *Model) renderFooter() string {
 	}
 
 	if hasTab && t.inputMode {
-		sb.WriteString("[Comment] Ctrl+S: save, Esc: cancel")
+		sb.WriteString("[Comment] Ctrl+D: save, Esc: cancel")
 	} else {
 		m.help.Width = m.width
 		sb.WriteString(m.help.View(m.contextKeyMap()))
@@ -326,7 +326,7 @@ func (m *Model) renderEditor(lo layout) []string {
 		mapping = append(mapping, visualEntry{logicalLine: i})
 
 		if t.inputMode && i == t.inputEnd {
-			label := "comment (Ctrl+S: save, Esc: cancel)"
+			label := "comment (Ctrl+D: save, Esc: cancel)"
 			white := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
 			blockRows := renderBlock(
 				t.commentInput.View(), label, commentBodyWidth, true, true, styleInput, &white)
