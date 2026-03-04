@@ -355,9 +355,9 @@ func (m *Model) renderEditor(lo layout) []string {
 					if si-1 < len(bp) {
 						wrapOff = bp[si-1]
 					}
-					lines = append(lines, lnPad+ansiReset+seg)
+					lines = append(lines, padRight(lnPad+ansiReset+seg+ansiReset, width))
 				} else {
-					lines = append(lines, lineNumStr+seg)
+					lines = append(lines, padRight(lineNumStr+seg+ansiReset, width))
 				}
 				mapping = append(mapping, visualEntry{
 					logicalLine: i,
@@ -365,7 +365,7 @@ func (m *Model) renderEditor(lo layout) []string {
 				})
 			}
 		} else {
-			lines = append(lines, lineNumStr+content)
+			lines = append(lines, padRight(lineNumStr+content+ansiReset, width))
 			mapping = append(mapping, visualEntry{logicalLine: i})
 		}
 
