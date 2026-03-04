@@ -95,8 +95,26 @@ type Model struct {
 	// icon display mode
 	iconMode iconMode
 
+	// visual row mapping (rebuilt each render)
+	lastMapping []visualEntry
+
 	// open-file overlay
 	openFile openFileOverlay
+}
+
+// lineKind distinguishes the type of a visual row.
+type lineKind int
+
+const (
+	lineKindCode lineKind = iota
+	lineKindComment
+	lineKindInput
+)
+
+// visualEntry maps a visual row to its logical line and type.
+type visualEntry struct {
+	logicalLine int
+	kind        lineKind
 }
 
 // activeTabState returns the active tab and whether it exists.

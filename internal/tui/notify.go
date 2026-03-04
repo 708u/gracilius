@@ -37,19 +37,26 @@ func (m *Model) notifyClearSelection() {
 }
 
 // notifyComment sends a comment as a selection_changed notification.
-func (m *Model) notifyComment(line int, comment string) {
+func (m *Model) notifyComment(startLine, endLine int, comment string) {
 	t, ok := m.activeTabState()
 	if !ok {
 		return
 	}
-	text := fmt.Sprintf("[Comment] %s:%d\n%s", t.filePath, line+1, comment)
+	var text string
+	if startLine == endLine {
+		text = fmt.Sprintf("[Comment] %s:%d\n%s",
+			t.filePath, startLine+1, comment)
+	} else {
+		text = fmt.Sprintf("[Comment] %s:%d-%d\n%s",
+			t.filePath, startLine+1, endLine+1, comment)
+	}
 
 	m.server.NotifySelectionChanged(
 		t.filePath,
 		text,
-		line,
+		startLine,
 		0,
-		line,
+		endLine,
 		0,
 	)
 }

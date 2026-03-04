@@ -5,12 +5,14 @@ const (
 	tabBarHeight        = 2 // labels + underline
 	footerHeight        = 4 // border-top + help + status
 	separatorWidth      = 3
-	lineNumberWidth     = 4
+	minLineNumberWidth  = 4
 	minTreeWidth        = 15
 	defaultTreePercent  = 30
 	maxTreeWidthPercent = 70
 	contentStartY       = headerHeight + tabBarHeight
 	minContentHeight    = 5
+	commentBlockMargin  = 4 // left/right padding around comment block
+	commentBorderChars  = 3 // "│ " (2) + "│" (1)
 )
 
 // layout holds all derived dimensions for a single render frame.
@@ -42,6 +44,7 @@ type layout struct {
 	treeWidth     int // file tree pane width
 	editorStartX  int // treeWidth + separatorWidth
 	editorWidth   int // total width - treeWidth - separatorWidth
+	lineNumWidth  int // line number gutter width (digits + 1 space)
 }
 
 // getTreeWidth returns the tree pane width.
@@ -63,12 +66,29 @@ func (m *Model) getContentHeight() int {
 	return max(m.height-chrome, minContentHeight)
 }
 
+// lineNumWidthFor returns the gutter width needed for n lines.
+// Format: "[marker][digits][space]" where marker is " " or "▎".
+func lineNumWidthFor(n int) int {
+	digits := 1
+	for v := n; v >= 10; v /= 10 {
+		digits++
+	}
+	w := 1 + digits + 1 // marker + digits + trailing space
+	return max(w, minLineNumberWidth)
+}
+
 func (m *Model) computeLayout() layout {
 	tw := m.getTreeWidth()
+	lnw := minLineNumberWidth
+	t, ok := m.activeTabState()
+	if ok && len(t.lines) > 0 {
+		lnw = lineNumWidthFor(len(t.lines))
+	}
 	return layout{
 		contentHeight: m.getContentHeight(),
 		treeWidth:     tw,
 		editorStartX:  tw + separatorWidth,
 		editorWidth:   m.width - tw - separatorWidth,
+		lineNumWidth:  lnw,
 	}
 }
