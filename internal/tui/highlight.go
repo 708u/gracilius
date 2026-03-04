@@ -2,10 +2,8 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
@@ -57,16 +55,7 @@ var (
 		logoLeaf:            "#1B7F37",
 		logoTrunk:           "#795E26",
 	}
-	activeTheme = darkTheme // default fallback
 )
-
-func init() {
-	if lipgloss.HasDarkBackground(os.Stdin, os.Stdout) {
-		activeTheme = darkTheme
-	} else {
-		activeTheme = lightTheme
-	}
-}
 
 var (
 	ansiInverse = termenv.CSI + termenv.ReverseSeq + "m"
@@ -84,14 +73,14 @@ type highlightedLine struct {
 	runs     []styledRun // For cursor/selection splitting
 }
 
-func highlightFile(filePath, source string) []highlightedLine {
+func highlightFile(filePath, source string, theme themeConfig) []highlightedLine {
 	lexer := lexers.Match(filePath)
 	if lexer == nil {
 		lexer = lexers.Fallback
 	}
 	lexer = chroma.Coalesce(lexer)
 
-	style := styles.Get(activeTheme.name)
+	style := styles.Get(theme.name)
 
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {
@@ -206,7 +195,7 @@ func renderStyledLineWithCursor(sb *strings.Builder, runs []styledRun, cursorCha
 	}
 }
 
-func renderStyledLineWithSelection(sb *strings.Builder, runs []styledRun, selStart, selEnd int) {
+func renderStyledLineWithSelection(sb *strings.Builder, runs []styledRun, selStart, selEnd int, selBgSeq string) {
 	pos := 0
 
 	for _, run := range runs {
@@ -234,7 +223,7 @@ func renderStyledLineWithSelection(sb *strings.Builder, runs []styledRun, selSta
 			if run.ANSI != "" {
 				sb.WriteString(run.ANSI)
 			}
-			sb.WriteString(activeTheme.selectionBgSeq())
+			sb.WriteString(selBgSeq)
 			sb.WriteString(expandTabs(string(runes[selLocalStart:selLocalEnd])))
 			sb.WriteString(ansiReset)
 

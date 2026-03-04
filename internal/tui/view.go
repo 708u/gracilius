@@ -25,8 +25,8 @@ var (
 			BorderStyle(separatorBorder)
 )
 
-func styleTreeCursor() lipgloss.Style {
-	return lipgloss.NewStyle().Background(lipgloss.Color(activeTheme.listSelectionBg))
+func styleTreeCursor(theme themeConfig) lipgloss.Style {
+	return lipgloss.NewStyle().Background(lipgloss.Color(theme.listSelectionBg))
 }
 
 // newView returns a tea.View with the base terminal settings.
@@ -62,7 +62,7 @@ func (m *Model) View() tea.View {
 
 	var editorLines []string
 	if !hasTab {
-		editorLines = renderWelcome(lo.editorWidth, lo.contentHeight)
+		editorLines = renderWelcome(lo.editorWidth, lo.contentHeight, m.theme)
 	} else {
 		editorLines = m.renderEditor(lo)
 	}
@@ -110,11 +110,11 @@ func (m *Model) renderTabBar(offset int) string {
 	}
 
 	styleActive := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(activeTheme.tabActiveFg))
+		Foreground(lipgloss.Color(m.theme.tabActiveFg))
 	styleInactive := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(activeTheme.tabInactiveFg))
+		Foreground(lipgloss.Color(m.theme.tabInactiveFg))
 	styleBorder := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(activeTheme.tabActiveBorder))
+		Foreground(lipgloss.Color(m.theme.tabActiveBorder))
 
 	padding := strings.Repeat(" ", offset)
 
@@ -127,7 +127,11 @@ func (m *Model) renderTabBar(offset int) string {
 			name = filepath.Base(t.filePath)
 		}
 		if t.kind == diffTab {
-			name = "[diff] " + name
+			if t.diff != nil {
+				name = "[review] " + name
+			} else {
+				name = "[diff] " + name
+			}
 		}
 
 		label := " " + name + " "
@@ -238,10 +242,10 @@ func (m *Model) renderTree(width, height int) []string {
 
 		switch {
 		case isCursor:
-			displayLine = styleTreeCursor().Render(displayLine)
+			displayLine = styleTreeCursor(m.theme).Render(displayLine)
 		case isActiveFile:
 			displayLine = lipgloss.NewStyle().
-				Background(lipgloss.Color(activeTheme.activeFileBg)).
+				Background(lipgloss.Color(m.theme.activeFileBg)).
 				Render(displayLine)
 		}
 
@@ -279,6 +283,7 @@ func (m *Model) renderEditor(lo layout) []string {
 	}
 
 	startLine, startChar, endLine, endChar := t.normalizedSelection()
+	selBgSeq := m.theme.selectionBgSeq()
 	offset := t.scrollOffset
 	commentBodyWidth := width - lnw - commentBlockMargin
 	lnPad := strings.Repeat(" ", lnw)
@@ -357,7 +362,7 @@ func (m *Model) renderEditor(lo layout) []string {
 				// Render segment content.
 				var segSB strings.Builder
 				if segSC < segEC {
-					renderStyledLineWithSelection(&segSB, segRuns, segSC, segEC)
+					renderStyledLineWithSelection(&segSB, segRuns, segSC, segEC, selBgSeq)
 				} else if cursorOff >= 0 {
 					renderStyledLineWithCursor(&segSB, segRuns, cursorOff)
 				} else {
@@ -391,9 +396,9 @@ func (m *Model) renderEditor(lo layout) []string {
 						renderLineWithCursor(&contentSB, lineContent, t.cursorChar)
 					}
 				} else if hl := t.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec)
+					renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec, selBgSeq)
 				} else {
-					renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec)
+					renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec, selBgSeq)
 				}
 			case isCursorLine:
 				if hl := t.getHighlightedLine(i); hl != nil {
@@ -404,9 +409,9 @@ func (m *Model) renderEditor(lo layout) []string {
 			case isSelected:
 				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
 				if hl := t.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec)
+					renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec, selBgSeq)
 				} else {
-					renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec)
+					renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec, selBgSeq)
 				}
 			default:
 				if hl := t.getHighlightedLine(i); hl != nil {
@@ -511,7 +516,7 @@ func renderLineWithCursor(sb *strings.Builder, line string, cursorChar int) {
 }
 
 // renderLineWithCursorAndSelection renders a line with selection highlight.
-func renderLineWithCursorAndSelection(sb *strings.Builder, line string, selStart, selEnd int) {
+func renderLineWithCursorAndSelection(sb *strings.Builder, line string, selStart, selEnd int, selBgSeq string) {
 	runs := []styledRun{{Text: line}}
-	renderStyledLineWithSelection(sb, runs, selStart, selEnd)
+	renderStyledLineWithSelection(sb, runs, selStart, selEnd, selBgSeq)
 }

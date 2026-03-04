@@ -118,11 +118,19 @@ func run() int {
 	)
 
 	// Register callbacks
-	srv.SetOpenDiffCallback(func(filePath string, contents string) {
+	srv.SetOpenDiffCallback(func(filePath, contents, tabName string, accept func(string), reject func()) {
 		log.Printf("openDiff callback: %s", filePath)
 		p.Send(tui.OpenDiffMsg{
 			FilePath: filePath,
 			Contents: contents,
+			Accept: func(newContents string) {
+				log.Printf("diff accepted: %s", filePath)
+				accept(newContents)
+			},
+			Reject: func() {
+				log.Printf("diff rejected: %s", filePath)
+				reject()
+			},
 		})
 	})
 

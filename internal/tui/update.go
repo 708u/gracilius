@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode"
 
+	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 )
@@ -26,7 +27,7 @@ type statusClearMsg struct{}
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.watchFile(), m.watchDir())
+	return tea.Batch(m.watchFile(), m.watchDir(), tea.RequestBackgroundColor)
 }
 
 type direction int
@@ -109,11 +110,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	t, hasTab := m.activeTabState()
 
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		m.isDark = msg.IsDark()
+		if m.isDark {
+			m.theme = darkTheme
+		} else {
+			m.theme = lightTheme
+		}
+		m.help.Styles = help.DefaultStyles(m.isDark)
+		m.openFile.updateTheme(m.theme)
+		for _, tab := range m.tabs {
+			if tab.filePath != "" && len(tab.lines) > 0 {
+				tab.highlightedLines = highlightFile(
+					tab.filePath, strings.Join(tab.lines, "\n"), m.theme,
+				)
+			}
+		}
+		return m, nil
 	case fileChangedMsg:
 		if hasTab {
 			t.lines = msg.lines
 			t.highlightedLines = highlightFile(
-				t.filePath, strings.Join(msg.lines, "\n"),
+				t.filePath, strings.Join(msg.lines, "\n"), m.theme,
 			)
 			if t.cursorLine >= len(t.lines) {
 				t.cursorLine = max(0, len(t.lines)-1)
@@ -136,8 +154,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case OpenDiffMsg:
 		lines := splitLines([]byte(msg.Contents))
-		dt := newDiffTab(msg.FilePath, lines)
-		dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents)
+		dt := newDiffTab(msg.FilePath, lines, msg.Accept, msg.Reject)
+		dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents, m.theme)
 		m.tabs = append(m.tabs, dt)
 		m.activeTab = len(m.tabs) - 1
 		m.focusPane = paneEditor
@@ -372,6 +390,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Accept/reject use enter/esc, so they must be checked
+		// before the general Cancel/Enter handlers below.
+		if hasTab && t.diff != nil && m.focusPane == paneEditor {
+			switch {
+			case key.Matches(msg, m.keys.AcceptDiff):
+				contents := strings.Join(t.lines, "\n")
+				t.diff.onAccept(contents)
+				t.diff = nil
+				m.closeTab(m.activeTab)
+				return m, nil
+			case key.Matches(msg, m.keys.RejectDiff):
+				t.rejectAndClear()
+				m.closeTab(m.activeTab)
+				return m, nil
+			}
+		}
+
 		switch {
 		case key.Matches(msg, m.keys.Cancel):
 			if hasTab && t.selecting {
@@ -603,6 +638,9 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 // closeTab removes the tab at idx and adjusts activeTab.
 func (m *Model) closeTab(idx int) {
 	t := m.tabs[idx]
+	if t.kind == diffTab {
+		t.rejectAndClear()
+	}
 	if t.filePath != "" && t.kind == fileTab && m.watcher != nil {
 		_ = m.watcher.Remove(t.filePath)
 	}
@@ -619,7 +657,9 @@ func (m *Model) closeTab(idx int) {
 func (m *Model) closeDiffTabs() {
 	tabs := make([]*tab, 0, len(m.tabs))
 	for _, t := range m.tabs {
-		if t.kind != diffTab {
+		if t.kind == diffTab {
+			t.rejectAndClear()
+		} else {
 			tabs = append(tabs, t)
 		}
 	}

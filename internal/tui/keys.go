@@ -28,6 +28,8 @@ type keyMap struct {
 	PrevTab       key.Binding
 	CloseTab      key.Binding
 	OpenFile      key.Binding
+	AcceptDiff    key.Binding
+	RejectDiff    key.Binding
 }
 
 func newKeyMap() keyMap {
@@ -120,6 +122,14 @@ func newKeyMap() keyMap {
 			key.WithKeys("o"),
 			key.WithHelp("o", "open file"),
 		),
+		AcceptDiff: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("Enter", "accept diff"),
+		),
+		RejectDiff: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("Esc", "reject diff"),
+		),
 	}
 }
 
@@ -127,7 +137,8 @@ func newKeyMap() keyMap {
 func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.SwitchPane, k.PrevTab, k.NextTab, k.CloseTab,
-		k.CharSelect, k.LineSelect, k.Copy, k.OpenFile, k.Cancel, k.Quit,
+		k.CharSelect, k.LineSelect, k.Copy, k.OpenFile,
+		k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit,
 	}
 }
 
@@ -136,7 +147,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown},
 		{k.Enter, k.SwitchPane, k.PrevTab, k.NextTab, k.CloseTab},
-		{k.CharSelect, k.LineSelect, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.Cancel, k.Quit},
+		{k.CharSelect, k.LineSelect, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
 	}
 }
 
@@ -145,6 +156,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 func (m *Model) contextKeyMap() help.KeyMap {
 	km := m.keys
 	t, hasTab := m.activeTabState()
+	isDiffReview := hasTab && t.diff != nil
 	km.CharSelect.SetEnabled(hasTab && m.focusPane == paneEditor)
 	km.LineSelect.SetEnabled(hasTab && m.focusPane == paneEditor)
 	km.Copy.SetEnabled(hasTab && m.focusPane == paneEditor && t.selecting)
@@ -154,5 +166,7 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km.PrevTab.SetEnabled(hasTab)
 	km.CloseTab.SetEnabled(hasTab)
 	km.SwitchPane.SetEnabled(hasTab)
+	km.AcceptDiff.SetEnabled(isDiffReview && m.focusPane == paneEditor)
+	km.RejectDiff.SetEnabled(isDiffReview && m.focusPane == paneEditor)
 	return km
 }

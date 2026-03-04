@@ -39,6 +39,20 @@ type wsClient struct {
 	mu       sync.Mutex // protects writes to conn
 }
 
+func (c *wsClient) writeResponse(resp *protocol.Response) {
+	data, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("Error marshaling response: %v", err)
+		return
+	}
+	c.mu.Lock()
+	err = c.conn.WriteMessage(websocket.TextMessage, data)
+	c.mu.Unlock()
+	if err != nil {
+		log.Printf("Error sending response: %v", err)
+	}
+}
+
 // Server is a WebSocket server for Claude Code integration.
 type Server struct {
 	port             int
@@ -451,6 +465,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		close(pingDone)
 		_ = conn.Close()
+		// Reject pending diffs so stale send callbacks are not called
+		// after the connection is closed.
+		s.handler.RejectAllPendingDiffs()
 		s.mu.Lock()
 		for i, c := range s.clients {
 			if c == client {
@@ -489,24 +506,8 @@ func (s *Server) handleMessage(client *wsClient, message []byte) {
 
 	log.Printf("Received: %s", string(message))
 
-	resp := s.handler.HandleMessage(&req)
-
-	if resp != nil {
-		data, err := json.Marshal(resp)
-		if err != nil {
-			log.Printf("Error marshaling response: %v", err)
-			return
-		}
-		client.mu.Lock()
-		err = client.conn.WriteMessage(websocket.TextMessage, data)
-		client.mu.Unlock()
-		if err != nil {
-			log.Printf("Error sending response: %v", err)
-			return
-		}
+	s.handler.HandleMessage(&req, func(resp *protocol.Response) {
+		client.writeResponse(resp)
 		log.Printf("Sent response for: %s", req.Method)
-	}
-
-	// Note: The initialized notification is sent by the client (Claude Code).
-	// The server only receives notifications/initialized.
+	})
 }

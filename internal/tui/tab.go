@@ -41,6 +41,14 @@ type tab struct {
 	inputMode    bool
 	inputStart   int
 	inputEnd     int
+
+	diff *diffState // non-nil for diff review tabs
+}
+
+// diffState holds accept/reject callbacks for a diff review tab.
+type diffState struct {
+	onAccept func(string)
+	onReject func()
 }
 
 func newTextarea() textarea.Model {
@@ -62,13 +70,25 @@ func newFileTab() *tab {
 }
 
 // newDiffTab creates a new tab for diff viewing.
-func newDiffTab(filePath string, lines []string) *tab {
+func newDiffTab(filePath string, lines []string, onAccept func(string), onReject func()) *tab {
 	return &tab{
 		kind:         diffTab,
 		filePath:     filePath,
 		lines:        lines,
 		commentInput: newTextarea(),
+		diff: &diffState{
+			onAccept: onAccept,
+			onReject: onReject,
+		},
 	}
+}
+
+// rejectAndClear calls onReject if set and nils the diff state.
+func (t *tab) rejectAndClear() {
+	if t.diff != nil && t.diff.onReject != nil {
+		t.diff.onReject()
+	}
+	t.diff = nil
 }
 
 // findComment returns the index of the comment covering line, or -1.
