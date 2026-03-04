@@ -372,6 +372,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Accept/reject use enter/esc, so they must be checked
+		// before the general Cancel/Enter handlers below.
+		if hasTab && t.diff != nil && m.focusPane == paneEditor {
+			switch {
+			case key.Matches(msg, m.keys.AcceptDiff):
+				contents := strings.Join(t.lines, "\n")
+				t.diff.onAccept(contents)
+				t.diff = nil
+				m.closeTab(m.activeTab)
+				return m, nil
+			case key.Matches(msg, m.keys.RejectDiff):
+				t.rejectAndClear()
+				m.closeTab(m.activeTab)
+				return m, nil
+			}
+		}
+
 		switch {
 		case key.Matches(msg, m.keys.Cancel):
 			if hasTab && t.selecting {
@@ -550,18 +567,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveToParagraphBoundary(dirUp)
 		case key.Matches(msg, m.keys.BlockDown):
 			m.moveToParagraphBoundary(dirDown)
-		case key.Matches(msg, m.keys.AcceptDiff):
-			if hasTab && t.diff != nil && m.focusPane == paneEditor {
-				contents := strings.Join(t.lines, "\n")
-				t.diff.onAccept(contents)
-				t.diff = nil
-				m.closeTab(m.activeTab)
-			}
-		case key.Matches(msg, m.keys.RejectDiff):
-			if hasTab && t.diff != nil && m.focusPane == paneEditor {
-				t.rejectAndClear()
-				m.closeTab(m.activeTab)
-			}
 		case key.Matches(msg, m.keys.CloseTab):
 			if len(m.tabs) > 0 {
 				m.closeTab(m.activeTab)

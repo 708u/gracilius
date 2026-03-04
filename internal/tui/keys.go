@@ -123,12 +123,12 @@ func newKeyMap() keyMap {
 			key.WithHelp("o", "open file"),
 		),
 		AcceptDiff: key.NewBinding(
-			key.WithKeys("a"),
-			key.WithHelp("a", "accept diff"),
+			key.WithKeys("enter"),
+			key.WithHelp("Enter", "accept diff"),
 		),
 		RejectDiff: key.NewBinding(
-			key.WithKeys("x"),
-			key.WithHelp("x", "reject diff"),
+			key.WithKeys("esc"),
+			key.WithHelp("Esc", "reject diff"),
 		),
 	}
 }

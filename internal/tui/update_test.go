@@ -44,7 +44,7 @@ func TestAcceptDiff_CallsOnAccept(t *testing.T) {
 	m.activeTab = 0
 	m.focusPane = paneEditor
 
-	msg := tea.KeyPressMsg(tea.Key{Code: 'a', Text: "a"})
+	msg := tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})
 	m.Update(msg)
 
 	if !accepted {
@@ -71,7 +71,7 @@ func TestRejectDiff_CallsOnReject(t *testing.T) {
 	m.activeTab = 0
 	m.focusPane = paneEditor
 
-	msg := tea.KeyPressMsg(tea.Key{Code: 'x', Text: "x"})
+	msg := tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape})
 	m.Update(msg)
 
 	if !rejected {
@@ -139,7 +139,7 @@ func TestAcceptDiff_NotCalledOnFileTab(t *testing.T) {
 	m.activeTab = 0
 	m.focusPane = paneEditor
 
-	msg := tea.KeyPressMsg(tea.Key{Code: 'a', Text: "a"})
+	msg := tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})
 	m.Update(msg)
 
 	if len(m.tabs) != 1 {
