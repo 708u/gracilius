@@ -13,6 +13,8 @@ var separatorBorder = lipgloss.Border{
 	Top: "\u2500",
 }
 
+const emptyStateMsg = "Select a file to view"
+
 var (
 	styleComment   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	styleInput     = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
@@ -181,7 +183,7 @@ func (m *Model) renderFooter() string {
 				fmt.Fprintf(&sb, "Cursor: %d:%d",
 					t.cursorLine+1, t.cursorChar+1)
 			default:
-				sb.WriteString("Select a file to view")
+				sb.WriteString(emptyStateMsg)
 			}
 		case m.treeCursor < len(m.fileTree):
 			entry := m.fileTree[m.treeCursor]
@@ -257,7 +259,7 @@ func (m *Model) renderEditor(lo layout) []string {
 	var mapping []visualEntry
 
 	if !hasTab || len(t.lines) == 0 {
-		emptyMsg := "No file selected"
+		emptyMsg := emptyStateMsg
 		lines = append(lines, padRight(emptyMsg, width))
 		for len(lines) < height {
 			lines = append(lines, padRight("", width))

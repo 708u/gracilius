@@ -34,7 +34,7 @@ func newKeyMap() keyMap {
 	return keyMap{
 		Quit: key.NewBinding(
 			key.WithKeys("ctrl+c"),
-			key.WithHelp("Ctrl+C×2", "quit"),
+			key.WithHelp("Ctrl+C (2x)", "quit"),
 		),
 		Cancel: key.NewBinding(
 			key.WithKeys("esc"),
