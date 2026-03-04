@@ -465,7 +465,8 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		close(pingDone)
 		_ = conn.Close()
-		// Resolve pending openDiff channels so waiting goroutines can exit.
+		// Reject pending diffs so stale send callbacks are not called
+		// after the connection is closed.
 		s.handler.RejectAllPendingDiffs()
 		s.mu.Lock()
 		for i, c := range s.clients {
