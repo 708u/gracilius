@@ -263,6 +263,7 @@ func (m *Model) renderEditor(lo layout) []string {
 	width := lo.editorWidth
 	height := lo.contentHeight
 	lnw := lo.lineNumWidth
+	textWidth := lo.textWidth
 
 	lines := make([]string, 0, height)
 	var mapping []visualEntry
@@ -288,15 +289,18 @@ func (m *Model) renderEditor(lo layout) []string {
 	for i := offset; i < len(t.lines) && len(lines) < height; i++ {
 		lineContent := t.lines[i]
 
-		var sb strings.Builder
-
+		// Build line number prefix
+		var lnSB strings.Builder
 		if t.findComment(i) >= 0 {
-			sb.WriteString(styleComment.Render("\u258e"))
-			fmt.Fprintf(&sb, barFmt, i+1)
+			lnSB.WriteString(styleComment.Render("\u258e"))
+			fmt.Fprintf(&lnSB, barFmt, i+1)
 		} else {
-			fmt.Fprintf(&sb, normalFmt, i+1)
+			fmt.Fprintf(&lnSB, normalFmt, i+1)
 		}
+		lineNumStr := lnSB.String()
 
+		// Build content (without line number)
+		var contentSB strings.Builder
 		isCursorLine := m.focusPane == paneEditor && i == t.cursorLine
 		isSelected := m.focusPane == paneEditor && t.selecting && i >= startLine && i <= endLine
 
@@ -305,38 +309,65 @@ func (m *Model) renderEditor(lo layout) []string {
 			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
 			if sc == ec {
 				if hl := t.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithCursor(&sb, hl.runs, t.cursorChar)
+					renderStyledLineWithCursor(&contentSB, hl.runs, t.cursorChar)
 				} else {
-					renderLineWithCursor(&sb, lineContent, t.cursorChar)
+					renderLineWithCursor(&contentSB, lineContent, t.cursorChar)
 				}
 			} else if hl := t.getHighlightedLine(i); hl != nil {
-				renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
+				renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec)
 			} else {
-				renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
+				renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec)
 			}
 		case isCursorLine:
 			if hl := t.getHighlightedLine(i); hl != nil {
-				renderStyledLineWithCursor(&sb, hl.runs, t.cursorChar)
+				renderStyledLineWithCursor(&contentSB, hl.runs, t.cursorChar)
 			} else {
-				renderLineWithCursor(&sb, lineContent, t.cursorChar)
+				renderLineWithCursor(&contentSB, lineContent, t.cursorChar)
 			}
 		case isSelected:
 			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
 			if hl := t.getHighlightedLine(i); hl != nil {
-				renderStyledLineWithSelection(&sb, hl.runs, sc, ec)
+				renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec)
 			} else {
-				renderLineWithCursorAndSelection(&sb, lineContent, sc, ec)
+				renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec)
 			}
 		default:
 			if hl := t.getHighlightedLine(i); hl != nil {
-				sb.WriteString(hl.rendered)
+				contentSB.WriteString(hl.rendered)
 			} else {
-				sb.WriteString(expandTabs(lineContent))
+				contentSB.WriteString(expandTabs(lineContent))
 			}
 		}
 
-		lines = append(lines, sb.String())
-		mapping = append(mapping, visualEntry{logicalLine: i})
+		content := contentSB.String()
+
+		// Word wrap and emit visual rows
+		bp := wrapBreakpoints(lineContent, textWidth)
+		if bp != nil {
+			wrapped := ansi.Hardwrap(content, textWidth, true)
+			segments := strings.Split(wrapped, "\n")
+			for si, seg := range segments {
+				if len(lines) >= height {
+					break
+				}
+				wrapOff := 0
+				if si > 0 {
+					if si-1 < len(bp) {
+						wrapOff = bp[si-1]
+					}
+					lines = append(lines, lnPad+ansiReset+seg)
+				} else {
+					lines = append(lines, lineNumStr+seg)
+				}
+				mapping = append(mapping, visualEntry{
+					logicalLine: i,
+					wrapOffset:  wrapOff,
+				})
+			}
+		} else {
+			lines = append(lines, lineNumStr+content)
+			mapping = append(mapping, visualEntry{logicalLine: i})
+		}
 
 		if t.inputMode && i == t.inputEnd {
 			label := fmt.Sprintf("comment (%s: save, Esc: cancel)",

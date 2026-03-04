@@ -198,7 +198,7 @@ func (t *tab) resetEditorState() {
 }
 
 // adjustScrollForCursor adjusts the scroll so the cursor stays visible.
-func (t *tab) adjustScrollForCursor(contentHeight int) {
+func (t *tab) adjustScrollForCursor(contentHeight, textWidth int) {
 	margin := contentHeight / 5
 
 	// Cursor above visible area (logical check is sufficient)
@@ -207,11 +207,11 @@ func (t *tab) adjustScrollForCursor(contentHeight int) {
 	}
 
 	// Cursor below visible area (visual-row aware)
-	if t.visualRowsBetween(t.scrollOffset, t.cursorLine) > contentHeight-margin {
-		t.scrollOffset = t.scrollOffsetFor(t.cursorLine, contentHeight-margin)
+	if t.visualRowsBetween(t.scrollOffset, t.cursorLine, textWidth) > contentHeight-margin {
+		t.scrollOffset = t.scrollOffsetFor(t.cursorLine, contentHeight-margin, textWidth)
 	}
 
-	maxOffset := t.maxScrollOffset(contentHeight)
+	maxOffset := t.maxScrollOffset(contentHeight, textWidth)
 	if t.scrollOffset > maxOffset {
 		t.scrollOffset = maxOffset
 	}
@@ -221,9 +221,12 @@ func (t *tab) adjustScrollForCursor(contentHeight int) {
 }
 
 // lineVisualRows returns the number of visual rows a single line occupies,
-// including any comment block or active input attached to it.
-func (t *tab) lineVisualRows(line int) int {
+// including word-wrap rows and any comment block or active input attached to it.
+func (t *tab) lineVisualRows(line, textWidth int) int {
 	rows := 1
+	if textWidth > 0 && line >= 0 && line < len(t.lines) {
+		rows = countWraps(t.lines[line], textWidth)
+	}
 	if c := t.commentEndingAt(line); c != nil {
 		rows += commentDisplayRows(c.text)
 	}
@@ -235,20 +238,20 @@ func (t *tab) lineVisualRows(line int) int {
 
 // visualRowsBetween returns the total visual rows from line 'from'
 // to line 'to' inclusive.
-func (t *tab) visualRowsBetween(from, to int) int {
+func (t *tab) visualRowsBetween(from, to, textWidth int) int {
 	rows := 0
 	for i := from; i <= to && i < len(t.lines); i++ {
-		rows += t.lineVisualRows(i)
+		rows += t.lineVisualRows(i, textWidth)
 	}
 	return rows
 }
 
 // scrollOffsetFor finds the scroll offset (logical line) where targetLine
 // appears at approximately targetVisualRow from the top of the viewport.
-func (t *tab) scrollOffsetFor(targetLine, targetVisualRow int) int {
+func (t *tab) scrollOffsetFor(targetLine, targetVisualRow, textWidth int) int {
 	rows := 0
 	for i := targetLine; i >= 0; i-- {
-		rows += t.lineVisualRows(i)
+		rows += t.lineVisualRows(i, textWidth)
 		if rows >= targetVisualRow {
 			return i
 		}
@@ -258,6 +261,6 @@ func (t *tab) scrollOffsetFor(targetLine, targetVisualRow int) int {
 
 // maxScrollOffset returns the largest valid scrollOffset (logical line)
 // such that rendering from that line fills at least contentHeight visual rows.
-func (t *tab) maxScrollOffset(contentHeight int) int {
-	return t.scrollOffsetFor(len(t.lines)-1, contentHeight)
+func (t *tab) maxScrollOffset(contentHeight, textWidth int) int {
+	return t.scrollOffsetFor(len(t.lines)-1, contentHeight, textWidth)
 }

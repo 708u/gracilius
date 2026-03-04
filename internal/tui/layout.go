@@ -45,6 +45,7 @@ type layout struct {
 	editorStartX  int // treeWidth + separatorWidth
 	editorWidth   int // total width - treeWidth - separatorWidth
 	lineNumWidth  int // line number gutter width (digits + 1 space)
+	textWidth     int // editorWidth - lineNumWidth
 }
 
 // getTreeWidth returns the tree pane width.
@@ -84,11 +85,13 @@ func (m *Model) computeLayout() layout {
 	if ok && len(t.lines) > 0 {
 		lnw = lineNumWidthFor(len(t.lines))
 	}
+	ew := m.width - tw - separatorWidth
 	return layout{
 		contentHeight: m.getContentHeight(),
 		treeWidth:     tw,
 		editorStartX:  tw + separatorWidth,
-		editorWidth:   m.width - tw - separatorWidth,
+		editorWidth:   ew,
 		lineNumWidth:  lnw,
+		textWidth:     ew - lnw,
 	}
 }
