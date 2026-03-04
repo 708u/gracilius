@@ -78,8 +78,8 @@ func lineNumWidthFor(n int) int {
 func (m *Model) computeLayout() layout {
 	tw := m.getTreeWidth()
 	lnw := minLineNumberWidth
-	t := m.activeTabState()
-	if len(t.lines) > 0 {
+	t, ok := m.activeTabState()
+	if ok && len(t.lines) > 0 {
 		lnw = lineNumWidthFor(len(t.lines))
 	}
 	return layout{
