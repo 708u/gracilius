@@ -18,6 +18,7 @@ const (
 
 // comment holds a single inline comment attached to a line range.
 type comment struct {
+	id        string
 	startLine int
 	endLine   int
 	text      string

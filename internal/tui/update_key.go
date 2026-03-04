@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -9,6 +10,8 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/commentstore"
+	"github.com/google/uuid"
 )
 
 // handleKeyPress dispatches key press events to the appropriate handler.
@@ -68,16 +71,46 @@ func (m *Model) handleKeyInputMode(t *tab, msg tea.KeyPressMsg) (tea.Model, tea.
 	case isSubmit:
 		val := t.commentInput.Value()
 		idx := t.findComment(t.inputStart)
+		var oldID string
 		if idx >= 0 {
+			oldID = t.comments[idx].id
 			t.comments = slices.Delete(t.comments, idx, idx+1)
 		}
 		if val != "" {
-			t.comments = append(t.comments, comment{
+			id, err := uuid.NewV7()
+			if err != nil {
+				log.Printf("Failed to generate UUID: %v", err)
+			}
+			c := comment{
+				id:        id.String(),
 				startLine: t.inputStart,
 				endLine:   t.inputEnd,
 				text:      val,
-			})
+			}
+			t.comments = append(t.comments, c)
 			m.notifyComment(t.inputStart, t.inputEnd, val)
+			sc := commentstore.Comment{
+				ID:        c.id,
+				FilePath:  t.filePath,
+				StartLine: c.startLine,
+				EndLine:   c.endLine,
+				Text:      c.text,
+				Snippet:   t.captureSnippet(t.inputStart, t.inputEnd),
+				CreatedAt: time.Now(),
+			}
+			if oldID != "" {
+				if err := m.commentStore.Replace(oldID, sc); err != nil {
+					log.Printf("Failed to update comment: %v", err)
+				}
+			} else {
+				if err := m.commentStore.Add(sc); err != nil {
+					log.Printf("Failed to persist comment: %v", err)
+				}
+			}
+		} else if oldID != "" {
+			if err := m.commentStore.Delete(oldID); err != nil {
+				log.Printf("Failed to delete comment: %v", err)
+			}
 		}
 		t.inputMode = false
 		t.commentInput.Reset()
@@ -95,6 +128,15 @@ func (m *Model) handleKeyInputMode(t *tab, msg tea.KeyPressMsg) (tea.Model, tea.
 		return m, cmd
 	}
 	return m, nil
+}
+
+// captureSnippet returns the text of lines[startLine:endLine+1].
+func (t *tab) captureSnippet(startLine, endLine int) string {
+	if startLine < 0 || startLine >= len(t.lines) {
+		return ""
+	}
+	end := min(endLine+1, len(t.lines))
+	return strings.Join(t.lines[startLine:end], "\n")
 }
 
 // handleKeyOpenFile handles key events when the open-file overlay is active.
@@ -294,6 +336,11 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.ClearAll):
 		if hasTab && m.focusPane == paneEditor {
 			t.comments = nil
+			if t.filePath != "" {
+				if err := m.commentStore.DeleteByFile(t.filePath); err != nil {
+					log.Printf("Failed to clear comments from store: %v", err)
+				}
+			}
 		}
 	case key.Matches(msg, m.keys.NextTab):
 		if len(m.tabs) > 0 {

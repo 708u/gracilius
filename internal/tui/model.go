@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"charm.land/bubbles/v2/help"
+	"github.com/708u/gracilius/internal/commentstore"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -109,6 +110,9 @@ type Model struct {
 
 	// keyboard enhancement (Kitty protocol)
 	enhancedKeyboard bool
+
+	// comment persistence
+	commentStore *commentstore.Store
 }
 
 // lineKind distinguishes the type of a visual row.
@@ -201,24 +205,30 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 		return nil, fmt.Errorf("resolve root directory: %w", err)
 	}
 
+	store, err := commentstore.NewStore(absRootDir)
+	if err != nil {
+		return nil, fmt.Errorf("create comment store: %w", err)
+	}
+
 	ft := buildFileTree(absRootDir)
 
 	im := detectIconMode()
 	return &Model{
-		server:     srv,
-		rootDir:    absRootDir,
-		fileTree:   ft,
-		treeCursor: 0,
-		focusPane:  paneTree,
-		watcher:    watcher,
-		dirWatcher: dirWatcher,
-		tabs:       []*tab{},
-		treeWidth:  30,
-		keys:       newKeyMap(),
-		help:       help.New(),
-		iconMode:   im,
-		openFile:   newOpenFileOverlay(im, darkTheme),
-		isDark:     true,
-		theme:      darkTheme,
+		server:       srv,
+		rootDir:      absRootDir,
+		fileTree:     ft,
+		treeCursor:   0,
+		focusPane:    paneTree,
+		watcher:      watcher,
+		dirWatcher:   dirWatcher,
+		tabs:         []*tab{},
+		treeWidth:    30,
+		keys:         newKeyMap(),
+		help:         help.New(),
+		iconMode:     im,
+		openFile:     newOpenFileOverlay(im, darkTheme),
+		isDark:       true,
+		theme:        darkTheme,
+		commentStore: store,
 	}, nil
 }
