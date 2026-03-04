@@ -341,6 +341,12 @@ func (m *Model) renderEditor(lo layout) []string {
 
 		content := contentSB.String()
 
+		// Compute selection range for wrap continuation segments.
+		var selSC, selEC int
+		if isSelected {
+			selSC, selEC = selRange(i, startLine, endLine, startChar, endChar, lineContent)
+		}
+
 		// Word wrap and emit visual rows
 		bp := wrapBreakpoints(lineContent, textWidth)
 		if bp != nil {
@@ -355,7 +361,11 @@ func (m *Model) renderEditor(lo layout) []string {
 					if si-1 < len(bp) {
 						wrapOff = bp[si-1]
 					}
-					lines = append(lines, padRight(lnPad+ansiReset+seg+ansiReset, width))
+					prefix := ansiReset
+					if isSelected && wrapOff >= selSC && wrapOff < selEC {
+						prefix = ansiReset + activeTheme.selectionBgSeq()
+					}
+					lines = append(lines, padRight(lnPad+prefix+seg+ansiReset, width))
 				} else {
 					lines = append(lines, padRight(lineNumStr+seg+ansiReset, width))
 				}
