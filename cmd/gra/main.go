@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"syscall"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/708u/gracilius/internal/server"
 	"github.com/708u/gracilius/internal/tui"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
 )
@@ -114,8 +114,6 @@ func run() int {
 		return exitErr
 	}
 	p := tea.NewProgram(m,
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
 		tea.WithContext(ctx),
 	)
 

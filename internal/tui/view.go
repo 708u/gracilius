@@ -5,7 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -28,14 +29,23 @@ func styleTreeCursor() lipgloss.Style {
 	return lipgloss.NewStyle().Background(lipgloss.Color(activeTheme.listSelectionBg))
 }
 
+// newView returns a tea.View with the base terminal settings.
+func newView(content string) tea.View {
+	var v tea.View
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	v.SetContent(content)
+	return v
+}
+
 // View implements tea.Model.
-func (m *Model) View() string {
+func (m *Model) View() tea.View {
 	if m.err != nil {
-		return fmt.Sprintf("Error: %v\n\nPress Ctrl+C to quit.", m.err)
+		return newView(fmt.Sprintf("Error: %v\n\nPress Ctrl+C to quit.", m.err))
 	}
 
 	if m.width == 0 || m.height == 0 {
-		return ""
+		return newView("")
 	}
 
 	t, hasTab := m.activeTabState()
@@ -87,10 +97,9 @@ func (m *Model) View() string {
 	)
 
 	if m.openFile.active {
-		return m.openFile.overlay(base, m.width, m.height)
+		return newView(m.openFile.overlay(base, m.width, m.height))
 	}
-
-	return base
+	return newView(base)
 }
 
 // renderTabBar generates the tab bar (2 lines: labels + underline).
@@ -163,7 +172,7 @@ func (m *Model) renderFooter() string {
 		fmt.Fprintf(&sb, "[Comment] %s: save, Esc: cancel",
 			m.keys.CommentSubmit.Help().Key)
 	} else {
-		m.help.Width = m.width
+		m.help.SetWidth(m.width)
 		sb.WriteString(m.help.View(m.contextKeyMap()))
 		sb.WriteString("\n")
 
