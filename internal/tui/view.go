@@ -361,9 +361,9 @@ func (m *Model) renderEditor(lo layout) []string {
 					if si-1 < len(bp) {
 						wrapOff = bp[si-1]
 					}
-					prefix := ansiReset
+					prefix := ""
 					if isSelected && wrapOff >= selSC && wrapOff < selEC {
-						prefix = ansiReset + activeTheme.selectionBgSeq()
+						prefix = activeTheme.selectionBgSeq()
 					}
 					lines = append(lines, padRight(lnPad+prefix+seg+ansiReset, width))
 				} else {
