@@ -304,65 +304,79 @@ func (m *Model) renderEditor(lo layout) []string {
 		}
 		lineNumStr := lnSB.String()
 
-		// Build content (without line number)
-		var contentSB strings.Builder
+		// Build content and emit visual rows
 		isCursorLine := m.focusPane == paneEditor && i == t.cursorLine
 		isSelected := m.focusPane == paneEditor && t.selecting && i >= startLine && i <= endLine
 
-		switch {
-		case isCursorLine && isSelected:
-			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
-			if sc == ec {
-				if hl := t.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithCursor(&contentSB, hl.runs, t.cursorChar)
-				} else {
-					renderLineWithCursor(&contentSB, lineContent, t.cursorChar)
-				}
-			} else if hl := t.getHighlightedLine(i); hl != nil {
-				renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec, selBgSeq)
-			} else {
-				renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec, selBgSeq)
-			}
-		case isCursorLine:
-			if hl := t.getHighlightedLine(i); hl != nil {
-				renderStyledLineWithCursor(&contentSB, hl.runs, t.cursorChar)
-			} else {
-				renderLineWithCursor(&contentSB, lineContent, t.cursorChar)
-			}
-		case isSelected:
-			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
-			if hl := t.getHighlightedLine(i); hl != nil {
-				renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec, selBgSeq)
-			} else {
-				renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec, selBgSeq)
-			}
-		default:
-			if hl := t.getHighlightedLine(i); hl != nil {
-				contentSB.WriteString(hl.rendered)
-			} else {
-				contentSB.WriteString(expandTabs(lineContent))
-			}
-		}
-
-		content := contentSB.String()
-
-		// Word wrap and emit visual rows
 		bp := wrapBreakpoints(lineContent, textWidth)
 		if bp != nil {
-			wrapped := ansi.Hardwrap(content, textWidth, true)
-			segments := strings.Split(wrapped, "\n")
-			for si, seg := range segments {
+			// Per-segment rendering: split runs at wrap breakpoints,
+			// then apply cursor/selection per segment independently.
+			var runs []styledRun
+			if hl := t.getHighlightedLine(i); hl != nil {
+				runs = hl.runs
+			} else {
+				runs = []styledRun{{Text: lineContent}}
+			}
+
+			var sc, ec int
+			if isSelected {
+				sc, ec = selRange(i, startLine, endLine, startChar, endChar, lineContent)
+			}
+
+			segRunsList := splitRunsAtBreakpoints(runs, bp)
+			for si, segRuns := range segRunsList {
 				if len(lines) >= height {
 					break
 				}
+
 				wrapOff := 0
-				if si > 0 {
-					if si-1 < len(bp) {
-						wrapOff = bp[si-1]
+				if si > 0 && si-1 < len(bp) {
+					wrapOff = bp[si-1]
+				}
+
+				segLen := 0
+				for _, r := range segRuns {
+					segLen += len([]rune(r.Text))
+				}
+
+				// Determine cursor offset within this segment (-1 = not here).
+				cursorOff := -1
+				if isCursorLine {
+					lastSeg := si == len(segRunsList)-1
+					if t.cursorChar >= wrapOff && (t.cursorChar < wrapOff+segLen || lastSeg) {
+						cursorOff = t.cursorChar - wrapOff
 					}
-					lines = append(lines, lnPad+ansiReset+seg)
+				}
+
+				// Clamp selection range to this segment.
+				segSC, segEC := 0, 0
+				if isSelected && sc < ec {
+					segSC = max(0, sc-wrapOff)
+					segEC = min(segLen, ec-wrapOff)
+					if segSC >= segEC {
+						segSC, segEC = 0, 0
+					}
+				}
+
+				// Render segment content.
+				var segSB strings.Builder
+				switch {
+				case segSC < segEC:
+					renderStyledLineWithSelection(&segSB, segRuns, segSC, segEC, selBgSeq)
+				case cursorOff >= 0:
+					renderStyledLineWithCursor(&segSB, segRuns, cursorOff)
+				default:
+					for _, r := range segRuns {
+						writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
+					}
+				}
+
+				seg := segSB.String()
+				if si > 0 {
+					lines = append(lines, padRight(lnPad+seg+ansiReset, width))
 				} else {
-					lines = append(lines, lineNumStr+seg)
+					lines = append(lines, padRight(lineNumStr+seg+ansiReset, width))
 				}
 				mapping = append(mapping, visualEntry{
 					logicalLine: i,
@@ -370,7 +384,46 @@ func (m *Model) renderEditor(lo layout) []string {
 				})
 			}
 		} else {
-			lines = append(lines, lineNumStr+content)
+			// Non-wrapped: build full content then emit.
+			var contentSB strings.Builder
+
+			switch {
+			case isCursorLine && isSelected:
+				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
+				if sc == ec {
+					if hl := t.getHighlightedLine(i); hl != nil {
+						renderStyledLineWithCursor(&contentSB, hl.runs, t.cursorChar)
+					} else {
+						renderLineWithCursor(&contentSB, lineContent, t.cursorChar)
+					}
+				} else if hl := t.getHighlightedLine(i); hl != nil {
+					renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec, selBgSeq)
+				} else {
+					renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec, selBgSeq)
+				}
+			case isCursorLine:
+				if hl := t.getHighlightedLine(i); hl != nil {
+					renderStyledLineWithCursor(&contentSB, hl.runs, t.cursorChar)
+				} else {
+					renderLineWithCursor(&contentSB, lineContent, t.cursorChar)
+				}
+			case isSelected:
+				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
+				if hl := t.getHighlightedLine(i); hl != nil {
+					renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec, selBgSeq)
+				} else {
+					renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec, selBgSeq)
+				}
+			default:
+				if hl := t.getHighlightedLine(i); hl != nil {
+					contentSB.WriteString(hl.rendered)
+				} else {
+					contentSB.WriteString(expandTabs(lineContent))
+				}
+			}
+
+			content := contentSB.String()
+			lines = append(lines, padRight(lineNumStr+content+ansiReset, width))
 			mapping = append(mapping, visualEntry{logicalLine: i})
 		}
 
