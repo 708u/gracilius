@@ -275,12 +275,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		lo := m.computeLayout()
 		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
-			if msg.Button == tea.MouseWheelUp {
+			switch msg.Button {
+			case tea.MouseWheelUp:
 				t.scrollOffset -= scrollAmount
 				if t.scrollOffset < 0 {
 					t.scrollOffset = 0
 				}
-			} else if msg.Button == tea.MouseWheelDown {
+			case tea.MouseWheelDown:
 				t.scrollOffset += scrollAmount
 				maxOffset := t.maxScrollOffset(lo.contentHeight)
 				if t.scrollOffset > maxOffset {
