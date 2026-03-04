@@ -97,10 +97,14 @@ func (m *Model) View() tea.View {
 	)
 
 	if m.openFile.active {
-		return newView(m.openFile.overlay(base, m.width, m.height))
+		v := newView(m.openFile.overlay(base, m.width, m.height))
+		v.Cursor = m.openFile.cursorPos(m.width, m.height)
+		return v
 	}
 	v := newView(base)
-	if hasTab && !t.inputMode {
+	if hasTab && t.inputMode {
+		v.Cursor = m.commentCursorScreenPos(lo)
+	} else if hasTab {
 		if x, y, ok := m.cursorScreenPos(lo); ok {
 			v.Cursor = tea.NewCursor(x, y)
 		}
@@ -161,6 +165,37 @@ func (m *Model) cursorScreenPos(lo layout) (x, y int, visible bool) {
 			t.cursorChar,
 		)
 	return x, y, true
+}
+
+// commentCursorScreenPos computes the screen-space cursor for the
+// comment textarea by finding its input block in lastMapping.
+func (m *Model) commentCursorScreenPos(lo layout) *tea.Cursor {
+	t, ok := m.activeTabState()
+	if !ok || !t.inputMode {
+		return nil
+	}
+	c := t.commentInput.Cursor()
+	if c == nil {
+		return nil
+	}
+
+	// Find the first lineKindInput entry in lastMapping.
+	blockStart := -1
+	for i, ve := range m.lastMapping {
+		if ve.kind == lineKindInput {
+			blockStart = i
+			break
+		}
+	}
+	if blockStart < 0 {
+		return nil
+	}
+
+	// renderBlock layout: row 0 = top border, row 1+ = body.
+	// Body rows have "│ " (2 display chars) prefix.
+	x := lo.editorStartX + lo.lineNumWidth + 2 + c.X
+	y := contentStartY + blockStart + 1 + c.Y
+	return tea.NewCursor(x, y)
 }
 
 // renderTabBar generates the tab bar (2 lines: labels + underline).

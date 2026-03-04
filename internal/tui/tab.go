@@ -58,6 +58,7 @@ func newTextarea() textarea.Model {
 	ta.SetHeight(3)
 	ta.ShowLineNumbers = false
 	ta.Prompt = ""
+	ta.SetVirtualCursor(false)
 	return ta
 }
 

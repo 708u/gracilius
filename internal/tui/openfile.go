@@ -116,6 +116,7 @@ func newOpenFileOverlay(mode iconMode, theme themeConfig) openFileOverlay {
 	ti := textinput.New()
 	ti.Placeholder = "Open file..."
 	ti.Prompt = "⌕ "
+	ti.SetVirtualCursor(false)
 
 	return openFileOverlay{list: l, input: ti, iconMode: mode, theme: theme}
 }
@@ -335,6 +336,17 @@ func (s *openFileOverlay) selectedPath() string {
 }
 
 // overlay renders the open-file overlay on top of the background view.
+// cursorPos returns the screen-space cursor for the overlay's text input.
+func (s *openFileOverlay) cursorPos(width, height int) *tea.Cursor {
+	c := s.input.Cursor()
+	if c == nil {
+		return nil
+	}
+	g := s.computeLayout(width, height)
+	// offset by box border (1) + padding (1)
+	return tea.NewCursor(g.startX+2+c.X, g.startY+1+c.Y)
+}
+
 func (s *openFileOverlay) overlay(bg string, width, height int) string {
 	g := s.computeLayout(width, height)
 
