@@ -11,8 +11,9 @@ import (
 func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
 	if t, ok := m.activeTabState(); ok {
 		t.lines = msg.lines
+		t.syncContent(msg.lines)
 		t.highlightedLines = highlightFile(
-			t.filePath, strings.Join(msg.lines, "\n"),
+			t.filePath, strings.Join(msg.lines, "\n"), m.theme,
 		)
 		if t.cursorLine >= len(t.lines) {
 			t.cursorLine = max(0, len(t.lines)-1)
@@ -41,8 +42,9 @@ func (m *Model) handleTreeChanged() (tea.Model, tea.Cmd) {
 // handleOpenDiff opens a new diff tab.
 func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 	lines := splitLines([]byte(msg.Contents))
-	dt := newDiffTab(msg.FilePath, lines)
-	dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents)
+	dt := newDiffTab(msg.FilePath, lines, msg.Accept, msg.Reject)
+	dt.syncContent(lines)
+	dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents, m.theme)
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1
 	m.focusPane = paneEditor
@@ -82,6 +84,11 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	maxWidth := m.width * maxTreeWidthPercent / 100
 	if m.treeWidth > maxWidth {
 		m.treeWidth = maxWidth
+	}
+	lo := m.computeLayout()
+	for _, tab := range m.tabs {
+		tab.vp.SetWidth(lo.editorWidth)
+		tab.vp.SetHeight(lo.contentHeight)
 	}
 	if t, ok := m.activeTabState(); ok && t.filePath != "" && len(t.lines) > 0 && m.focusPane == paneEditor {
 		m.notifySelectionChanged()

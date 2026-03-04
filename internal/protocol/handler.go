@@ -3,6 +3,7 @@ package protocol
 import (
 	"encoding/json"
 	"net/url"
+	"sync"
 )
 
 const defaultProtocolVersion = "2025-11-25"
@@ -43,8 +44,13 @@ type InitializeResult struct {
 	ServerInfo      ServerInfo   `json:"serverInfo"`
 }
 
-// Capabilities describes server capabilities (empty for MCP compatibility).
-type Capabilities struct{}
+// ToolsCapability signals that the server supports tools.
+type ToolsCapability struct{}
+
+// Capabilities describes server capabilities.
+type Capabilities struct {
+	Tools *ToolsCapability `json:"tools,omitempty"`
+}
 
 // ServerInfo describes the server.
 type ServerInfo struct {
@@ -81,7 +87,8 @@ type OpenDiffArgs struct {
 }
 
 // OpenDiffCallback is called when openDiff is received.
-type OpenDiffCallback func(filePath string, contents string)
+// accept and reject are bound to the DiffResponder's methods.
+type OpenDiffCallback func(filePath, contents, tabName string, accept func(string), reject func())
 
 // CloseTabCallback is called when close_tab is received.
 type CloseTabCallback func()
@@ -116,18 +123,63 @@ func NewMCPResultEmpty() MCPResult {
 	}
 }
 
+const (
+	diffResultAccepted = "FILE_SAVED"
+	diffResultRejected = "DIFF_REJECTED"
+)
+
+// DiffResponder holds the send function and request ID for a pending
+// diff response. Accept or Reject sends the response exactly once.
+type DiffResponder struct {
+	send    func(*Response)
+	id      json.RawMessage
+	tabName string
+	once    sync.Once
+	cleanup func()
+}
+
+// respond sends a two-element MCP result exactly once, then runs cleanup.
+func (r *DiffResponder) respond(status, payload string) {
+	r.once.Do(func() {
+		result := MCPResult{
+			Content: []MCPContent{
+				{Type: "text", Text: status},
+				{Type: "text", Text: payload},
+			},
+		}
+		r.send(NewResponse(r.id, result))
+		if r.cleanup != nil {
+			r.cleanup()
+		}
+	})
+}
+
+// Accept sends a FILE_SAVED response with saved file contents.
+func (r *DiffResponder) Accept(savedContents string) {
+	r.respond(diffResultAccepted, savedContents)
+}
+
+// Reject sends a DIFF_REJECTED response with the tab name.
+func (r *DiffResponder) Reject() {
+	r.respond(diffResultRejected, r.tabName)
+}
+
 // Handler processes JSON-RPC messages.
 type Handler struct {
 	workspaceFolders []string
 	onOpenDiff       OpenDiffCallback
 	onCloseTab       CloseTabCallback
 	onIdeConnected   IdeConnectedCallback
+
+	pendingDiffs map[string]*DiffResponder
+	diffMu       sync.Mutex
 }
 
 // NewHandler creates a new Handler.
 func NewHandler(workspaceFolders []string) *Handler {
 	return &Handler{
 		workspaceFolders: workspaceFolders,
+		pendingDiffs:     make(map[string]*DiffResponder),
 	}
 }
 
@@ -146,35 +198,41 @@ func (h *Handler) SetIdeConnectedCallback(cb IdeConnectedCallback) {
 	h.onIdeConnected = cb
 }
 
-// HandleMessage processes a JSON-RPC request and returns a response.
-func (h *Handler) HandleMessage(req *Request) *Response {
+// RejectAllPendingDiffs rejects all pending diff responses.
+func (h *Handler) RejectAllPendingDiffs() {
+	h.diffMu.Lock()
+	pending := h.pendingDiffs
+	h.pendingDiffs = make(map[string]*DiffResponder)
+	h.diffMu.Unlock()
+
+	for _, r := range pending {
+		r.Reject()
+	}
+}
+
+// HandleMessage processes a JSON-RPC request.
+// send is called with the response when it is ready.
+// For blocking operations (openDiff), send is called asynchronously.
+func (h *Handler) HandleMessage(req *Request, send func(*Response)) {
 	switch req.Method {
 	case "initialize":
-		return h.handleInitialize(req)
+		send(h.handleInitialize(req))
 	case "tools/call":
-		return h.handleToolsCall(req)
+		h.handleToolsCall(req, send)
 	case "notifications/initialized":
-		// Received initialized notification from client (no response needed)
-		return nil
+		// no response
 	case "prompts/list":
-		// MCP prompts/list - return an empty list
-		return NewResponse(req.ID, map[string][]any{"prompts": {}})
+		send(NewResponse(req.ID, map[string][]any{"prompts": {}}))
 	case "tools/list":
-		// MCP tools/list - return tool list
-		return h.handleToolsList(req)
+		send(h.handleToolsList(req))
 	case "ide_connected":
-		// Claude Code notified that connection is established
 		if h.onIdeConnected != nil {
 			h.onIdeConnected()
 		}
-		return nil
 	default:
-		// If id is present, return a "method not found" error
-		// If id is absent, it is a notification so no response is needed
 		if len(req.ID) > 0 {
-			return NewErrorResponse(req.ID, codeMethodNotFound, "Method not found: "+req.Method)
+			send(NewErrorResponse(req.ID, codeMethodNotFound, "Method not found: "+req.Method))
 		}
-		return nil
 	}
 }
 
@@ -184,7 +242,6 @@ func (h *Handler) handleInitialize(req *Request) *Response {
 		json.Unmarshal(req.Params, &params) //nolint:errcheck // use default values on parse failure
 	}
 
-	// Default protocol version if not provided
 	protocolVersion := params.ProtocolVersion
 	if protocolVersion == "" {
 		protocolVersion = defaultProtocolVersion
@@ -192,7 +249,9 @@ func (h *Handler) handleInitialize(req *Request) *Response {
 
 	result := InitializeResult{
 		ProtocolVersion: protocolVersion,
-		Capabilities:    Capabilities{},
+		Capabilities: Capabilities{
+			Tools: &ToolsCapability{},
+		},
 		ServerInfo: ServerInfo{
 			Name:    "gracilius",
 			Version: "0.1.0",
@@ -202,7 +261,6 @@ func (h *Handler) handleInitialize(req *Request) *Response {
 }
 
 func (h *Handler) handleToolsList(req *Request) *Response {
-	// MCP-compliant tool list
 	tools := []toolDefinition{
 		{
 			Name:        "getWorkspaceFolders",
@@ -243,10 +301,11 @@ func fileURI(path string) string {
 	return (&url.URL{Scheme: "file", Path: path}).String()
 }
 
-func (h *Handler) handleToolsCall(req *Request) *Response {
+func (h *Handler) handleToolsCall(req *Request, send func(*Response)) {
 	var params ToolCallParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return NewErrorResponse(req.ID, codeInvalidParams, "Invalid params")
+		send(NewErrorResponse(req.ID, codeInvalidParams, "Invalid params"))
+		return
 	}
 
 	switch params.Name {
@@ -263,38 +322,60 @@ func (h *Handler) handleToolsCall(req *Request) *Response {
 				Path: path,
 			}
 		}
-		// MCP-compliant response format
 		result := WorkspaceFoldersResult{
 			Success:  true,
 			Folders:  folders,
 			RootPath: rootPath,
 		}
 		resultJSON, _ := json.Marshal(result)
-		return NewResponse(req.ID, NewMCPResult(string(resultJSON)))
+		send(NewResponse(req.ID, NewMCPResult(string(resultJSON))))
 	case "openDiff":
+		// Unlike other tools, openDiff does not call send here.
+		// send is stored in DiffResponder and called later when the
+		// user accepts or rejects the diff in the TUI. This blocks
+		// Claude Code until the user makes a decision.
 		var args OpenDiffArgs
 		if err := json.Unmarshal(params.Arguments, &args); err != nil {
-			return NewErrorResponse(req.ID, codeInvalidParams, "Invalid openDiff arguments")
+			send(NewErrorResponse(req.ID, codeInvalidParams, "Invalid openDiff arguments"))
+			return
 		}
+
+		idKey := string(req.ID)
+		responder := &DiffResponder{
+			send:    send,
+			id:      req.ID,
+			tabName: args.TabName,
+			cleanup: func() {
+				h.diffMu.Lock()
+				delete(h.pendingDiffs, idKey)
+				h.diffMu.Unlock()
+			},
+		}
+
+		h.diffMu.Lock()
+		h.pendingDiffs[idKey] = responder
+		h.diffMu.Unlock()
+
 		if h.onOpenDiff != nil {
-			h.onOpenDiff(args.NewFilePath, args.NewFileContents)
+			h.onOpenDiff(args.NewFilePath, args.NewFileContents, args.TabName, responder.Accept, responder.Reject)
+		} else {
+			responder.Reject()
 		}
-		return NewResponse(req.ID, NewMCPResult("DIFF_SHOWN"))
 	case "getDiagnostics":
-		// MCP-compliant: return an empty content array
-		return NewResponse(req.ID, NewMCPResultEmpty())
+		send(NewResponse(req.ID, NewMCPResultEmpty()))
 	case "closeAllDiffTabs":
+		h.RejectAllPendingDiffs()
 		if h.onCloseTab != nil {
 			h.onCloseTab()
 		}
-		return NewResponse(req.ID, NewMCPResult("CLOSED_DIFF_TABS"))
+		send(NewResponse(req.ID, NewMCPResult("CLOSED_DIFF_TABS")))
 	case "close_tab":
-		// close_tab is called on cancel, so clear the preview
+		h.RejectAllPendingDiffs()
 		if h.onCloseTab != nil {
 			h.onCloseTab()
 		}
-		return NewResponse(req.ID, NewMCPResult("TAB_CLOSED"))
+		send(NewResponse(req.ID, NewMCPResult("TAB_CLOSED")))
 	default:
-		return NewErrorResponse(req.ID, codeMethodNotFound, "Method not found: "+params.Name)
+		send(NewErrorResponse(req.ID, codeMethodNotFound, "Method not found: "+params.Name))
 	}
 }

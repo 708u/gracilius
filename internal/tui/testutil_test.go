@@ -19,7 +19,7 @@ func newTestModel(t *testing.T) *Model {
 		treeWidth: 30,
 		keys:      newKeyMap(),
 		iconMode:  iconSymbol,
-		openFile:  newOpenFileOverlay(iconSymbol),
+		openFile:  newOpenFileOverlay(iconSymbol, darkTheme),
 		width:     120,
 		height:    40,
 	}
@@ -39,7 +39,7 @@ func newTestModelWithFile(t *testing.T, content string) *Model {
 	ft := newFileTab()
 	ft.filePath = filePath
 	ft.lines = strings.Split(content, "\n")
-	ft.highlightedLines = highlightFile(filePath, content)
+	ft.highlightedLines = highlightFile(filePath, content, m.theme)
 
 	m.tabs = append(m.tabs, ft)
 	m.activeTab = 0

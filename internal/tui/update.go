@@ -6,11 +6,11 @@ import (
 	"time"
 	"unicode"
 
+	"charm.land/bubbles/v2/help"
 	tea "charm.land/bubbletea/v2"
 )
 
 const (
-	scrollAmount       = 3
 	quitTimeout        = 750 * time.Millisecond
 	statusClearTimeout = 2 * time.Second
 )
@@ -23,7 +23,7 @@ type statusClearMsg struct{}
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.watchFile(), m.watchDir())
+	return tea.Batch(m.watchFile(), m.watchDir(), tea.RequestBackgroundColor)
 }
 
 type direction int
@@ -104,6 +104,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		m.isDark = msg.IsDark()
+		if m.isDark {
+			m.theme = darkTheme
+		} else {
+			m.theme = lightTheme
+		}
+		m.help.Styles = help.DefaultStyles(m.isDark)
+		m.openFile.updateTheme(m.theme)
+		for _, tab := range m.tabs {
+			if tab.filePath != "" && len(tab.lines) > 0 {
+				tab.highlightedLines = highlightFile(
+					tab.filePath, strings.Join(tab.lines, "\n"), m.theme,
+				)
+			}
+		}
+		return m, nil
 	case fileChangedMsg:
 		return m.handleFileChanged(msg)
 	case treeChangedMsg:
@@ -140,7 +157,7 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 	editorX := mouseX - lo.editorStartX - lo.lineNumWidth
 	editorY := mouseY - contentStartY
 
-	targetLine := t.scrollOffset + editorY
+	targetLine := t.vp.YOffset() + editorY
 	if editorY >= 0 && editorY < len(m.lastMapping) {
 		targetLine = m.lastMapping[editorY].logicalLine
 	}
@@ -167,6 +184,9 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 // closeTab removes the tab at idx and adjusts activeTab.
 func (m *Model) closeTab(idx int) {
 	t := m.tabs[idx]
+	if t.kind == diffTab {
+		t.rejectAndClear()
+	}
 	if t.filePath != "" && t.kind == fileTab && m.watcher != nil {
 		_ = m.watcher.Remove(t.filePath)
 	}
@@ -183,7 +203,9 @@ func (m *Model) closeTab(idx int) {
 func (m *Model) closeDiffTabs() {
 	tabs := make([]*tab, 0, len(m.tabs))
 	for _, t := range m.tabs {
-		if t.kind != diffTab {
+		if t.kind == diffTab {
+			t.rejectAndClear()
+		} else {
 			tabs = append(tabs, t)
 		}
 	}

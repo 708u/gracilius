@@ -115,6 +115,23 @@ func (m *Model) handleKeyOpenFile(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	t, hasTab := m.activeTabState()
 
+	// Accept/reject use enter/esc, so they must be checked
+	// before the general Cancel/Enter handlers below.
+	if hasTab && t.diff != nil && m.focusPane == paneEditor {
+		switch {
+		case key.Matches(msg, m.keys.AcceptDiff):
+			contents := strings.Join(t.lines, "\n")
+			t.diff.onAccept(contents)
+			t.diff = nil
+			m.closeTab(m.activeTab)
+			return m, nil
+		case key.Matches(msg, m.keys.RejectDiff):
+			t.rejectAndClear()
+			m.closeTab(m.activeTab)
+			return m, nil
+		}
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Cancel):
 		if hasTab && t.selecting {

@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
 )
 
 // tabKind distinguishes between file and diff tabs.
@@ -34,13 +36,21 @@ type tab struct {
 	anchorChar       int
 	selecting        bool
 	lineSelect       bool
-	scrollOffset     int
+	vp               viewport.Model
 
 	comments     []comment
 	commentInput textarea.Model
 	inputMode    bool
 	inputStart   int
 	inputEnd     int
+
+	diff *diffState // non-nil for diff review tabs
+}
+
+// diffState holds accept/reject callbacks for a diff review tab.
+type diffState struct {
+	onAccept func(string)
+	onReject func()
 }
 
 func newTextarea() textarea.Model {
@@ -53,22 +63,69 @@ func newTextarea() textarea.Model {
 	return ta
 }
 
+// newViewport creates a viewport with keybindings disabled.
+func newViewport() viewport.Model {
+	vp := viewport.New()
+	vp.KeyMap = viewport.KeyMap{} // disable all keybindings
+	vp.MouseWheelEnabled = true
+	return vp
+}
+
 // newFileTab creates a new tab for file viewing.
 func newFileTab() *tab {
 	return &tab{
 		kind:         fileTab,
 		commentInput: newTextarea(),
+		vp:           newViewport(),
 	}
 }
 
 // newDiffTab creates a new tab for diff viewing.
-func newDiffTab(filePath string, lines []string) *tab {
+func newDiffTab(filePath string, lines []string, onAccept func(string), onReject func()) *tab {
 	return &tab{
 		kind:         diffTab,
 		filePath:     filePath,
 		lines:        lines,
 		commentInput: newTextarea(),
+		vp:           newViewport(),
+		diff: &diffState{
+			onAccept: onAccept,
+			onReject: onReject,
+		},
 	}
+}
+
+// configureGutter sets up the LeftGutterFunc for line numbers
+// with comment markers.
+func (t *tab) configureGutter(digitWidth int) {
+	softPad := strings.Repeat(" ", digitWidth+2)
+	t.vp.LeftGutterFunc = func(ctx viewport.GutterContext) string {
+		if ctx.Soft || ctx.Index >= ctx.TotalLines {
+			return softPad
+		}
+		var sb strings.Builder
+		if t.findComment(ctx.Index) >= 0 {
+			sb.WriteString(styleComment.Render("\u258e"))
+			fmt.Fprintf(&sb, "%*d ", digitWidth, ctx.Index+1)
+		} else {
+			fmt.Fprintf(&sb, " %*d ", digitWidth, ctx.Index+1)
+		}
+		return sb.String()
+	}
+}
+
+// syncContent updates the viewport content and reconfigures the gutter.
+func (t *tab) syncContent(lines []string) {
+	t.vp.SetContentLines(lines)
+	t.configureGutter(lineNumWidthFor(len(lines)) - 2)
+}
+
+// rejectAndClear calls onReject if set and nils the diff state.
+func (t *tab) rejectAndClear() {
+	if t.diff != nil && t.diff.onReject != nil {
+		t.diff.onReject()
+	}
+	t.diff = nil
 }
 
 // findComment returns the index of the comment covering line, or -1.
@@ -188,7 +245,7 @@ func (t *tab) resetEditorState() {
 	t.cursorChar = 0
 	t.anchorLine = 0
 	t.anchorChar = 0
-	t.scrollOffset = 0
+	t.vp.SetYOffset(0)
 	t.selecting = false
 	t.lineSelect = false
 	t.comments = nil
@@ -202,21 +259,18 @@ func (t *tab) adjustScrollForCursor(contentHeight, textWidth int) {
 	margin := contentHeight / 5
 
 	// Cursor above visible area (logical check is sufficient)
-	if t.cursorLine < t.scrollOffset+margin {
-		t.scrollOffset = t.cursorLine - margin
+	if t.cursorLine < t.vp.YOffset()+margin {
+		t.vp.SetYOffset(t.cursorLine - margin)
 	}
 
 	// Cursor below visible area (visual-row aware)
-	if t.visualRowsBetween(t.scrollOffset, t.cursorLine, textWidth) > contentHeight-margin {
-		t.scrollOffset = t.scrollOffsetFor(t.cursorLine, contentHeight-margin, textWidth)
+	if t.visualRowsBetween(t.vp.YOffset(), t.cursorLine, textWidth) > contentHeight-margin {
+		t.vp.SetYOffset(t.scrollOffsetFor(t.cursorLine, contentHeight-margin, textWidth))
 	}
 
 	maxOffset := t.maxScrollOffset(contentHeight, textWidth)
-	if t.scrollOffset > maxOffset {
-		t.scrollOffset = maxOffset
-	}
-	if t.scrollOffset < 0 {
-		t.scrollOffset = 0
+	if t.vp.YOffset() > maxOffset {
+		t.vp.SetYOffset(maxOffset)
 	}
 }
 

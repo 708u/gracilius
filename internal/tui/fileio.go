@@ -66,7 +66,8 @@ func (m *Model) loadFileIntoTab(t *tab, filePath string) error {
 	}
 
 	t.lines = splitLines(content)
-	t.highlightedLines = highlightFile(absPath, string(content))
+	t.syncContent(t.lines)
+	t.highlightedLines = highlightFile(absPath, string(content), m.theme)
 
 	return nil
 }

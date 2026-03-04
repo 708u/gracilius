@@ -130,18 +130,10 @@ func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	}
 	lo := m.computeLayout()
 	if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
-		switch msg.Button {
-		case tea.MouseWheelUp:
-			t.scrollOffset -= scrollAmount
-			if t.scrollOffset < 0 {
-				t.scrollOffset = 0
-			}
-		case tea.MouseWheelDown:
-			t.scrollOffset += scrollAmount
-			maxOffset := t.maxScrollOffset(lo.contentHeight, lo.textWidth)
-			if t.scrollOffset > maxOffset {
-				t.scrollOffset = maxOffset
-			}
+		t.vp, _ = t.vp.Update(msg)
+		maxOff := t.maxScrollOffset(lo.contentHeight, lo.textWidth)
+		if t.vp.YOffset() > maxOff {
+			t.vp.SetYOffset(maxOff)
 		}
 	}
 	return m, nil
