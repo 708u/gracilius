@@ -201,8 +201,8 @@ func (s *openFileOverlay) applyFilter() {
 func (s *openFileOverlay) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "up", "down":
+		switch msg.Code {
+		case tea.KeyUp, tea.KeyDown:
 			var cmd tea.Cmd
 			s.list, cmd = s.list.Update(msg)
 			return cmd

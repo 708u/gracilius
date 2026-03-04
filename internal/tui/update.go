@@ -327,7 +327,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.commentInput.Blur()
 			default:
 				linesBefore := strings.Count(t.commentInput.Value(), "\n") + 1
-				if msg.String() == "enter" && linesBefore >= t.commentInput.Height() {
+				if msg.Code == tea.KeyEnter && linesBefore >= t.commentInput.Height() {
 					t.commentInput.SetHeight(t.commentInput.Height() + 1)
 				}
 				t.commentInput, cmd = t.commentInput.Update(msg)
@@ -360,7 +360,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, m.keys.Cancel):
 				m.openFile.close()
 				return m, nil
-			case msg.String() == "enter":
+			case msg.Code == tea.KeyEnter:
 				if p := m.openFile.selectedPath(); p != "" {
 					absPath := filepath.Join(m.rootDir, p)
 					m.openFile.close()
