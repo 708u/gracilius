@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
+	"charm.land/bubbles/v2/textarea"
 )
 
 // tabKind distinguishes between file and diff tabs.

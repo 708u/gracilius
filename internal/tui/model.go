@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/charmbracelet/bubbles/help"
+	"charm.land/bubbles/v2/help"
 	"github.com/fsnotify/fsnotify"
 )
 

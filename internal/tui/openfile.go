@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/sahilm/fuzzy"
 )
@@ -114,7 +114,6 @@ func newOpenFileOverlay(mode iconMode) openFileOverlay {
 	ti := textinput.New()
 	ti.Placeholder = "Open file..."
 	ti.Prompt = "⌕ "
-	ti.PromptStyle = lipgloss.NewStyle()
 
 	return openFileOverlay{list: l, input: ti}
 }
@@ -158,10 +157,10 @@ func (s *openFileOverlay) open(rootDir string) tea.Cmd {
 		s.targets[i] = fi.path
 	}
 	s.input.Reset()
-	s.input.Focus()
+	cmd := s.input.Focus()
 	s.applyFilter()
 	s.active = true
-	return s.input.Cursor.BlinkCmd()
+	return cmd
 }
 
 // close deactivates the open-file overlay and frees the item list.
@@ -201,8 +200,8 @@ func (s *openFileOverlay) applyFilter() {
 // Arrow keys navigate the list; all other input goes to textinput.
 func (s *openFileOverlay) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.Type {
+	case tea.KeyPressMsg:
+		switch msg.Code {
 		case tea.KeyUp, tea.KeyDown:
 			var cmd tea.Cmd
 			s.list, cmd = s.list.Update(msg)
@@ -324,7 +323,7 @@ func (s *openFileOverlay) overlay(bg string, width, height int) string {
 	g := s.computeLayout(width, height)
 
 	s.list.SetSize(g.innerW, g.listH)
-	s.input.Width = g.innerW
+	s.input.SetWidth(g.innerW)
 
 	inputView := s.input.View()
 	separator := strings.Repeat("─", g.innerW)
@@ -334,7 +333,7 @@ func (s *openFileOverlay) overlay(bg string, width, height int) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(activeTheme.tabActiveBorder)).
 		Padding(0, 1).
-		Width(g.innerW + 2). // lipgloss Width includes padding
+		Width(g.innerW + overlayBorderW + overlayPaddingW).
 		Height(g.innerH).
 		Render(content)
 

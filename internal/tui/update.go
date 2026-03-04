@@ -8,9 +8,9 @@ import (
 	"time"
 	"unicode"
 
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 const (
@@ -95,7 +95,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// when it is active.
 	if m.openFile.active {
 		switch msg.(type) {
-		case tea.KeyMsg, tea.MouseMsg, tea.WindowSizeMsg,
+		case tea.KeyPressMsg, tea.MouseClickMsg,
+			tea.WindowSizeMsg,
 			fileChangedMsg, treeChangedMsg,
 			OpenDiffMsg, CloseDiffMsg,
 			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
@@ -166,9 +167,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if hasTab && t.filePath != "" && len(t.lines) > 0 && m.focusPane == paneEditor {
 			m.notifySelectionChanged()
 		}
-	case tea.MouseMsg:
+	case tea.MouseClickMsg:
 		if m.openFile.active {
-			if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+			if msg.Button == tea.MouseLeft {
 				path, closeOverlay := m.openFile.handleClick(msg.X, msg.Y, m.width, m.height)
 				if path != "" {
 					absPath := filepath.Join(m.rootDir, path)
@@ -185,20 +186,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		borderX := lo.treeWidth
 		isBorderArea := msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= contentStartY
 
-		if isBorderArea && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+		if isBorderArea && msg.Button == tea.MouseLeft {
 			m.resizingPane = true
 			return m, nil
 		}
-		if m.resizingPane && msg.Action == tea.MouseActionMotion {
-			m.treeWidth = msg.X
-			return m, nil
-		}
-		if m.resizingPane && msg.Action == tea.MouseActionRelease {
-			m.resizingPane = false
-			return m, nil
-		}
 
-		if msg.X < lo.treeWidth && msg.Y >= contentStartY && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+		if msg.X < lo.treeWidth && msg.Y >= contentStartY && msg.Button == tea.MouseLeft {
 			treeIdx := msg.Y - contentStartY + m.treeScrollOffset
 			if treeIdx >= 0 && treeIdx < len(m.fileTree) {
 				m.treeCursor = treeIdx
@@ -211,76 +204,84 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		if msg.Button == tea.MouseLeft && msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+			targetLine, targetChar := m.editorTarget(t, lo, msg.X, msg.Y)
+			m.focusPane = paneEditor
+			t.cursorLine = targetLine
+			t.cursorChar = targetChar
+			t.anchorLine = targetLine
+			t.anchorChar = targetChar
+			t.selecting = false
+			t.lineSelect = false
+			m.mouseDown = true
+			m.lastMouseLine = targetLine
+			m.lastMouseChar = targetChar
+		}
+		return m, nil
+	case tea.MouseMotionMsg:
+		if m.resizingPane {
+			m.treeWidth = msg.X
+			return m, nil
+		}
+
+		if !hasTab || len(t.lines) == 0 || !m.mouseDown {
+			return m, nil
+		}
+
+		lo := m.computeLayout()
 		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
-			editorX := msg.X - lo.editorStartX - lo.lineNumWidth
-			editorY := msg.Y - contentStartY
+			targetLine, targetChar := m.editorTarget(t, lo, msg.X, msg.Y)
+			if targetLine != m.lastMouseLine || targetChar != m.lastMouseChar {
+				t.selecting = true
+				t.cursorLine = targetLine
+				t.cursorChar = targetChar
+				m.lastMouseLine = targetLine
+				m.lastMouseChar = targetChar
+			}
+		}
+		return m, nil
+	case tea.MouseReleaseMsg:
+		if m.openFile.active {
+			return m, nil
+		}
+		if m.resizingPane {
+			m.resizingPane = false
+			return m, nil
+		}
 
-			targetLine := t.scrollOffset + editorY
-			if editorY >= 0 && editorY < len(m.lastMapping) {
-				targetLine = m.lastMapping[editorY].logicalLine
-			}
+		wasDown := m.mouseDown
+		m.mouseDown = false
 
-			if targetLine >= len(t.lines) {
-				targetLine = len(t.lines) - 1
-			}
-			if targetLine < 0 {
-				targetLine = 0
-			}
+		if !hasTab || len(t.lines) == 0 {
+			return m, nil
+		}
 
-			targetChar := max(editorX, 0)
-			if editorY >= 0 && editorY < len(m.lastMapping) {
-				targetChar += m.lastMapping[editorY].wrapOffset
+		if wasDown && t.selecting {
+			lo := m.computeLayout()
+			if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+				targetLine, targetChar := m.editorTarget(t, lo, msg.X, msg.Y)
+				t.cursorLine = targetLine
+				t.cursorChar = targetChar
 			}
-			if targetLine < len(t.lines) {
-				runeLen := len([]rune(t.lines[targetLine]))
-				if targetChar > runeLen {
-					targetChar = runeLen
-				}
-			}
-
-			switch {
-			case msg.Button == tea.MouseButtonLeft:
-				m.focusPane = paneEditor
-				switch msg.Action {
-				case tea.MouseActionPress:
-					t.cursorLine = targetLine
-					t.cursorChar = targetChar
-					t.anchorLine = targetLine
-					t.anchorChar = targetChar
-					t.selecting = false
-					t.lineSelect = false
-					m.mouseDown = true
-					m.lastMouseLine = targetLine
-					m.lastMouseChar = targetChar
-				case tea.MouseActionMotion:
-					if m.mouseDown && (targetLine != m.lastMouseLine || targetChar != m.lastMouseChar) {
-						t.selecting = true
-						t.cursorLine = targetLine
-						t.cursorChar = targetChar
-						m.lastMouseLine = targetLine
-						m.lastMouseChar = targetChar
-					}
-				case tea.MouseActionRelease:
-					m.mouseDown = false
-					if t.selecting {
-						t.cursorLine = targetLine
-						t.cursorChar = targetChar
-						m.notifySelectionChanged()
-					}
-				}
-			case msg.Action == tea.MouseActionRelease:
-				m.mouseDown = false
-				if t.selecting {
-					t.cursorLine = targetLine
-					t.cursorChar = targetChar
-					m.notifySelectionChanged()
-				}
-			case msg.Button == tea.MouseButtonWheelUp:
+			m.notifySelectionChanged()
+		}
+		return m, nil
+	case tea.MouseWheelMsg:
+		if m.openFile.active {
+			return m, nil
+		}
+		if !hasTab || len(t.lines) == 0 {
+			return m, nil
+		}
+		lo := m.computeLayout()
+		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+			switch msg.Button {
+			case tea.MouseWheelUp:
 				t.scrollOffset -= scrollAmount
 				if t.scrollOffset < 0 {
 					t.scrollOffset = 0
 				}
-			case msg.Button == tea.MouseButtonWheelDown:
+			case tea.MouseWheelDown:
 				t.scrollOffset += scrollAmount
 				maxOffset := t.maxScrollOffset(lo.contentHeight, lo.textWidth)
 				if t.scrollOffset > maxOffset {
@@ -289,7 +290,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		var cmd tea.Cmd
 		if key.Matches(msg, m.keys.Quit) {
 			if m.quitPending {
@@ -326,7 +327,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.commentInput.Blur()
 			default:
 				linesBefore := strings.Count(t.commentInput.Value(), "\n") + 1
-				if msg.Type == tea.KeyEnter && linesBefore >= t.commentInput.Height() {
+				if msg.Code == tea.KeyEnter && linesBefore >= t.commentInput.Height() {
 					t.commentInput.SetHeight(t.commentInput.Height() + 1)
 				}
 				t.commentInput, cmd = t.commentInput.Update(msg)
@@ -359,7 +360,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, m.keys.Cancel):
 				m.openFile.close()
 				return m, nil
-			case msg.Type == tea.KeyEnter:
+			case msg.Code == tea.KeyEnter:
 				if p := m.openFile.selectedPath(); p != "" {
 					absPath := filepath.Join(m.rootDir, p)
 					m.openFile.close()
@@ -570,6 +571,35 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// editorTarget converts mouse coordinates to editor line and character.
+func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
+	editorX := mouseX - lo.editorStartX - lo.lineNumWidth
+	editorY := mouseY - contentStartY
+
+	targetLine := t.scrollOffset + editorY
+	if editorY >= 0 && editorY < len(m.lastMapping) {
+		targetLine = m.lastMapping[editorY].logicalLine
+	}
+	if targetLine >= len(t.lines) {
+		targetLine = len(t.lines) - 1
+	}
+	if targetLine < 0 {
+		targetLine = 0
+	}
+
+	targetChar := max(editorX, 0)
+	if editorY >= 0 && editorY < len(m.lastMapping) {
+		targetChar += m.lastMapping[editorY].wrapOffset
+	}
+	if targetLine < len(t.lines) {
+		runeLen := len([]rune(t.lines[targetLine]))
+		if targetChar > runeLen {
+			targetChar = runeLen
+		}
+	}
+	return targetLine, targetChar
 }
 
 // closeTab removes the tab at idx and adjusts activeTab.

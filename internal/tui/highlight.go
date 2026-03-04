@@ -2,12 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )
 
@@ -60,7 +61,7 @@ var (
 )
 
 func init() {
-	if lipgloss.HasDarkBackground() {
+	if lipgloss.HasDarkBackground(os.Stdin, os.Stdout) {
 		activeTheme = darkTheme
 	} else {
 		activeTheme = lightTheme
