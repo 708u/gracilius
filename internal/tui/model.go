@@ -124,23 +124,19 @@ func (m *Model) openFileByPath(absPath string) {
 	if i := m.findTabByPath(absPath); i >= 0 {
 		m.activeTab = i
 	} else {
+		var target *tab
 		cur, hasTab := m.activeTabState()
 		if hasTab && cur.kind == fileTab && cur.filePath == "" {
-			if err := m.loadFileIntoTab(cur, absPath); err != nil {
-				m.statusMsg = fmt.Sprintf(
-					"Cannot open: %v", err,
-				)
-				return
-			}
+			target = cur
 		} else {
-			t := newFileTab()
-			if err := m.loadFileIntoTab(t, absPath); err != nil {
-				m.statusMsg = fmt.Sprintf(
-					"Cannot open: %v", err,
-				)
-				return
-			}
-			m.tabs = append(m.tabs, t)
+			target = newFileTab()
+		}
+		if err := m.loadFileIntoTab(target, absPath); err != nil {
+			m.statusMsg = fmt.Sprintf("Cannot open: %v", err)
+			return
+		}
+		if target != cur {
+			m.tabs = append(m.tabs, target)
 			m.activeTab = len(m.tabs) - 1
 		}
 	}

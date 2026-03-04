@@ -224,37 +224,75 @@ func (s *searchOverlay) update(msg tea.Msg) tea.Cmd {
 	}
 }
 
+// searchLayout holds the computed layout for the search overlay.
+type searchLayout struct {
+	overlayW int // total overlay width
+	innerW   int // content width (overlayW - border - padding)
+	startX   int // horizontal start position
+	startY   int // vertical start position
+	innerH   int // inner content height (input + separator + list)
+	listH    int // list area height
+	boxH     int // total box height (innerH + border)
+}
+
+const (
+	overlayMaxW       = 80 // max overlay width in columns
+	overlayWidthRatio = 3  // overlay uses 3/4 of terminal width
+	overlayBorderW    = 2  // left + right border
+	overlayPaddingW   = 2  // left + right padding
+	overlayBorderH    = 2  // top + bottom border
+	overlayInputRows  = 2  // input field + separator
+	overlayMinItems   = 1  // show at least 1 item row
+	overlayMinInnerH  = 3  // minimum inner height
+	overlayListOffset = 3  // rows from box top to list: border + input + separator
+)
+
+// computeLayout calculates the overlay layout from terminal dimensions.
+func (s *searchOverlay) computeLayout(width, height int) searchLayout {
+	overlayW := min(width*overlayWidthRatio/4, overlayMaxW)
+	innerW := overlayW - overlayBorderW - overlayPaddingW
+
+	startY := contentStartY
+	available := height - startY - footerHeight - overlayBorderH
+	maxInnerH := max(available, overlayMinInnerH)
+	itemCount := len(s.list.Items())
+	innerH := min(overlayInputRows+max(itemCount, overlayMinItems), maxInnerH)
+	listH := max(innerH-overlayInputRows, overlayMinItems)
+
+	boxH := innerH + overlayBorderH
+	maxBottom := height - footerHeight
+	if startY+boxH > maxBottom {
+		startY = max(maxBottom-boxH, 0)
+	}
+
+	startX := max((width-overlayW)/2, 0)
+
+	return searchLayout{
+		overlayW: overlayW,
+		innerW:   innerW,
+		startX:   startX,
+		startY:   startY,
+		innerH:   innerH,
+		listH:    listH,
+		boxH:     boxH,
+	}
+}
+
 // handleClick processes a mouse click within the search overlay.
 // It returns the relative path of the clicked item (empty if none)
 // and whether the overlay should be closed.
 func (s *searchOverlay) handleClick(mouseX, mouseY, width, height int) (path string, closeOverlay bool) {
-	overlayW := min(width*3/4, 80)
-
-	oStartY := headerHeight + tabBarHeight
-	maxInnerH := max(height-oStartY-footerHeight-2, 3)
-	itemCount := len(s.list.Items())
-	innerH := min(2+max(itemCount, 1), maxInnerH)
-
-	boxH := innerH + 2 // content + top/bottom border
-	maxBottom := height - footerHeight
-	if oStartY+boxH > maxBottom {
-		oStartY = max(maxBottom-boxH, 0)
-	}
-
-	fgW := overlayW
-	startX := max((width-fgW)/2, 0)
+	g := s.computeLayout(width, height)
 
 	// Click outside overlay: close
-	if mouseY < oStartY || mouseY >= oStartY+boxH ||
-		mouseX < startX || mouseX >= startX+overlayW {
+	if mouseY < g.startY || mouseY >= g.startY+g.boxH ||
+		mouseX < g.startX || mouseX >= g.startX+g.overlayW {
 		return "", true
 	}
 
-	// List area: border(1) + input(1) + separator(1) = 3 rows offset
-	listStartY := oStartY + 3
-	listH := max(innerH-2, 1)
+	listStartY := g.startY + overlayListOffset
 
-	if mouseY >= listStartY && mouseY < listStartY+listH {
+	if mouseY >= listStartY && mouseY < listStartY+g.listH {
 		visualRow := mouseY - listStartY
 		totalItems := len(s.list.Items())
 		start, _ := s.list.Paginator.GetSliceBounds(totalItems)
@@ -283,29 +321,21 @@ func (s *searchOverlay) selectedPath() string {
 
 // overlay renders the search overlay on top of the background view.
 func (s *searchOverlay) overlay(bg string, width, height int) string {
-	overlayW := min(width*3/4, 80)
-	innerW := overlayW - 4 // border(2) + padding(2)
+	g := s.computeLayout(width, height)
 
-	// Max height: available space between startY and footer, minus border
-	startY := headerHeight + tabBarHeight
-	maxInnerH := max(height-startY-footerHeight-2, 3) // border(2)
-	itemCount := len(s.list.Items())
-	innerH := min(2+max(itemCount, 1), maxInnerH) // input(1) + separator(1) + items
-	listH := max(innerH-2, 1)
-
-	s.list.SetSize(innerW, listH)
-	s.input.Width = innerW
+	s.list.SetSize(g.innerW, g.listH)
+	s.input.Width = g.innerW
 
 	inputView := s.input.View()
-	separator := strings.Repeat("─", innerW)
+	separator := strings.Repeat("─", g.innerW)
 	content := inputView + "\n" + separator + "\n" + s.list.View()
 
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(activeTheme.tabActiveBorder)).
 		Padding(0, 1).
-		Width(innerW + 2). // lipgloss Width includes padding
-		Height(innerH).
+		Width(g.innerW + 2). // lipgloss Width includes padding
+		Height(g.innerH).
 		Render(content)
 
 	dimmedBg := dimBackground(bg)
