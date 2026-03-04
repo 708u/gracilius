@@ -156,7 +156,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 func (m *Model) contextKeyMap() help.KeyMap {
 	km := m.keys
 	t, hasTab := m.activeTabState()
-	isDiffReview := hasTab && t.kind == diffTab && t.onAccept != nil
+	isDiffReview := hasTab && t.diff != nil
 	km.CharSelect.SetEnabled(hasTab && m.focusPane == paneEditor)
 	km.LineSelect.SetEnabled(hasTab && m.focusPane == paneEditor)
 	km.Copy.SetEnabled(hasTab && m.focusPane == paneEditor && t.selecting)

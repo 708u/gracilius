@@ -330,6 +330,10 @@ func (h *Handler) handleToolsCall(req *Request, send func(*Response)) {
 		resultJSON, _ := json.Marshal(result)
 		send(NewResponse(req.ID, NewMCPResult(string(resultJSON))))
 	case "openDiff":
+		// Unlike other tools, openDiff does not call send here.
+		// send is stored in DiffResponder and called later when the
+		// user accepts or rejects the diff in the TUI. This blocks
+		// Claude Code until the user makes a decision.
 		var args OpenDiffArgs
 		if err := json.Unmarshal(params.Arguments, &args); err != nil {
 			send(NewErrorResponse(req.ID, codeInvalidParams, "Invalid openDiff arguments"))

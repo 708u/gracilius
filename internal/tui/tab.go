@@ -26,7 +26,6 @@ type tab struct {
 	kind tabKind
 
 	filePath         string
-	tabName          string
 	lines            []string
 	highlightedLines []highlightedLine
 	cursorLine       int
@@ -43,7 +42,11 @@ type tab struct {
 	inputStart   int
 	inputEnd     int
 
-	// diff accept/reject callbacks (diffTab only)
+	diff *diffState // non-nil for diff review tabs
+}
+
+// diffState holds accept/reject callbacks for a diff review tab.
+type diffState struct {
 	onAccept func(string)
 	onReject func()
 }
@@ -67,25 +70,25 @@ func newFileTab() *tab {
 }
 
 // newDiffTab creates a new tab for diff viewing.
-func newDiffTab(filePath, tabName string, lines []string, onAccept func(string), onReject func()) *tab {
+func newDiffTab(filePath string, lines []string, onAccept func(string), onReject func()) *tab {
 	return &tab{
 		kind:         diffTab,
 		filePath:     filePath,
-		tabName:      tabName,
 		lines:        lines,
 		commentInput: newTextarea(),
-		onAccept:     onAccept,
-		onReject:     onReject,
+		diff: &diffState{
+			onAccept: onAccept,
+			onReject: onReject,
+		},
 	}
 }
 
-// rejectAndClear calls onReject if set and clears both callbacks.
+// rejectAndClear calls onReject if set and nils the diff state.
 func (t *tab) rejectAndClear() {
-	if t.onReject != nil {
-		t.onReject()
+	if t.diff != nil && t.diff.onReject != nil {
+		t.diff.onReject()
 	}
-	t.onAccept = nil
-	t.onReject = nil
+	t.diff = nil
 }
 
 // findComment returns the index of the comment covering line, or -1.

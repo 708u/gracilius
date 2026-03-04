@@ -32,7 +32,7 @@ func TestAcceptDiff_CallsOnAccept(t *testing.T) {
 
 	var accepted bool
 	var acceptedContents string
-	dt := newDiffTab("/workspace/file.go", "file.go",
+	dt := newDiffTab("/workspace/file.go",
 		[]string{"line1", "line2"},
 		func(contents string) {
 			accepted = true
@@ -62,7 +62,7 @@ func TestRejectDiff_CallsOnReject(t *testing.T) {
 	m := newTestModel()
 
 	var rejected bool
-	dt := newDiffTab("/workspace/file.go", "file.go",
+	dt := newDiffTab("/workspace/file.go",
 		[]string{"line1"},
 		func(string) { t.Error("accept should not be called") },
 		func() { rejected = true },
@@ -86,7 +86,7 @@ func TestCloseTab_CallsOnReject(t *testing.T) {
 	m := newTestModel()
 
 	var rejected bool
-	dt := newDiffTab("/workspace/file.go", "file.go",
+	dt := newDiffTab("/workspace/file.go",
 		[]string{"line1"},
 		func(string) { t.Error("accept should not be called") },
 		func() { rejected = true },
@@ -111,7 +111,7 @@ func TestCloseDiffTabs_CallsOnReject(t *testing.T) {
 
 	var rejectCount int
 	for range 3 {
-		dt := newDiffTab("/workspace/file.go", "file.go",
+		dt := newDiffTab("/workspace/file.go",
 			[]string{"line1"},
 			func(string) {},
 			func() { rejectCount++ },
@@ -150,7 +150,7 @@ func TestAcceptDiff_NotCalledOnFileTab(t *testing.T) {
 func TestContextKeyMap_DiffReviewBindings(t *testing.T) {
 	m := newTestModel()
 
-	dt := newDiffTab("/workspace/file.go", "file.go",
+	dt := newDiffTab("/workspace/file.go",
 		[]string{"line1"},
 		func(string) {},
 		func() {},

@@ -127,7 +127,7 @@ func (m *Model) renderTabBar(offset int) string {
 			name = filepath.Base(t.filePath)
 		}
 		if t.kind == diffTab {
-			if t.onAccept != nil {
+			if t.diff != nil {
 				name = "[review] " + name
 			} else {
 				name = "[diff] " + name

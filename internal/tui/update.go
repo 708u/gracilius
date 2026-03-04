@@ -136,7 +136,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case OpenDiffMsg:
 		lines := splitLines([]byte(msg.Contents))
-		dt := newDiffTab(msg.FilePath, msg.TabName, lines, msg.Accept, msg.Reject)
+		dt := newDiffTab(msg.FilePath, lines, msg.Accept, msg.Reject)
 		dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents)
 		m.tabs = append(m.tabs, dt)
 		m.activeTab = len(m.tabs) - 1
@@ -551,15 +551,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.BlockDown):
 			m.moveToParagraphBoundary(dirDown)
 		case key.Matches(msg, m.keys.AcceptDiff):
-			if hasTab && t.kind == diffTab && t.onAccept != nil && m.focusPane == paneEditor {
+			if hasTab && t.diff != nil && m.focusPane == paneEditor {
 				contents := strings.Join(t.lines, "\n")
-				t.onAccept(contents)
-				t.onAccept = nil
-				t.onReject = nil
+				t.diff.onAccept(contents)
+				t.diff = nil
 				m.closeTab(m.activeTab)
 			}
 		case key.Matches(msg, m.keys.RejectDiff):
-			if hasTab && t.kind == diffTab && t.onReject != nil && m.focusPane == paneEditor {
+			if hasTab && t.diff != nil && m.focusPane == paneEditor {
 				t.rejectAndClear()
 				m.closeTab(m.activeTab)
 			}

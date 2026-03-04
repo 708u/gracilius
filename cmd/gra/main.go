@@ -123,7 +123,6 @@ func run() int {
 		p.Send(tui.OpenDiffMsg{
 			FilePath: filePath,
 			Contents: contents,
-			TabName:  tabName,
 			Accept: func(newContents string) {
 				log.Printf("diff accepted: %s", filePath)
 				accept(newContents)
