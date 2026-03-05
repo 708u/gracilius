@@ -79,7 +79,8 @@ func (m *Model) handleKeyInputMode(t *tab, msg tea.KeyPressMsg) (tea.Model, tea.
 		t.commentInput.Blur()
 	default:
 		linesBefore := strings.Count(t.commentInput.Value(), "\n") + 1
-		if msg.Code == tea.KeyEnter && linesBefore >= t.commentInput.Height() {
+		if msg.Code == tea.KeyEnter && msg.Mod.Contains(tea.ModShift) &&
+			linesBefore >= t.commentInput.Height() {
 			t.commentInput.SetHeight(t.commentInput.Height() + 1)
 		}
 		t.commentInput, cmd = t.commentInput.Update(msg)

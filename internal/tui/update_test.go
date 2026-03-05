@@ -244,6 +244,90 @@ func TestCloseDiffTabs_CallsOnReject(t *testing.T) {
 	}
 }
 
+func TestCommentSubmit_EnterSavesComment(t *testing.T) {
+	content := "line1\nline2\nline3"
+	m := newTestModelWithFile(t, content)
+	tab := m.tabs[0]
+
+	// Enter comment input mode.
+	tab.inputMode = true
+	tab.inputStart = 0
+	tab.inputEnd = 0
+	tab.commentInput.Focus()
+	tab.commentInput.SetValue("test comment")
+
+	// Press Enter to submit.
+	msg := tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})
+	m.Update(msg)
+
+	if tab.inputMode {
+		t.Fatal("expected inputMode=false after Enter submit")
+	}
+	if len(tab.comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(tab.comments))
+	}
+	if tab.comments[0].text != "test comment" {
+		t.Errorf("expected comment text 'test comment', got %q",
+			tab.comments[0].text)
+	}
+}
+
+func TestCommentSubmit_ShiftEnterInsertsNewline(t *testing.T) {
+	content := "line1\nline2\nline3"
+	m := newTestModelWithFile(t, content)
+	tab := m.tabs[0]
+
+	// Enter comment input mode.
+	tab.inputMode = true
+	tab.inputStart = 0
+	tab.inputEnd = 0
+	tab.commentInput.Focus()
+	tab.commentInput.SetValue("first line")
+
+	// Press Shift+Enter to insert newline.
+	msg := tea.KeyPressMsg(tea.Key{
+		Code: tea.KeyEnter,
+		Mod:  tea.ModShift,
+	})
+	m.Update(msg)
+
+	if !tab.inputMode {
+		t.Fatal("expected inputMode=true after Shift+Enter")
+	}
+	if len(tab.comments) != 0 {
+		t.Fatalf("expected 0 comments (not submitted), got %d",
+			len(tab.comments))
+	}
+}
+
+func TestCommentSubmit_CtrlDSavesComment(t *testing.T) {
+	content := "line1\nline2\nline3"
+	m := newTestModelWithFile(t, content)
+	tab := m.tabs[0]
+
+	// Enter comment input mode.
+	tab.inputMode = true
+	tab.inputStart = 1
+	tab.inputEnd = 1
+	tab.commentInput.Focus()
+	tab.commentInput.SetValue("ctrl-d comment")
+
+	// Press Ctrl+D to submit.
+	msg := tea.KeyPressMsg(tea.Key{Code: 'd', Mod: tea.ModCtrl})
+	m.Update(msg)
+
+	if tab.inputMode {
+		t.Fatal("expected inputMode=false after Ctrl+D submit")
+	}
+	if len(tab.comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(tab.comments))
+	}
+	if tab.comments[0].text != "ctrl-d comment" {
+		t.Errorf("expected 'ctrl-d comment', got %q",
+			tab.comments[0].text)
+	}
+}
+
 func TestAcceptDiff_NotCalledOnFileTab(t *testing.T) {
 	m := newTestModel(t)
 

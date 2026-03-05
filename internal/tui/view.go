@@ -31,6 +31,8 @@ var separatorBorder = lipgloss.Border{
 
 const emptyStateMsg = "Select a file to view"
 
+const commentHintFmt = "%s: save, Shift+Enter: newline, Esc: cancel"
+
 var (
 	styleComment   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	styleInput     = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
@@ -290,7 +292,7 @@ func (m *Model) renderFooter() string {
 	}
 
 	if hasTab && t.inputMode {
-		fmt.Fprintf(&sb, "[Comment] %s: save, Esc: cancel",
+		fmt.Fprintf(&sb, "[Comment] "+commentHintFmt,
 			m.keys.CommentSubmit.Help().Key)
 	} else {
 		m.help.SetWidth(m.width)
@@ -511,7 +513,7 @@ func (m *Model) renderEditor(lo layout) []string {
 		if t.inputMode && i == t.inputEnd {
 			gutterCtx.Soft = true
 			lnPad := t.vp.LeftGutterFunc(gutterCtx)
-			label := fmt.Sprintf("comment (%s: save, Esc: cancel)",
+			label := fmt.Sprintf("comment ("+commentHintFmt+")",
 				m.keys.CommentSubmit.Help().Key)
 			blockRows := renderBlock(
 				t.commentInput.View(), label, commentBodyWidth, styleInput, styleBodyWhite)
