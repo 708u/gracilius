@@ -214,22 +214,10 @@ func (m *Model) toggleTreeEntry(idx int) {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher) (*Model, error) {
+func NewModel(srv MCPServer, store CommentStore, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher) (*Model, error) {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root directory: %w", err)
-	}
-
-	store, err := comment.NewStore(absRootDir)
-	if err != nil {
-		return nil, fmt.Errorf("create comment store: %w", err)
-	}
-
-	if commentWatcher != nil {
-		commentDir := filepath.Dir(store.DataPath())
-		if err := commentWatcher.Add(commentDir); err != nil {
-			return nil, fmt.Errorf("watch comment directory: %w", err)
-		}
 	}
 
 	ft := buildFileTree(absRootDir)
