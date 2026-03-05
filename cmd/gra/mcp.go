@@ -13,12 +13,12 @@ import (
 )
 
 type listCommentsInput struct {
-	FilePath        string `json:"filePath,omitempty" jsonschema:"description=Filter by file path"`
-	IncludeResolved bool   `json:"includeResolved,omitempty" jsonschema:"description=Include resolved comments"`
+	FilePath        string `json:"filePath,omitempty" jsonschema:"filter by file path"`
+	IncludeResolved bool   `json:"includeResolved,omitempty" jsonschema:"include resolved comments"`
 }
 
 type commentIDInput struct {
-	ID string `json:"id" jsonschema:"description=Comment ID"`
+	ID string `json:"id" jsonschema:"comment ID"`
 }
 
 func runMCP() int {
