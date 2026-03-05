@@ -42,12 +42,12 @@ func (m *Model) handleCommentsChanged() (tea.Model, tea.Cmd) {
 			continue
 		}
 		t.comments = nil
-		for _, sc := range stored {
+		for i := range stored {
 			t.comments = append(t.comments, comment{
-				id:        sc.ID,
-				startLine: sc.StartLine,
-				endLine:   sc.EndLine,
-				text:      sc.Text,
+				id:        stored[i].ID,
+				startLine: stored[i].StartLine,
+				endLine:   stored[i].EndLine,
+				text:      stored[i].Text,
 			})
 		}
 	}

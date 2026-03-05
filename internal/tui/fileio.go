@@ -74,12 +74,12 @@ func (m *Model) loadFileIntoTab(t *tab, filePath string) error {
 	if err != nil {
 		log.Printf("Failed to load comments for %s: %v", absPath, err)
 	}
-	for _, sc := range stored {
+	for i := range stored {
 		t.comments = append(t.comments, comment{
-			id:        sc.ID,
-			startLine: sc.StartLine,
-			endLine:   sc.EndLine,
-			text:      sc.Text,
+			id:        stored[i].ID,
+			startLine: stored[i].StartLine,
+			endLine:   stored[i].EndLine,
+			text:      stored[i].Text,
 		})
 	}
 

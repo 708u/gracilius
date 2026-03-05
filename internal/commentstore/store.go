@@ -35,7 +35,7 @@ type commentJSON struct {
 }
 
 // MarshalJSON implements json.Marshaler.
-func (c Comment) MarshalJSON() ([]byte, error) {
+func (c *Comment) MarshalJSON() ([]byte, error) {
 	j := commentJSON{
 		ID:        c.ID,
 		FilePath:  c.FilePath,
@@ -131,7 +131,7 @@ func (s *Store) withLock(exclusive bool, fn func() error) error {
 	if err != nil {
 		return fmt.Errorf("open lock file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	flag := syscall.LOCK_SH
 	if exclusive {
@@ -140,7 +140,7 @@ func (s *Store) withLock(exclusive bool, fn func() error) error {
 	if err := syscall.Flock(int(f.Fd()), flag); err != nil {
 		return fmt.Errorf("flock: %w", err)
 	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	defer func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) }()
 
 	return fn()
 }
@@ -166,11 +166,11 @@ func (s *Store) loadRaw() ([]Comment, error) {
 func (s *Store) saveRaw(comments []Comment) error {
 	now := time.Now()
 	var kept []Comment
-	for _, c := range comments {
-		if !c.ResolvedAt.IsZero() && now.Sub(c.ResolvedAt) > purgeAge {
+	for i := range comments {
+		if !comments[i].ResolvedAt.IsZero() && now.Sub(comments[i].ResolvedAt) > purgeAge {
 			continue
 		}
-		kept = append(kept, c)
+		kept = append(kept, comments[i])
 	}
 
 	cf := CommentsFile{
@@ -191,7 +191,7 @@ func (s *Store) saveRaw(comments []Comment) error {
 	}
 
 	if err := os.Rename(tmp, s.DataPath()); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return fmt.Errorf("rename temp file: %w", err)
 	}
 
@@ -288,9 +288,9 @@ func (s *Store) DeleteByFile(filePath string) error {
 			return err
 		}
 		var kept []Comment
-		for _, c := range comments {
-			if c.FilePath != filePath {
-				kept = append(kept, c)
+		for i := range comments {
+			if comments[i].FilePath != filePath {
+				kept = append(kept, comments[i])
 			}
 		}
 		return s.saveRaw(kept)
@@ -305,14 +305,14 @@ func (s *Store) List(filePath string, includeResolved bool) ([]Comment, error) {
 		if err != nil {
 			return err
 		}
-		for _, c := range comments {
-			if filePath != "" && c.FilePath != filePath {
+		for i := range comments {
+			if filePath != "" && comments[i].FilePath != filePath {
 				continue
 			}
-			if !includeResolved && !c.ResolvedAt.IsZero() {
+			if !includeResolved && !comments[i].ResolvedAt.IsZero() {
 				continue
 			}
-			result = append(result, c)
+			result = append(result, comments[i])
 		}
 		return nil
 	})
