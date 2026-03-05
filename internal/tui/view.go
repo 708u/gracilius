@@ -11,6 +11,16 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// cursorPosition represents screen-space cursor coordinates.
+// A zero value means no cursor is visible.
+type cursorPosition struct {
+	x, y int
+}
+
+func (c cursorPosition) isZero() bool {
+	return c.x == 0 && c.y == 0
+}
+
 var separatorBorder = lipgloss.Border{
 	Top: "\u2500",
 }
@@ -97,38 +107,35 @@ func (m *Model) View() tea.View {
 		footerRendered,
 	)
 
-	var cx, cy int
-	var cursorOK bool
-
 	if m.openFile.active {
 		v := newView(m.openFile.overlay(base, m.width, m.height))
-		cx, cy, cursorOK = m.openFile.cursorPos(m.width, m.height)
-		if cursorOK {
-			v.Cursor = tea.NewCursor(cx, cy)
+		if cp := m.openFile.cursorPos(m.width, m.height); !cp.isZero() {
+			v.Cursor = tea.NewCursor(cp.x, cp.y)
 		}
 		return v
 	}
 
 	v := newView(base)
+	var cp cursorPosition
 	switch {
 	case hasTab && t.inputMode:
-		cx, cy, cursorOK = m.commentCursorScreenPos(lo)
+		cp = m.commentCursorScreenPos(lo)
 	case hasTab:
-		cx, cy, cursorOK = m.cursorScreenPos(lo)
+		cp = m.cursorScreenPos(lo)
 	}
-	if cursorOK {
-		v.Cursor = tea.NewCursor(cx, cy)
+	if !cp.isZero() {
+		v.Cursor = tea.NewCursor(cp.x, cp.y)
 	}
 	return v
 }
 
 // cursorScreenPos computes the screen coordinates for the editor cursor
 // using lastMapping (which must be populated by renderEditor before this call).
-func (m *Model) cursorScreenPos(lo layout) (x, y int, visible bool) {
+func (m *Model) cursorScreenPos(lo layout) cursorPosition {
 	t, ok := m.activeTabState()
 	if !ok || m.focusPane != paneEditor ||
 		len(t.lines) == 0 || len(m.lastMapping) == 0 {
-		return 0, 0, false
+		return cursorPosition{}
 	}
 
 	visualRow := -1
@@ -164,29 +171,30 @@ func (m *Model) cursorScreenPos(lo layout) (x, y int, visible bool) {
 	}
 
 	if visualRow < 0 {
-		return 0, 0, false
+		return cursorPosition{}
 	}
 
-	y = contentStartY + visualRow
-	x = lo.editorStartX + lo.lineNumWidth +
-		displayWidthRange(
-			t.lines[t.cursorLine],
-			m.lastMapping[visualRow].wrapOffset,
-			t.cursorChar,
-		)
-	return x, y, true
+	return cursorPosition{
+		x: lo.editorStartX + lo.lineNumWidth +
+			displayWidthRange(
+				t.lines[t.cursorLine],
+				m.lastMapping[visualRow].wrapOffset,
+				t.cursorChar,
+			),
+		y: contentStartY + visualRow,
+	}
 }
 
 // commentCursorScreenPos computes the screen-space cursor position for the
 // comment textarea by finding its input block in lastMapping.
-func (m *Model) commentCursorScreenPos(lo layout) (x, y int, ok bool) {
+func (m *Model) commentCursorScreenPos(lo layout) cursorPosition {
 	t, hasTab := m.activeTabState()
 	if !hasTab || !t.inputMode {
-		return 0, 0, false
+		return cursorPosition{}
 	}
 	c := t.commentInput.Cursor()
 	if c == nil {
-		return 0, 0, false
+		return cursorPosition{}
 	}
 
 	// Find the first lineKindInput entry in lastMapping.
@@ -198,12 +206,13 @@ func (m *Model) commentCursorScreenPos(lo layout) (x, y int, ok bool) {
 		}
 	}
 	if blockStart < 0 {
-		return 0, 0, false
+		return cursorPosition{}
 	}
 
-	x = lo.editorStartX + lo.lineNumWidth + blockBorderLeft + c.X
-	y = contentStartY + blockStart + blockBorderTop + c.Y
-	return x, y, true
+	return cursorPosition{
+		x: lo.editorStartX + lo.lineNumWidth + blockBorderLeft + c.X,
+		y: contentStartY + blockStart + blockBorderTop + c.Y,
+	}
 }
 
 // renderTabBar generates the tab bar (2 lines: labels + underline).

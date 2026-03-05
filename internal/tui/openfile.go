@@ -336,15 +336,16 @@ func (s *openFileOverlay) selectedPath() string {
 }
 
 // cursorPos returns the screen-space cursor position for the overlay's text input.
-func (s *openFileOverlay) cursorPos(width, height int) (x, y int, ok bool) {
+func (s *openFileOverlay) cursorPos(width, height int) cursorPosition {
 	c := s.input.Cursor()
 	if c == nil {
-		return 0, 0, false
+		return cursorPosition{}
 	}
 	g := s.computeLayout(width, height)
-	x = g.startX + overlayBorderW/2 + overlayPaddingW/2 + c.X
-	y = g.startY + overlayBorderH/2 + c.Y
-	return x, y, true
+	return cursorPosition{
+		x: g.startX + overlayBorderW/2 + overlayPaddingW/2 + c.X,
+		y: g.startY + overlayBorderH/2 + c.Y,
+	}
 }
 
 // overlay renders the open-file overlay on top of the background view.
