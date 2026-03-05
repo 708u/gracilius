@@ -57,10 +57,13 @@ def load_state(session_id):
         try:
             with open(state_file, "r") as f:
                 data = json.load(f)
-                return {"warned": data.get("warned", False)}
+                return {
+                    "warned": data.get("warned", False),
+                    "pushed": data.get("pushed", False),
+                }
         except (json.JSONDecodeError, IOError):
             pass
-    return {"warned": False}
+    return {"warned": False, "pushed": False}
 
 
 def save_state(session_id, state):
@@ -118,6 +121,15 @@ def main():
         )
         for cmd in info["commands"]:
             print(f"    - {cmd}", file=sys.stderr)
+    print("", file=sys.stderr)
+    print(
+        "After committing and pushing, review the entire PR "
+        "description and update it to accurately reflect the "
+        "current state of all changes in the PR. Ensure "
+        "consistency across all sections. Write the PR "
+        "description in English.",
+        file=sys.stderr,
+    )
     print("", file=sys.stderr)
     print(
         "After running checks, commit again to confirm.",
