@@ -5,7 +5,41 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/708u/gracilius/internal/comment"
 )
+
+// mockCommentStore is a no-op CommentStore for tests.
+type mockCommentStore struct {
+	comments []comment.Comment
+}
+
+func (s *mockCommentStore) List(string, bool) ([]comment.Comment, error) { return s.comments, nil }
+func (s *mockCommentStore) Add(c comment.Comment) error {
+	s.comments = append(s.comments, c)
+	return nil
+}
+func (s *mockCommentStore) Replace(oldID string, c comment.Comment) error {
+	for i := range s.comments {
+		if s.comments[i].ID == oldID {
+			s.comments = append(s.comments[:i], s.comments[i+1:]...)
+			break
+		}
+	}
+	s.comments = append(s.comments, c)
+	return nil
+}
+func (s *mockCommentStore) Delete(id string) error {
+	for i := range s.comments {
+		if s.comments[i].ID == id {
+			s.comments = append(s.comments[:i], s.comments[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+func (s *mockCommentStore) DeleteByFile(string) error { s.comments = nil; return nil }
+func (s *mockCommentStore) DataPath() string          { return "" }
 
 // newTestModel creates a minimal Model with mock server and temp directory.
 func newTestModel(t *testing.T) *Model {
@@ -13,15 +47,16 @@ func newTestModel(t *testing.T) *Model {
 	tmpDir := t.TempDir()
 	srv := &mockServer{port: 18765}
 	m := &Model{
-		server:    srv,
-		rootDir:   tmpDir,
-		tabs:      []*tab{},
-		treeWidth: 30,
-		keys:      newKeyMap(),
-		iconMode:  iconSymbol,
-		openFile:  newOpenFileOverlay(iconSymbol, darkTheme),
-		width:     120,
-		height:    40,
+		server:       srv,
+		commentStore: &mockCommentStore{},
+		rootDir:      tmpDir,
+		tabs:         []*tab{},
+		treeWidth:    30,
+		keys:         newKeyMap(),
+		iconMode:     iconSymbol,
+		openFile:     newOpenFileOverlay(iconSymbol, darkTheme),
+		width:        120,
+		height:       40,
 	}
 	return m
 }

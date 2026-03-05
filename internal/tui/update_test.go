@@ -262,12 +262,16 @@ func TestCommentSubmit_EnterSavesComment_Enhanced(t *testing.T) {
 	if tab.inputMode {
 		t.Fatal("expected inputMode=false after Enter submit")
 	}
-	if len(tab.comments) != 1 {
-		t.Fatalf("expected 1 comment, got %d", len(tab.comments))
+	comments, err := m.commentStore.List("", false)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if tab.comments[0].text != "test comment" {
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment in store, got %d", len(comments))
+	}
+	if comments[0].Text != "test comment" {
 		t.Errorf("expected comment text 'test comment', got %q",
-			tab.comments[0].text)
+			comments[0].Text)
 	}
 }
 
@@ -312,9 +316,13 @@ func TestCommentSubmit_ShiftEnterInsertsNewline_Enhanced(t *testing.T) {
 	if !tab.inputMode {
 		t.Fatal("expected inputMode=true after Shift+Enter")
 	}
-	if len(tab.comments) != 0 {
+	comments, err := m.commentStore.List("", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 0 {
 		t.Fatalf("expected 0 comments (not submitted), got %d",
-			len(tab.comments))
+			len(comments))
 	}
 }
 
@@ -335,12 +343,16 @@ func TestCommentSubmit_CtrlDSavesComment(t *testing.T) {
 	if tab.inputMode {
 		t.Fatal("expected inputMode=false after Ctrl+D submit")
 	}
-	if len(tab.comments) != 1 {
-		t.Fatalf("expected 1 comment, got %d", len(tab.comments))
+	comments, err := m.commentStore.List("", false)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if tab.comments[0].text != "ctrl-d comment" {
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment in store, got %d", len(comments))
+	}
+	if comments[0].Text != "ctrl-d comment" {
 		t.Errorf("expected 'ctrl-d comment', got %q",
-			tab.comments[0].text)
+			comments[0].Text)
 	}
 }
 
