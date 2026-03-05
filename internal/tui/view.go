@@ -11,6 +11,20 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// cursorPosition represents screen-space cursor coordinates.
+// A zero value means no cursor is visible.
+type cursorPosition struct {
+	x, y int
+}
+
+func (c cursorPosition) isZero() bool {
+	return c.x == 0 && c.y == 0
+}
+
+func (c cursorPosition) XY() (int, int) {
+	return c.x, c.y
+}
+
 var separatorBorder = lipgloss.Border{
 	Top: "\u2500",
 }
@@ -98,9 +112,111 @@ func (m *Model) View() tea.View {
 	)
 
 	if m.openFile.active {
-		return newView(m.openFile.overlay(base, m.width, m.height))
+		v := newView(m.openFile.overlay(base, m.width, m.height))
+		if cp := m.openFile.cursorPos(m.width, m.height); !cp.isZero() {
+			v.Cursor = tea.NewCursor(cp.XY())
+		}
+		return v
 	}
-	return newView(base)
+
+	v := newView(base)
+	var cp cursorPosition
+	switch {
+	case hasTab && t.inputMode:
+		cp = m.commentCursorScreenPos(lo)
+	case hasTab:
+		cp = m.cursorScreenPos(lo)
+	}
+	if !cp.isZero() {
+		v.Cursor = tea.NewCursor(cp.XY())
+	}
+	return v
+}
+
+// cursorScreenPos computes the screen coordinates for the editor cursor
+// using lastMapping (which must be populated by renderEditor before this call).
+func (m *Model) cursorScreenPos(lo layout) cursorPosition {
+	t, ok := m.activeTabState()
+	if !ok || m.focusPane != paneEditor ||
+		len(t.lines) == 0 || len(m.lastMapping) == 0 {
+		return cursorPosition{}
+	}
+
+	visualRow := -1
+	for i, ve := range m.lastMapping {
+		if ve.kind != lineKindCode {
+			continue
+		}
+		if ve.logicalLine != t.cursorLine {
+			continue
+		}
+
+		segEnd := t.lineLen(t.cursorLine)
+		for j := i + 1; j < len(m.lastMapping); j++ {
+			next := m.lastMapping[j]
+			if next.logicalLine == t.cursorLine &&
+				next.kind == lineKindCode {
+				segEnd = next.wrapOffset
+				break
+			}
+			if next.logicalLine != t.cursorLine {
+				break
+			}
+		}
+
+		if t.cursorChar >= ve.wrapOffset &&
+			t.cursorChar < segEnd {
+			visualRow = i
+			break
+		}
+		if t.cursorChar >= ve.wrapOffset {
+			visualRow = i
+		}
+	}
+
+	if visualRow < 0 {
+		return cursorPosition{}
+	}
+
+	return cursorPosition{
+		x: lo.editorStartX + lo.lineNumWidth +
+			displayWidthRange(
+				t.lines[t.cursorLine],
+				m.lastMapping[visualRow].wrapOffset,
+				t.cursorChar,
+			),
+		y: contentStartY + visualRow,
+	}
+}
+
+// commentCursorScreenPos computes the screen-space cursor position for the
+// comment textarea by finding its input block in lastMapping.
+func (m *Model) commentCursorScreenPos(lo layout) cursorPosition {
+	t, hasTab := m.activeTabState()
+	if !hasTab || !t.inputMode {
+		return cursorPosition{}
+	}
+	c := t.commentInput.Cursor()
+	if c == nil {
+		return cursorPosition{}
+	}
+
+	// Find the first lineKindInput entry in lastMapping.
+	blockStart := -1
+	for i, ve := range m.lastMapping {
+		if ve.kind == lineKindInput {
+			blockStart = i
+			break
+		}
+	}
+	if blockStart < 0 {
+		return cursorPosition{}
+	}
+
+	return cursorPosition{
+		x: lo.editorStartX + lo.lineNumWidth + blockBorderLeft + c.X,
+		y: contentStartY + blockStart + blockBorderTop + c.Y,
+	}
 }
 
 // renderTabBar generates the tab bar (2 lines: labels + underline).
@@ -299,7 +415,6 @@ func (m *Model) renderEditor(lo layout) []string {
 		lineNumStr := t.vp.LeftGutterFunc(gutterCtx)
 
 		// Build content and emit visual rows
-		isCursorLine := m.focusPane == paneEditor && i == t.cursorLine
 		isSelected := m.focusPane == paneEditor && t.selecting && i >= startLine && i <= endLine
 
 		bp := wrapBreakpoints(lineContent, textWidth)
@@ -334,15 +449,6 @@ func (m *Model) renderEditor(lo layout) []string {
 					segLen += len([]rune(r.Text))
 				}
 
-				// Determine cursor offset within this segment (-1 = not here).
-				cursorOff := -1
-				if isCursorLine {
-					lastSeg := si == len(segRunsList)-1
-					if t.cursorChar >= wrapOff && (t.cursorChar < wrapOff+segLen || lastSeg) {
-						cursorOff = t.cursorChar - wrapOff
-					}
-				}
-
 				// Clamp selection range to this segment.
 				segSC, segEC := 0, 0
 				if isSelected && sc < ec {
@@ -358,8 +464,6 @@ func (m *Model) renderEditor(lo layout) []string {
 				switch {
 				case segSC < segEC:
 					renderStyledLineWithSelection(&segSB, segRuns, segSC, segEC, selBgSeq)
-				case cursorOff >= 0:
-					renderStyledLineWithCursor(&segSB, segRuns, cursorOff)
 				default:
 					for _, r := range segRuns {
 						writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
@@ -384,25 +488,6 @@ func (m *Model) renderEditor(lo layout) []string {
 			var contentSB strings.Builder
 
 			switch {
-			case isCursorLine && isSelected:
-				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
-				if sc == ec {
-					if hl := t.getHighlightedLine(i); hl != nil {
-						renderStyledLineWithCursor(&contentSB, hl.runs, t.cursorChar)
-					} else {
-						renderLineWithCursor(&contentSB, lineContent, t.cursorChar)
-					}
-				} else if hl := t.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec, selBgSeq)
-				} else {
-					renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec, selBgSeq)
-				}
-			case isCursorLine:
-				if hl := t.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithCursor(&contentSB, hl.runs, t.cursorChar)
-				} else {
-					renderLineWithCursor(&contentSB, lineContent, t.cursorChar)
-				}
 			case isSelected:
 				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
 				if hl := t.getHighlightedLine(i); hl != nil {
@@ -508,12 +593,6 @@ func selRange(line, startLine, endLine, startChar, endChar int, content string) 
 		ec = endChar
 	}
 	return sc, ec
-}
-
-// renderLineWithCursor renders a line with an inverted cursor.
-func renderLineWithCursor(sb *strings.Builder, line string, cursorChar int) {
-	runs := []styledRun{{Text: line}}
-	renderStyledLineWithCursor(sb, runs, cursorChar)
 }
 
 // renderLineWithCursorAndSelection renders a line with selection highlight.

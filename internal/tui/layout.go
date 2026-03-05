@@ -1,5 +1,6 @@
 package tui
 
+// Screen geometry constants.
 const (
 	headerHeight        = 1
 	tabBarHeight        = 2 // labels + underline
@@ -11,8 +12,14 @@ const (
 	maxTreeWidthPercent = 70
 	contentStartY       = headerHeight + tabBarHeight
 	minContentHeight    = 5
-	commentBlockMargin  = 4 // left/right padding around comment block
-	commentBorderChars  = 3 // "│ " (2) + "│" (1)
+)
+
+// Comment / input block geometry (renderBlock).
+const (
+	commentBlockMargin = 4 // left/right padding around comment block
+	commentBorderChars = 3 // "│ " (2) + "│" (1)
+	blockBorderLeft    = 2 // "│ " prefix in body row
+	blockBorderTop     = 1 // top border row
 )
 
 // layout holds all derived dimensions for a single render frame.
