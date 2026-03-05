@@ -55,12 +55,17 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // handleKeyInputMode handles key events during comment input mode.
 func (m *Model) handleKeyInputMode(t *tab, msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	isSubmit := key.Matches(msg, m.keys.CommentSubmit)
+	if m.enhancedKeyboard && msg.Code == tea.KeyEnter && !msg.Mod.Contains(tea.ModShift) {
+		isSubmit = true
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Cancel):
 		t.inputMode = false
 		t.commentInput.Reset()
 		t.commentInput.Blur()
-	case key.Matches(msg, m.keys.CommentSubmit):
+	case isSubmit:
 		val := t.commentInput.Value()
 		idx := t.findComment(t.inputStart)
 		if idx >= 0 {
@@ -79,8 +84,7 @@ func (m *Model) handleKeyInputMode(t *tab, msg tea.KeyPressMsg) (tea.Model, tea.
 		t.commentInput.Blur()
 	default:
 		linesBefore := strings.Count(t.commentInput.Value(), "\n") + 1
-		if msg.Code == tea.KeyEnter && msg.Mod.Contains(tea.ModShift) &&
-			linesBefore >= t.commentInput.Height() {
+		if msg.Code == tea.KeyEnter && linesBefore >= t.commentInput.Height() {
 			t.commentInput.SetHeight(t.commentInput.Height() + 1)
 		}
 		t.commentInput, cmd = t.commentInput.Update(msg)
@@ -264,6 +268,11 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			t.commentInput.SetWidth(
 				lo.editorWidth - lo.lineNumWidth - commentBlockMargin - commentBorderChars)
 			t.commentInput.SetHeight(3)
+			if m.enhancedKeyboard {
+				t.commentInput.KeyMap.InsertNewline = key.NewBinding(
+					key.WithKeys("shift+enter"),
+				)
+			}
 			t.commentInput.Reset()
 			if idx := t.findComment(t.inputStart); idx >= 0 {
 				t.inputStart = t.comments[idx].startLine

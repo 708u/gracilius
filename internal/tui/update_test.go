@@ -244,19 +244,18 @@ func TestCloseDiffTabs_CallsOnReject(t *testing.T) {
 	}
 }
 
-func TestCommentSubmit_EnterSavesComment(t *testing.T) {
+func TestCommentSubmit_EnterSavesComment_Enhanced(t *testing.T) {
 	content := "line1\nline2\nline3"
 	m := newTestModelWithFile(t, content)
+	m.enhancedKeyboard = true
 	tab := m.tabs[0]
 
-	// Enter comment input mode.
 	tab.inputMode = true
 	tab.inputStart = 0
 	tab.inputEnd = 0
 	tab.commentInput.Focus()
 	tab.commentInput.SetValue("test comment")
 
-	// Press Enter to submit.
 	msg := tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})
 	m.Update(msg)
 
@@ -272,19 +271,38 @@ func TestCommentSubmit_EnterSavesComment(t *testing.T) {
 	}
 }
 
-func TestCommentSubmit_ShiftEnterInsertsNewline(t *testing.T) {
+func TestCommentSubmit_EnterInsertsNewline_Basic(t *testing.T) {
 	content := "line1\nline2\nline3"
 	m := newTestModelWithFile(t, content)
+	m.enhancedKeyboard = false
 	tab := m.tabs[0]
 
-	// Enter comment input mode.
 	tab.inputMode = true
 	tab.inputStart = 0
 	tab.inputEnd = 0
 	tab.commentInput.Focus()
 	tab.commentInput.SetValue("first line")
 
-	// Press Shift+Enter to insert newline.
+	msg := tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})
+	m.Update(msg)
+
+	if !tab.inputMode {
+		t.Fatal("expected inputMode=true: Enter should not submit without enhanced keyboard")
+	}
+}
+
+func TestCommentSubmit_ShiftEnterInsertsNewline_Enhanced(t *testing.T) {
+	content := "line1\nline2\nline3"
+	m := newTestModelWithFile(t, content)
+	m.enhancedKeyboard = true
+	tab := m.tabs[0]
+
+	tab.inputMode = true
+	tab.inputStart = 0
+	tab.inputEnd = 0
+	tab.commentInput.Focus()
+	tab.commentInput.SetValue("first line")
+
 	msg := tea.KeyPressMsg(tea.Key{
 		Code: tea.KeyEnter,
 		Mod:  tea.ModShift,
@@ -305,14 +323,12 @@ func TestCommentSubmit_CtrlDSavesComment(t *testing.T) {
 	m := newTestModelWithFile(t, content)
 	tab := m.tabs[0]
 
-	// Enter comment input mode.
 	tab.inputMode = true
 	tab.inputStart = 1
 	tab.inputEnd = 1
 	tab.commentInput.Focus()
 	tab.commentInput.SetValue("ctrl-d comment")
 
-	// Press Ctrl+D to submit.
 	msg := tea.KeyPressMsg(tea.Key{Code: 'd', Mod: tea.ModCtrl})
 	m.Update(msg)
 

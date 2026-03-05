@@ -31,7 +31,10 @@ var separatorBorder = lipgloss.Border{
 
 const emptyStateMsg = "Select a file to view"
 
-const commentHintFmt = "%s: save, Shift+Enter: newline, Esc: cancel"
+const (
+	commentHintEnhanced = "Enter: save, Shift+Enter: newline, Esc: cancel"
+	commentHintBasic    = "Ctrl+D: save, Esc: cancel"
+)
 
 var (
 	styleComment   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
@@ -292,8 +295,11 @@ func (m *Model) renderFooter() string {
 	}
 
 	if hasTab && t.inputMode {
-		fmt.Fprintf(&sb, "[Comment] "+commentHintFmt,
-			m.keys.CommentSubmit.Help().Key)
+		hint := commentHintBasic
+		if m.enhancedKeyboard {
+			hint = commentHintEnhanced
+		}
+		sb.WriteString("[Comment] " + hint)
 	} else {
 		m.help.SetWidth(m.width)
 		sb.WriteString(m.help.View(m.contextKeyMap()))
@@ -513,8 +519,11 @@ func (m *Model) renderEditor(lo layout) []string {
 		if t.inputMode && i == t.inputEnd {
 			gutterCtx.Soft = true
 			lnPad := t.vp.LeftGutterFunc(gutterCtx)
-			label := fmt.Sprintf("comment ("+commentHintFmt+")",
-				m.keys.CommentSubmit.Help().Key)
+			hint := commentHintBasic
+			if m.enhancedKeyboard {
+				hint = commentHintEnhanced
+			}
+			label := "comment (" + hint + ")"
 			blockRows := renderBlock(
 				t.commentInput.View(), label, commentBodyWidth, styleInput, styleBodyWhite)
 			for _, r := range blockRows {

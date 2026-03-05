@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 )
@@ -62,9 +61,6 @@ func newTextarea() textarea.Model {
 	ta.ShowLineNumbers = false
 	ta.Prompt = ""
 	ta.SetVirtualCursor(false)
-	ta.KeyMap.InsertNewline = key.NewBinding(
-		key.WithKeys("shift+enter"),
-	)
 	return ta
 }
 
