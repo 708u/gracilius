@@ -9,7 +9,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/708u/gracilius/internal/commentstore"
+	"github.com/708u/gracilius/internal/comment"
 	"github.com/google/uuid"
 )
 
@@ -102,7 +102,7 @@ func (m *Model) submitComment(t *tab) {
 	idx := t.findComment(t.inputStart)
 	var oldID string
 	if idx >= 0 {
-		oldID = t.comments[idx].id
+		oldID = t.comments[idx].ID
 	}
 
 	if val == "" && oldID != "" {
@@ -120,7 +120,7 @@ func (m *Model) submitComment(t *tab) {
 		log.Printf("Failed to generate UUID: %v", err)
 	}
 	m.notifyComment(t.inputStart, t.inputEnd, val)
-	sc := commentstore.Comment{
+	sc := comment.Comment{
 		ID:        id.String(),
 		FilePath:  t.filePath,
 		StartLine: t.inputStart,
@@ -318,9 +318,9 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			t.commentInput.Reset()
 			if idx := t.findComment(t.inputStart); idx >= 0 {
-				t.inputStart = t.comments[idx].startLine
-				t.inputEnd = t.comments[idx].endLine
-				t.commentInput.SetValue(t.comments[idx].text)
+				t.inputStart = t.comments[idx].StartLine
+				t.inputEnd = t.comments[idx].EndLine
+				t.commentInput.SetValue(t.comments[idx].Text)
 			}
 			t.commentInput.Focus()
 		}

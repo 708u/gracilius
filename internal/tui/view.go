@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/708u/gracilius/internal/comment"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -539,7 +540,7 @@ func (m *Model) renderEditor(lo layout) []string {
 			lnPad := t.vp.LeftGutterFunc(gutterCtx)
 			label := formatCommentLabel(c)
 			blockRows := renderBlock(
-				c.text, label, commentBodyWidth, styleComment, styleBodyWhite)
+				c.Text, label, commentBodyWidth, styleComment, styleBodyWhite)
 			for _, r := range blockRows {
 				if len(lines) >= height {
 					break
@@ -560,11 +561,11 @@ func (m *Model) renderEditor(lo layout) []string {
 }
 
 // formatCommentLabel returns the label for a comment block header.
-func formatCommentLabel(c *comment) string {
-	if c.startLine == c.endLine {
+func formatCommentLabel(c *comment.Comment) string {
+	if c.StartLine == c.EndLine {
 		return "comment"
 	}
-	return fmt.Sprintf("comment (L%d-%d)", c.startLine+1, c.endLine+1)
+	return fmt.Sprintf("comment (L%d-%d)", c.StartLine+1, c.EndLine+1)
 }
 
 // renderBlock renders text inside a bordered block with a label header.

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"charm.land/bubbles/v2/help"
-	"github.com/708u/gracilius/internal/commentstore"
+	"github.com/708u/gracilius/internal/comment"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -25,6 +25,17 @@ type MCPServer interface {
 		filePath, text string,
 		startLine, startChar, endLine, endChar int,
 	)
+}
+
+// CommentStore is the interface for comment persistence.
+// comment.Store satisfies this implicitly.
+type CommentStore interface {
+	List(filePath string, includeResolved bool) ([]comment.Comment, error)
+	Add(c comment.Comment) error
+	Replace(oldID string, c comment.Comment) error
+	Delete(id string) error
+	DeleteByFile(filePath string) error
+	DataPath() string
 }
 
 // OpenDiffMsg notifies the TUI to open a diff tab.
@@ -115,7 +126,7 @@ type Model struct {
 	enhancedKeyboard bool
 
 	// comment persistence
-	commentStore   *commentstore.Store
+	commentStore   CommentStore
 	commentWatcher *fsnotify.Watcher
 }
 
@@ -209,7 +220,7 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 		return nil, fmt.Errorf("resolve root directory: %w", err)
 	}
 
-	store, err := commentstore.NewStore(absRootDir)
+	store, err := comment.NewStore(absRootDir)
 	if err != nil {
 		return nil, fmt.Errorf("create comment store: %w", err)
 	}

@@ -41,15 +41,7 @@ func (m *Model) handleCommentsChanged() (tea.Model, tea.Cmd) {
 			log.Printf("Failed to reload comments for %s: %v", t.filePath, err)
 			continue
 		}
-		t.comments = nil
-		for i := range stored {
-			t.comments = append(t.comments, comment{
-				id:        stored[i].ID,
-				startLine: stored[i].StartLine,
-				endLine:   stored[i].EndLine,
-				text:      stored[i].Text,
-			})
-		}
+		t.comments = stored
 	}
 	cmd := m.watchComments()
 	return m, cmd

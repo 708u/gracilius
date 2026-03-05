@@ -6,6 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
+	"github.com/708u/gracilius/internal/comment"
 )
 
 // tabKind distinguishes between file and diff tabs.
@@ -15,14 +16,6 @@ const (
 	fileTab tabKind = iota
 	diffTab
 )
-
-// comment holds a single inline comment attached to a line range.
-type comment struct {
-	id        string
-	startLine int
-	endLine   int
-	text      string
-}
 
 // tab holds all per-tab state.
 type tab struct {
@@ -39,7 +32,7 @@ type tab struct {
 	lineSelect       bool
 	vp               viewport.Model
 
-	comments     []comment
+	comments     []comment.Comment
 	commentInput textarea.Model
 	inputMode    bool
 	inputStart   int
@@ -132,18 +125,18 @@ func (t *tab) rejectAndClear() {
 
 // findComment returns the index of the comment covering line, or -1.
 func (t *tab) findComment(line int) int {
-	for i, c := range t.comments {
-		if line >= c.startLine && line <= c.endLine {
+	for i := range t.comments {
+		if line >= t.comments[i].StartLine && line <= t.comments[i].EndLine {
 			return i
 		}
 	}
 	return -1
 }
 
-// commentEndingAt returns the comment whose endLine is line, or nil.
-func (t *tab) commentEndingAt(line int) *comment {
+// commentEndingAt returns the comment whose EndLine is line, or nil.
+func (t *tab) commentEndingAt(line int) *comment.Comment {
 	for i := range t.comments {
-		if t.comments[i].endLine == line {
+		if t.comments[i].EndLine == line {
 			return &t.comments[i]
 		}
 	}
@@ -284,7 +277,7 @@ func (t *tab) lineVisualRows(line, textWidth int) int {
 		rows = countWraps(t.lines[line], textWidth)
 	}
 	if c := t.commentEndingAt(line); c != nil {
-		rows += commentDisplayRows(c.text)
+		rows += commentDisplayRows(c.Text)
 	}
 	if t.inputMode && line == t.inputEnd {
 		rows += t.commentInput.Height() + 2

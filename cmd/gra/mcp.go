@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/708u/gracilius/internal/commentstore"
+	"github.com/708u/gracilius/internal/comment"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -33,7 +33,7 @@ func runMCP() int {
 		return exitErr
 	}
 
-	store, err := commentstore.NewStore(absRootDir)
+	store, err := comment.NewStore(absRootDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create comment store: %v\n", err)
 		return exitErr

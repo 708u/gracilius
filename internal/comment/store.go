@@ -1,4 +1,4 @@
-package commentstore
+package comment
 
 import (
 	"crypto/sha256"
