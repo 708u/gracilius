@@ -113,10 +113,10 @@ func run() int {
 		return exitErr
 	}
 
-	// Comment store
-	store, err := comment.NewStore(absRootDir)
+	// Comment repository
+	store, err := comment.NewRepository(absRootDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create comment store: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to create comment repository: %v\n", err)
 		return exitErr
 	}
 

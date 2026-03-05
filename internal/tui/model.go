@@ -27,9 +27,9 @@ type MCPServer interface {
 	)
 }
 
-// CommentStore is the interface for comment persistence.
-// comment.Store satisfies this implicitly.
-type CommentStore interface {
+// CommentRepository is the interface for comment persistence.
+// comment.Repository satisfies this implicitly.
+type CommentRepository interface {
 	List(filePath string, includeResolved bool) ([]comment.Entry, error)
 	Add(c comment.Entry) error
 	Replace(oldID string, c comment.Entry) error
@@ -126,7 +126,7 @@ type Model struct {
 	enhancedKeyboard bool
 
 	// comment persistence
-	commentStore   CommentStore
+	commentRepo    CommentRepository
 	commentWatcher *fsnotify.Watcher
 }
 
@@ -214,7 +214,7 @@ func (m *Model) toggleTreeEntry(idx int) {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, store CommentStore, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher) (*Model, error) {
+func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher) (*Model, error) {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root directory: %w", err)
@@ -239,7 +239,7 @@ func NewModel(srv MCPServer, store CommentStore, rootDir string, watcher *fsnoti
 		openFile:       newOpenFileOverlay(im, darkTheme),
 		isDark:         true,
 		theme:          darkTheme,
-		commentStore:   store,
+		commentRepo:    store,
 		commentWatcher: commentWatcher,
 	}, nil
 }

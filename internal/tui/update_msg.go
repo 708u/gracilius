@@ -36,7 +36,7 @@ func (m *Model) handleCommentsChanged() (tea.Model, tea.Cmd) {
 		if t.filePath == "" || t.kind != fileTab {
 			continue
 		}
-		stored, err := m.commentStore.List(t.filePath, false)
+		stored, err := m.commentRepo.List(t.filePath, false)
 		if err != nil {
 			log.Printf("Failed to reload comments for %s: %v", t.filePath, err)
 			continue

@@ -106,7 +106,7 @@ func (m *Model) submitComment(t *tab) {
 	}
 
 	if val == "" && oldID != "" {
-		if err := m.commentStore.Delete(oldID); err != nil {
+		if err := m.commentRepo.Delete(oldID); err != nil {
 			log.Printf("Failed to delete comment: %v", err)
 		}
 		return
@@ -130,12 +130,12 @@ func (m *Model) submitComment(t *tab) {
 		CreatedAt: time.Now(),
 	}
 	if oldID != "" {
-		if err := m.commentStore.Replace(oldID, sc); err != nil {
+		if err := m.commentRepo.Replace(oldID, sc); err != nil {
 			log.Printf("Failed to update comment: %v", err)
 		}
 		return
 	}
-	if err := m.commentStore.Add(sc); err != nil {
+	if err := m.commentRepo.Add(sc); err != nil {
 		log.Printf("Failed to persist comment: %v", err)
 	}
 }
@@ -336,7 +336,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, m.keys.ClearAll):
 		if hasTab && m.focusPane == paneEditor && t.filePath != "" {
-			if err := m.commentStore.DeleteByFile(t.filePath); err != nil {
+			if err := m.commentRepo.DeleteByFile(t.filePath); err != nil {
 				log.Printf("Failed to clear comments from store: %v", err)
 			}
 		}

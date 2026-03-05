@@ -262,7 +262,7 @@ func TestCommentSubmit_EnterSavesComment_Enhanced(t *testing.T) {
 	if tab.inputMode {
 		t.Fatal("expected inputMode=false after Enter submit")
 	}
-	comments, err := m.commentStore.List("", false)
+	comments, err := m.commentRepo.List("", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestCommentSubmit_ShiftEnterInsertsNewline_Enhanced(t *testing.T) {
 	if !tab.inputMode {
 		t.Fatal("expected inputMode=true after Shift+Enter")
 	}
-	comments, err := m.commentStore.List("", false)
+	comments, err := m.commentRepo.List("", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +343,7 @@ func TestCommentSubmit_CtrlDSavesComment(t *testing.T) {
 	if tab.inputMode {
 		t.Fatal("expected inputMode=false after Ctrl+D submit")
 	}
-	comments, err := m.commentStore.List("", false)
+	comments, err := m.commentRepo.List("", false)
 	if err != nil {
 		t.Fatal(err)
 	}

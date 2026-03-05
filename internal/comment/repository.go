@@ -88,15 +88,15 @@ type CommentsFile struct {
 
 const purgeAge = 30 * 24 * time.Hour
 
-// Store manages comment persistence.
-type Store struct {
+// Repository manages comment persistence.
+type Repository struct {
 	dir     string
 	rootDir string
 }
 
-// NewStore creates a new Store for the given rootDir.
+// NewRepository creates a new Repository for the given rootDir.
 // The store directory is ~/.gracilius/projects/{basename-hash8}/
-func NewStore(rootDir string) (*Store, error) {
+func NewRepository(rootDir string) (*Repository, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("get home directory: %w", err)
@@ -111,15 +111,15 @@ func NewStore(rootDir string) (*Store, error) {
 		return nil, fmt.Errorf("create project directory: %w", err)
 	}
 
-	return &Store{dir: dir, rootDir: rootDir}, nil
+	return &Repository{dir: dir, rootDir: rootDir}, nil
 }
 
 // DataPath returns the path to the comments JSON file.
-func (s *Store) DataPath() string {
+func (s *Repository) DataPath() string {
 	return filepath.Join(s.dir, "comments.json")
 }
 
-func (s *Store) load() ([]Entry, error) {
+func (s *Repository) load() ([]Entry, error) {
 	data, err := os.ReadFile(s.DataPath())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -134,7 +134,7 @@ func (s *Store) load() ([]Entry, error) {
 	return cf.Comments, nil
 }
 
-func (s *Store) save(comments []Entry) error {
+func (s *Repository) save(comments []Entry) error {
 	now := time.Now()
 	var kept []Entry
 	for i := range comments {
@@ -169,19 +169,8 @@ func (s *Store) save(comments []Entry) error {
 	return nil
 }
 
-// Load reads comments from the store.
-func (s *Store) Load() ([]Entry, error) {
-	return s.load()
-}
-
-// Save writes comments to the store atomically.
-// Old resolved comments (>30 days) are auto-purged.
-func (s *Store) Save(comments []Entry) error {
-	return s.save(comments)
-}
-
 // Add adds a comment to the store.
-func (s *Store) Add(c Entry) error {
+func (s *Repository) Add(c Entry) error {
 	comments, err := s.load()
 	if err != nil {
 		return err
@@ -191,7 +180,7 @@ func (s *Store) Add(c Entry) error {
 }
 
 // Replace removes the comment with oldID and adds c in a single operation.
-func (s *Store) Replace(oldID string, c Entry) error {
+func (s *Repository) Replace(oldID string, c Entry) error {
 	comments, err := s.load()
 	if err != nil {
 		return err
@@ -207,7 +196,7 @@ func (s *Store) Replace(oldID string, c Entry) error {
 }
 
 // Resolve marks a comment as resolved.
-func (s *Store) Resolve(id string) error {
+func (s *Repository) Resolve(id string) error {
 	comments, err := s.load()
 	if err != nil {
 		return err
@@ -222,7 +211,7 @@ func (s *Store) Resolve(id string) error {
 }
 
 // Delete removes a comment from the store.
-func (s *Store) Delete(id string) error {
+func (s *Repository) Delete(id string) error {
 	comments, err := s.load()
 	if err != nil {
 		return err
@@ -237,7 +226,7 @@ func (s *Store) Delete(id string) error {
 }
 
 // DeleteByFile removes all comments for a specific file.
-func (s *Store) DeleteByFile(filePath string) error {
+func (s *Repository) DeleteByFile(filePath string) error {
 	comments, err := s.load()
 	if err != nil {
 		return err
@@ -252,7 +241,7 @@ func (s *Store) DeleteByFile(filePath string) error {
 }
 
 // List returns comments filtered by file path and resolved status.
-func (s *Store) List(filePath string, includeResolved bool) ([]Entry, error) {
+func (s *Repository) List(filePath string, includeResolved bool) ([]Entry, error) {
 	comments, err := s.load()
 	if err != nil {
 		return nil, err

@@ -43,7 +43,7 @@ func (m *Model) watchFile() tea.Cmd {
 // watchComments returns a tea.Cmd that watches comments.json for changes.
 func (m *Model) watchComments() tea.Cmd {
 	w := m.commentWatcher
-	dataPath := m.commentStore.DataPath()
+	dataPath := m.commentRepo.DataPath()
 	return func() tea.Msg {
 		if w == nil {
 			return nil

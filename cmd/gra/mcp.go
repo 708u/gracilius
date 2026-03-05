@@ -33,9 +33,9 @@ func runMCP() int {
 		return exitErr
 	}
 
-	store, err := comment.NewStore(absRootDir)
+	store, err := comment.NewRepository(absRootDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create comment store: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to create comment repository: %v\n", err)
 		return exitErr
 	}
 
