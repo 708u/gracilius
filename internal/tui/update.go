@@ -104,6 +104,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.KeyboardEnhancementsMsg:
+		m.enhancedKeyboard = msg.SupportsKeyDisambiguation()
+		return m, nil
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		if m.isDark {

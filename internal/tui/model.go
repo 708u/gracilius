@@ -106,6 +106,9 @@ type Model struct {
 	// theme
 	isDark bool
 	theme  themeConfig
+
+	// keyboard enhancement (Kitty protocol)
+	enhancedKeyboard bool
 }
 
 // lineKind distinguishes the type of a visual row.
