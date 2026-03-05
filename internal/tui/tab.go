@@ -32,7 +32,7 @@ type tab struct {
 	lineSelect       bool
 	vp               viewport.Model
 
-	comments     []comment.Comment
+	comments     []comment.Entry
 	commentInput textarea.Model
 	inputMode    bool
 	inputStart   int
@@ -134,7 +134,7 @@ func (t *tab) findComment(line int) int {
 }
 
 // commentEndingAt returns the comment whose EndLine is line, or nil.
-func (t *tab) commentEndingAt(line int) *comment.Comment {
+func (t *tab) commentEndingAt(line int) *comment.Entry {
 	for i := range t.comments {
 		if t.comments[i].EndLine == line {
 			return &t.comments[i]

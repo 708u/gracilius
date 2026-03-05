@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// Comment represents a review comment attached to a file.
-type Comment struct {
+// Entry represents a review comment attached to a file.
+type Entry struct {
 	ID         string
 	FilePath   string
 	StartLine  int
@@ -21,7 +21,7 @@ type Comment struct {
 	CreatedAt  time.Time
 }
 
-// commentJSON is the JSON serialization format for Comment.
+// commentJSON is the JSON serialization format for Entry.
 type commentJSON struct {
 	ID         string `json:"id"`
 	FilePath   string `json:"filePath"`
@@ -34,7 +34,7 @@ type commentJSON struct {
 }
 
 // MarshalJSON implements json.Marshaler.
-func (c *Comment) MarshalJSON() ([]byte, error) {
+func (c *Entry) MarshalJSON() ([]byte, error) {
 	j := commentJSON{
 		ID:        c.ID,
 		FilePath:  c.FilePath,
@@ -51,7 +51,7 @@ func (c *Comment) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
-func (c *Comment) UnmarshalJSON(data []byte) error {
+func (c *Entry) UnmarshalJSON(data []byte) error {
 	var j commentJSON
 	if err := json.Unmarshal(data, &j); err != nil {
 		return err
@@ -81,9 +81,9 @@ func (c *Comment) UnmarshalJSON(data []byte) error {
 
 // CommentsFile is the top-level structure for the comments JSON file.
 type CommentsFile struct {
-	RootDir  string    `json:"rootDir"`
-	Version  int       `json:"version"`
-	Comments []Comment `json:"comments"`
+	RootDir  string  `json:"rootDir"`
+	Version  int     `json:"version"`
+	Comments []Entry `json:"comments"`
 }
 
 const purgeAge = 30 * 24 * time.Hour
@@ -119,7 +119,7 @@ func (s *Store) DataPath() string {
 	return filepath.Join(s.dir, "comments.json")
 }
 
-func (s *Store) load() ([]Comment, error) {
+func (s *Store) load() ([]Entry, error) {
 	data, err := os.ReadFile(s.DataPath())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -134,9 +134,9 @@ func (s *Store) load() ([]Comment, error) {
 	return cf.Comments, nil
 }
 
-func (s *Store) save(comments []Comment) error {
+func (s *Store) save(comments []Entry) error {
 	now := time.Now()
-	var kept []Comment
+	var kept []Entry
 	for i := range comments {
 		if !comments[i].ResolvedAt.IsZero() && now.Sub(comments[i].ResolvedAt) > purgeAge {
 			continue
@@ -170,18 +170,18 @@ func (s *Store) save(comments []Comment) error {
 }
 
 // Load reads comments from the store.
-func (s *Store) Load() ([]Comment, error) {
+func (s *Store) Load() ([]Entry, error) {
 	return s.load()
 }
 
 // Save writes comments to the store atomically.
 // Old resolved comments (>30 days) are auto-purged.
-func (s *Store) Save(comments []Comment) error {
+func (s *Store) Save(comments []Entry) error {
 	return s.save(comments)
 }
 
 // Add adds a comment to the store.
-func (s *Store) Add(c Comment) error {
+func (s *Store) Add(c Entry) error {
 	comments, err := s.load()
 	if err != nil {
 		return err
@@ -191,7 +191,7 @@ func (s *Store) Add(c Comment) error {
 }
 
 // Replace removes the comment with oldID and adds c in a single operation.
-func (s *Store) Replace(oldID string, c Comment) error {
+func (s *Store) Replace(oldID string, c Entry) error {
 	comments, err := s.load()
 	if err != nil {
 		return err
@@ -242,7 +242,7 @@ func (s *Store) DeleteByFile(filePath string) error {
 	if err != nil {
 		return err
 	}
-	var kept []Comment
+	var kept []Entry
 	for i := range comments {
 		if comments[i].FilePath != filePath {
 			kept = append(kept, comments[i])
@@ -252,12 +252,12 @@ func (s *Store) DeleteByFile(filePath string) error {
 }
 
 // List returns comments filtered by file path and resolved status.
-func (s *Store) List(filePath string, includeResolved bool) ([]Comment, error) {
+func (s *Store) List(filePath string, includeResolved bool) ([]Entry, error) {
 	comments, err := s.load()
 	if err != nil {
 		return nil, err
 	}
-	var result []Comment
+	var result []Entry
 	for i := range comments {
 		if filePath != "" && comments[i].FilePath != filePath {
 			continue

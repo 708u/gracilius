@@ -11,15 +11,15 @@ import (
 
 // mockCommentStore is a no-op CommentStore for tests.
 type mockCommentStore struct {
-	comments []comment.Comment
+	comments []comment.Entry
 }
 
-func (s *mockCommentStore) List(string, bool) ([]comment.Comment, error) { return s.comments, nil }
-func (s *mockCommentStore) Add(c comment.Comment) error {
+func (s *mockCommentStore) List(string, bool) ([]comment.Entry, error) { return s.comments, nil }
+func (s *mockCommentStore) Add(c comment.Entry) error {
 	s.comments = append(s.comments, c)
 	return nil
 }
-func (s *mockCommentStore) Replace(oldID string, c comment.Comment) error {
+func (s *mockCommentStore) Replace(oldID string, c comment.Entry) error {
 	for i := range s.comments {
 		if s.comments[i].ID == oldID {
 			s.comments = append(s.comments[:i], s.comments[i+1:]...)

@@ -120,7 +120,7 @@ func (m *Model) submitComment(t *tab) {
 		log.Printf("Failed to generate UUID: %v", err)
 	}
 	m.notifyComment(t.inputStart, t.inputEnd, val)
-	sc := comment.Comment{
+	sc := comment.Entry{
 		ID:        id.String(),
 		FilePath:  t.filePath,
 		StartLine: t.inputStart,

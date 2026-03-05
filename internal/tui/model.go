@@ -30,9 +30,9 @@ type MCPServer interface {
 // CommentStore is the interface for comment persistence.
 // comment.Store satisfies this implicitly.
 type CommentStore interface {
-	List(filePath string, includeResolved bool) ([]comment.Comment, error)
-	Add(c comment.Comment) error
-	Replace(oldID string, c comment.Comment) error
+	List(filePath string, includeResolved bool) ([]comment.Entry, error)
+	Add(c comment.Entry) error
+	Replace(oldID string, c comment.Entry) error
 	Delete(id string) error
 	DeleteByFile(filePath string) error
 	DataPath() string

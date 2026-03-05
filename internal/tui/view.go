@@ -561,7 +561,7 @@ func (m *Model) renderEditor(lo layout) []string {
 }
 
 // formatCommentLabel returns the label for a comment block header.
-func formatCommentLabel(c *comment.Comment) string {
+func formatCommentLabel(c *comment.Entry) string {
 	if c.StartLine == c.EndLine {
 		return "comment"
 	}
