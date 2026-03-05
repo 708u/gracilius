@@ -21,6 +21,10 @@ func (c cursorPosition) isZero() bool {
 	return c.x == 0 && c.y == 0
 }
 
+func (c cursorPosition) XY() (int, int) {
+	return c.x, c.y
+}
+
 var separatorBorder = lipgloss.Border{
 	Top: "\u2500",
 }
@@ -110,7 +114,7 @@ func (m *Model) View() tea.View {
 	if m.openFile.active {
 		v := newView(m.openFile.overlay(base, m.width, m.height))
 		if cp := m.openFile.cursorPos(m.width, m.height); !cp.isZero() {
-			v.Cursor = tea.NewCursor(cp.x, cp.y)
+			v.Cursor = tea.NewCursor(cp.XY())
 		}
 		return v
 	}
@@ -124,7 +128,7 @@ func (m *Model) View() tea.View {
 		cp = m.cursorScreenPos(lo)
 	}
 	if !cp.isZero() {
-		v.Cursor = tea.NewCursor(cp.x, cp.y)
+		v.Cursor = tea.NewCursor(cp.XY())
 	}
 	return v
 }
