@@ -144,6 +144,29 @@ func scanDir(dir string, depth int, entries []fileEntry) []fileEntry {
 	return entries
 }
 
+// expandedPaths returns the set of currently expanded directory paths.
+func expandedPaths(entries []fileEntry) map[string]bool {
+	paths := make(map[string]bool)
+	for _, e := range entries {
+		if e.isDir && e.expanded {
+			paths[e.path] = true
+		}
+	}
+	return paths
+}
+
+// restoreExpanded expands directories whose paths are in the given set.
+func restoreExpanded(
+	entries []fileEntry, paths map[string]bool,
+) []fileEntry {
+	for i := 0; i < len(entries); i++ {
+		if entries[i].isDir && paths[entries[i].path] {
+			entries = expandDir(entries, i)
+		}
+	}
+	return entries
+}
+
 // expandDir expands a directory entry and inserts its children.
 func expandDir(entries []fileEntry, index int) []fileEntry {
 	if index < 0 || index >= len(entries) || !entries[index].isDir {

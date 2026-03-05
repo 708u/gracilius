@@ -31,7 +31,9 @@ func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
 
 // handleTreeChanged processes directory tree change notifications.
 func (m *Model) handleTreeChanged() (tea.Model, tea.Cmd) {
+	expanded := expandedPaths(m.fileTree)
 	m.fileTree = buildFileTree(m.rootDir)
+	m.fileTree = restoreExpanded(m.fileTree, expanded)
 	if m.treeCursor >= len(m.fileTree) {
 		m.treeCursor = max(0, len(m.fileTree)-1)
 	}
