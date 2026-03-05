@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 )
 
@@ -120,33 +119,7 @@ func (s *Store) DataPath() string {
 	return filepath.Join(s.dir, "comments.json")
 }
 
-func (s *Store) lockPath() string {
-	return filepath.Join(s.dir, "comments.lock")
-}
-
-// withLock acquires a file lock and runs fn.
-// exclusive=true for writes, false for reads.
-func (s *Store) withLock(exclusive bool, fn func() error) error {
-	f, err := os.OpenFile(s.lockPath(), os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return fmt.Errorf("open lock file: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
-	flag := syscall.LOCK_SH
-	if exclusive {
-		flag = syscall.LOCK_EX
-	}
-	if err := syscall.Flock(int(f.Fd()), flag); err != nil {
-		return fmt.Errorf("flock: %w", err)
-	}
-	defer func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) }()
-
-	return fn()
-}
-
-// loadRaw reads comments from the data file without locking.
-func (s *Store) loadRaw() ([]Comment, error) {
+func (s *Store) load() ([]Comment, error) {
 	data, err := os.ReadFile(s.DataPath())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -161,9 +134,7 @@ func (s *Store) loadRaw() ([]Comment, error) {
 	return cf.Comments, nil
 }
 
-// saveRaw writes comments to the data file atomically without locking.
-// Old resolved comments (>30 days) are auto-purged.
-func (s *Store) saveRaw(comments []Comment) error {
+func (s *Store) save(comments []Comment) error {
 	now := time.Now()
 	var kept []Comment
 	for i := range comments {
@@ -200,121 +171,101 @@ func (s *Store) saveRaw(comments []Comment) error {
 
 // Load reads comments from the store.
 func (s *Store) Load() ([]Comment, error) {
-	var comments []Comment
-	err := s.withLock(false, func() error {
-		var loadErr error
-		comments, loadErr = s.loadRaw()
-		return loadErr
-	})
-	return comments, err
+	return s.load()
 }
 
-// Save writes comments to the store.
+// Save writes comments to the store atomically.
+// Old resolved comments (>30 days) are auto-purged.
 func (s *Store) Save(comments []Comment) error {
-	return s.withLock(true, func() error {
-		return s.saveRaw(comments)
-	})
+	return s.save(comments)
 }
 
 // Add adds a comment to the store.
 func (s *Store) Add(c Comment) error {
-	return s.withLock(true, func() error {
-		comments, err := s.loadRaw()
-		if err != nil {
-			return err
-		}
-		comments = append(comments, c)
-		return s.saveRaw(comments)
-	})
+	comments, err := s.load()
+	if err != nil {
+		return err
+	}
+	comments = append(comments, c)
+	return s.save(comments)
 }
 
 // Replace removes the comment with oldID and adds c in a single operation.
 func (s *Store) Replace(oldID string, c Comment) error {
-	return s.withLock(true, func() error {
-		comments, err := s.loadRaw()
-		if err != nil {
-			return err
+	comments, err := s.load()
+	if err != nil {
+		return err
+	}
+	for i := range comments {
+		if comments[i].ID == oldID {
+			comments = append(comments[:i], comments[i+1:]...)
+			break
 		}
-		for i := range comments {
-			if comments[i].ID == oldID {
-				comments = append(comments[:i], comments[i+1:]...)
-				break
-			}
-		}
-		comments = append(comments, c)
-		return s.saveRaw(comments)
-	})
+	}
+	comments = append(comments, c)
+	return s.save(comments)
 }
 
 // Resolve marks a comment as resolved.
 func (s *Store) Resolve(id string) error {
-	return s.withLock(true, func() error {
-		comments, err := s.loadRaw()
-		if err != nil {
-			return err
+	comments, err := s.load()
+	if err != nil {
+		return err
+	}
+	for i := range comments {
+		if comments[i].ID == id {
+			comments[i].ResolvedAt = time.Now()
+			return s.save(comments)
 		}
-		for i := range comments {
-			if comments[i].ID == id {
-				comments[i].ResolvedAt = time.Now()
-				return s.saveRaw(comments)
-			}
-		}
-		return fmt.Errorf("comment not found: %s", id)
-	})
+	}
+	return fmt.Errorf("comment not found: %s", id)
 }
 
 // Delete removes a comment from the store.
 func (s *Store) Delete(id string) error {
-	return s.withLock(true, func() error {
-		comments, err := s.loadRaw()
-		if err != nil {
-			return err
+	comments, err := s.load()
+	if err != nil {
+		return err
+	}
+	for i := range comments {
+		if comments[i].ID == id {
+			comments = append(comments[:i], comments[i+1:]...)
+			return s.save(comments)
 		}
-		for i := range comments {
-			if comments[i].ID == id {
-				comments = append(comments[:i], comments[i+1:]...)
-				return s.saveRaw(comments)
-			}
-		}
-		return fmt.Errorf("comment not found: %s", id)
-	})
+	}
+	return fmt.Errorf("comment not found: %s", id)
 }
 
 // DeleteByFile removes all comments for a specific file.
 func (s *Store) DeleteByFile(filePath string) error {
-	return s.withLock(true, func() error {
-		comments, err := s.loadRaw()
-		if err != nil {
-			return err
+	comments, err := s.load()
+	if err != nil {
+		return err
+	}
+	var kept []Comment
+	for i := range comments {
+		if comments[i].FilePath != filePath {
+			kept = append(kept, comments[i])
 		}
-		var kept []Comment
-		for i := range comments {
-			if comments[i].FilePath != filePath {
-				kept = append(kept, comments[i])
-			}
-		}
-		return s.saveRaw(kept)
-	})
+	}
+	return s.save(kept)
 }
 
 // List returns comments filtered by file path and resolved status.
 func (s *Store) List(filePath string, includeResolved bool) ([]Comment, error) {
+	comments, err := s.load()
+	if err != nil {
+		return nil, err
+	}
 	var result []Comment
-	err := s.withLock(false, func() error {
-		comments, err := s.loadRaw()
-		if err != nil {
-			return err
+	for i := range comments {
+		if filePath != "" && comments[i].FilePath != filePath {
+			continue
 		}
-		for i := range comments {
-			if filePath != "" && comments[i].FilePath != filePath {
-				continue
-			}
-			if !includeResolved && !comments[i].ResolvedAt.IsZero() {
-				continue
-			}
-			result = append(result, comments[i])
+		if !includeResolved && !comments[i].ResolvedAt.IsZero() {
+			continue
 		}
-		return nil
-	})
-	return result, err
+		result = append(result, comments[i])
+	}
+	return result, nil
 }
