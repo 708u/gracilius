@@ -112,7 +112,15 @@ func run() int {
 		return exitErr
 	}
 
-	m, err := tui.NewModel(srv, rootDir, watcher, dirWatcher)
+	// Comment file watcher
+	commentWatcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create comment watcher: %v\n", err)
+		return exitErr
+	}
+	defer func() { _ = commentWatcher.Close() }()
+
+	m, err := tui.NewModel(srv, rootDir, watcher, dirWatcher, commentWatcher)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create TUI model: %v\n", err)
 		return exitErr

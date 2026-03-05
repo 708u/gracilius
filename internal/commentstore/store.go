@@ -115,7 +115,8 @@ func NewStore(rootDir string) (*Store, error) {
 	return &Store{dir: dir, rootDir: rootDir}, nil
 }
 
-func (s *Store) dataPath() string {
+// DataPath returns the path to the comments JSON file.
+func (s *Store) DataPath() string {
 	return filepath.Join(s.dir, "comments.json")
 }
 
@@ -146,7 +147,7 @@ func (s *Store) withLock(exclusive bool, fn func() error) error {
 
 // loadRaw reads comments from the data file without locking.
 func (s *Store) loadRaw() ([]Comment, error) {
-	data, err := os.ReadFile(s.dataPath())
+	data, err := os.ReadFile(s.DataPath())
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -184,12 +185,12 @@ func (s *Store) saveRaw(comments []Comment) error {
 	}
 	data = append(data, '\n')
 
-	tmp := s.dataPath() + ".tmp"
+	tmp := s.DataPath() + ".tmp"
 	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		return fmt.Errorf("write temp file: %w", err)
 	}
 
-	if err := os.Rename(tmp, s.dataPath()); err != nil {
+	if err := os.Rename(tmp, s.DataPath()); err != nil {
 		os.Remove(tmp)
 		return fmt.Errorf("rename temp file: %w", err)
 	}

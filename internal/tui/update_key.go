@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -74,27 +73,19 @@ func (m *Model) handleKeyInputMode(t *tab, msg tea.KeyPressMsg) (tea.Model, tea.
 		var oldID string
 		if idx >= 0 {
 			oldID = t.comments[idx].id
-			t.comments = slices.Delete(t.comments, idx, idx+1)
 		}
 		if val != "" {
 			id, err := uuid.NewV7()
 			if err != nil {
 				log.Printf("Failed to generate UUID: %v", err)
 			}
-			c := comment{
-				id:        id.String(),
-				startLine: t.inputStart,
-				endLine:   t.inputEnd,
-				text:      val,
-			}
-			t.comments = append(t.comments, c)
 			m.notifyComment(t.inputStart, t.inputEnd, val)
 			sc := commentstore.Comment{
-				ID:        c.id,
+				ID:        id.String(),
 				FilePath:  t.filePath,
-				StartLine: c.startLine,
-				EndLine:   c.endLine,
-				Text:      c.text,
+				StartLine: t.inputStart,
+				EndLine:   t.inputEnd,
+				Text:      val,
 				Snippet:   t.captureSnippet(t.inputStart, t.inputEnd),
 				CreatedAt: time.Now(),
 			}
@@ -334,12 +325,9 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			)
 		}
 	case key.Matches(msg, m.keys.ClearAll):
-		if hasTab && m.focusPane == paneEditor {
-			t.comments = nil
-			if t.filePath != "" {
-				if err := m.commentStore.DeleteByFile(t.filePath); err != nil {
-					log.Printf("Failed to clear comments from store: %v", err)
-				}
+		if hasTab && m.focusPane == paneEditor && t.filePath != "" {
+			if err := m.commentStore.DeleteByFile(t.filePath); err != nil {
+				log.Printf("Failed to clear comments from store: %v", err)
 			}
 		}
 	case key.Matches(msg, m.keys.NextTab):

@@ -49,6 +49,9 @@ type fileChangedMsg struct {
 // treeChangedMsg notifies the TUI that the directory tree has changed.
 type treeChangedMsg struct{}
 
+// commentsChangedMsg notifies the TUI that comments.json has changed on disk.
+type commentsChangedMsg struct{}
+
 // Model holds the entire TUI state.
 type Model struct {
 	width  int
@@ -112,7 +115,8 @@ type Model struct {
 	enhancedKeyboard bool
 
 	// comment persistence
-	commentStore *commentstore.Store
+	commentStore   *commentstore.Store
+	commentWatcher *fsnotify.Watcher
 }
 
 // lineKind distinguishes the type of a visual row.
@@ -199,7 +203,7 @@ func (m *Model) toggleTreeEntry(idx int) {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher) (*Model, error) {
+func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher) (*Model, error) {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root directory: %w", err)
@@ -210,25 +214,33 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 		return nil, fmt.Errorf("create comment store: %w", err)
 	}
 
+	if commentWatcher != nil {
+		commentDir := filepath.Dir(store.DataPath())
+		if err := commentWatcher.Add(commentDir); err != nil {
+			return nil, fmt.Errorf("watch comment directory: %w", err)
+		}
+	}
+
 	ft := buildFileTree(absRootDir)
 
 	im := detectIconMode()
 	return &Model{
-		server:       srv,
-		rootDir:      absRootDir,
-		fileTree:     ft,
-		treeCursor:   0,
-		focusPane:    paneTree,
-		watcher:      watcher,
-		dirWatcher:   dirWatcher,
-		tabs:         []*tab{},
-		treeWidth:    30,
-		keys:         newKeyMap(),
-		help:         help.New(),
-		iconMode:     im,
-		openFile:     newOpenFileOverlay(im, darkTheme),
-		isDark:       true,
-		theme:        darkTheme,
-		commentStore: store,
+		server:         srv,
+		rootDir:        absRootDir,
+		fileTree:       ft,
+		treeCursor:     0,
+		focusPane:      paneTree,
+		watcher:        watcher,
+		dirWatcher:     dirWatcher,
+		tabs:           []*tab{},
+		treeWidth:      30,
+		keys:           newKeyMap(),
+		help:           help.New(),
+		iconMode:       im,
+		openFile:       newOpenFileOverlay(im, darkTheme),
+		isDark:         true,
+		theme:          darkTheme,
+		commentStore:   store,
+		commentWatcher: commentWatcher,
 	}, nil
 }

@@ -40,6 +40,37 @@ func (m *Model) watchFile() tea.Cmd {
 	}
 }
 
+// watchComments returns a tea.Cmd that watches comments.json for changes.
+func (m *Model) watchComments() tea.Cmd {
+	w := m.commentWatcher
+	dataPath := m.commentStore.DataPath()
+	return func() tea.Msg {
+		if w == nil {
+			return nil
+		}
+		for {
+			select {
+			case event, ok := <-w.Events:
+				if !ok {
+					return nil
+				}
+				if event.Name != dataPath {
+					continue
+				}
+				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
+					log.Printf("Comments file changed: %s (%s)", event.Name, event.Op)
+					return commentsChangedMsg{}
+				}
+			case err, ok := <-w.Errors:
+				if !ok {
+					return nil
+				}
+				log.Printf("Comment watcher error: %v", err)
+			}
+		}
+	}
+}
+
 // watchDir returns a tea.Cmd that watches directories for changes.
 func (m *Model) watchDir() tea.Cmd {
 	w := m.dirWatcher
