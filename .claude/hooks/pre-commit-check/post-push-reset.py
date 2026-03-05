@@ -43,6 +43,12 @@ def main():
 
     if "git push" in command:
         reset_state(session_id)
+        print(
+            "After pushing, review the entire PR description and "
+            "update it to accurately reflect the current state of "
+            "all changes in the PR. Ensure consistency across all "
+            "sections. Write the PR description in English."
+        )
 
     sys.exit(0)
 
