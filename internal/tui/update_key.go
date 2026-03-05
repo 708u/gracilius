@@ -68,41 +68,7 @@ func (m *Model) handleKeyInputMode(t *tab, msg tea.KeyPressMsg) (tea.Model, tea.
 		t.commentInput.Reset()
 		t.commentInput.Blur()
 	case isSubmit:
-		val := t.commentInput.Value()
-		idx := t.findComment(t.inputStart)
-		var oldID string
-		if idx >= 0 {
-			oldID = t.comments[idx].id
-		}
-		if val != "" {
-			id, err := uuid.NewV7()
-			if err != nil {
-				log.Printf("Failed to generate UUID: %v", err)
-			}
-			m.notifyComment(t.inputStart, t.inputEnd, val)
-			sc := commentstore.Comment{
-				ID:        id.String(),
-				FilePath:  t.filePath,
-				StartLine: t.inputStart,
-				EndLine:   t.inputEnd,
-				Text:      val,
-				Snippet:   t.captureSnippet(t.inputStart, t.inputEnd),
-				CreatedAt: time.Now(),
-			}
-			if oldID != "" {
-				if err := m.commentStore.Replace(oldID, sc); err != nil {
-					log.Printf("Failed to update comment: %v", err)
-				}
-			} else {
-				if err := m.commentStore.Add(sc); err != nil {
-					log.Printf("Failed to persist comment: %v", err)
-				}
-			}
-		} else if oldID != "" {
-			if err := m.commentStore.Delete(oldID); err != nil {
-				log.Printf("Failed to delete comment: %v", err)
-			}
-		}
+		m.submitComment(t)
 		t.inputMode = false
 		t.commentInput.Reset()
 		t.commentInput.Blur()
@@ -128,6 +94,50 @@ func (t *tab) captureSnippet(startLine, endLine int) string {
 	}
 	end := min(endLine+1, len(t.lines))
 	return strings.Join(t.lines[startLine:end], "\n")
+}
+
+// submitComment persists the current comment input to the store.
+func (m *Model) submitComment(t *tab) {
+	val := t.commentInput.Value()
+	idx := t.findComment(t.inputStart)
+	var oldID string
+	if idx >= 0 {
+		oldID = t.comments[idx].id
+	}
+
+	if val == "" && oldID != "" {
+		if err := m.commentStore.Delete(oldID); err != nil {
+			log.Printf("Failed to delete comment: %v", err)
+		}
+		return
+	}
+	if val == "" {
+		return
+	}
+
+	id, err := uuid.NewV7()
+	if err != nil {
+		log.Printf("Failed to generate UUID: %v", err)
+	}
+	m.notifyComment(t.inputStart, t.inputEnd, val)
+	sc := commentstore.Comment{
+		ID:        id.String(),
+		FilePath:  t.filePath,
+		StartLine: t.inputStart,
+		EndLine:   t.inputEnd,
+		Text:      val,
+		Snippet:   t.captureSnippet(t.inputStart, t.inputEnd),
+		CreatedAt: time.Now(),
+	}
+	if oldID != "" {
+		if err := m.commentStore.Replace(oldID, sc); err != nil {
+			log.Printf("Failed to update comment: %v", err)
+		}
+		return
+	}
+	if err := m.commentStore.Add(sc); err != nil {
+		log.Printf("Failed to persist comment: %v", err)
+	}
 }
 
 // handleKeyOpenFile handles key events when the open-file overlay is active.
