@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "gracilius": {
+      "command": "gra",
+      "args": ["mcp"]
+    }
+  }
+}

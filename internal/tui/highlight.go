@@ -58,9 +58,8 @@ var (
 )
 
 var (
-	ansiInverse = termenv.CSI + termenv.ReverseSeq + "m"
-	ansiReset   = termenv.CSI + termenv.ResetSeq + "m"
-	ansiFaint   = termenv.CSI + termenv.FaintSeq + "m"
+	ansiReset = termenv.CSI + termenv.ResetSeq + "m"
+	ansiFaint = termenv.CSI + termenv.FaintSeq + "m"
 )
 
 type styledRun struct {
@@ -146,53 +145,6 @@ func resolveANSI(style *chroma.Style, tokenType chroma.TokenType) string {
 		return ""
 	}
 	return termenv.CSI + strings.Join(params, ";") + "m"
-}
-
-func renderStyledLineWithCursor(sb *strings.Builder, runs []styledRun, cursorChar int) {
-	pos := 0
-	cursorRendered := false
-
-	for _, run := range runs {
-		runes := []rune(run.Text)
-		runStart := pos
-		runEnd := pos + len(runes)
-
-		if !cursorRendered && cursorChar >= runStart && cursorChar < runEnd {
-			// Cursor falls within this run
-			offset := cursorChar - runStart
-
-			// Text before cursor
-			if offset > 0 {
-				writeStyledText(sb, run.ANSI, expandTabs(string(runes[:offset])))
-			}
-
-			// Cursor character
-			ch := runes[offset]
-			sb.WriteString(ansiInverse)
-			if ch == '\t' {
-				sb.WriteString("    ")
-			} else {
-				sb.WriteString(string(ch))
-			}
-			sb.WriteString(ansiReset)
-
-			// Text after cursor
-			if offset+1 < len(runes) {
-				writeStyledText(sb, run.ANSI, expandTabs(string(runes[offset+1:])))
-			}
-
-			cursorRendered = true
-		} else {
-			writeStyledText(sb, run.ANSI, expandTabs(run.Text))
-		}
-
-		pos = runEnd
-	}
-
-	if !cursorRendered {
-		// Cursor is past end of line
-		sb.WriteString(ansiInverse + " " + ansiReset)
-	}
 }
 
 func renderStyledLineWithSelection(sb *strings.Builder, runs []styledRun, selStart, selEnd int, selBgSeq string) {

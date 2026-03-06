@@ -95,6 +95,16 @@ func splitRunsAtBreakpoints(runs []styledRun, bp []int) [][]styledRun {
 	return segments
 }
 
+// displayWidthRange returns the display width of runes in line[from:to).
+func displayWidthRange(line string, from, to int) int {
+	runes := []rune(line)
+	w := 0
+	for i := from; i < to && i < len(runes); i++ {
+		w += runeWidth(runes[i])
+	}
+	return w
+}
+
 // countWraps returns the number of visual rows a line occupies
 // when wrapped at textWidth. Returns 1 if no wrapping is needed.
 // Unlike wrapBreakpoints, this does not allocate a slice.

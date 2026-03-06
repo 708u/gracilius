@@ -30,6 +30,7 @@ type keyMap struct {
 	OpenFile      key.Binding
 	AcceptDiff    key.Binding
 	RejectDiff    key.Binding
+	Confirm       key.Binding
 }
 
 func newKeyMap() keyMap {
@@ -84,7 +85,7 @@ func newKeyMap() keyMap {
 		),
 		CommentSubmit: key.NewBinding(
 			key.WithKeys("ctrl+d"),
-			key.WithHelp("Ctrl+D", "save comment"),
+			key.WithHelp("Enter/Ctrl+D", "save comment"),
 		),
 		ClearAll: key.NewBinding(
 			key.WithKeys("D"),
@@ -129,6 +130,9 @@ func newKeyMap() keyMap {
 		RejectDiff: key.NewBinding(
 			key.WithKeys("esc"),
 			key.WithHelp("Esc", "reject diff"),
+		),
+		Confirm: key.NewBinding(
+			key.WithKeys("y"),
 		),
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/comment"
 	"github.com/708u/gracilius/internal/server"
 	"github.com/708u/gracilius/internal/tui"
 	"github.com/fsnotify/fsnotify"
@@ -23,6 +24,10 @@ const (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "mcp" {
+		os.Exit(runMCP())
+		return
+	}
 	os.Exit(run())
 }
 
@@ -108,7 +113,28 @@ func run() int {
 		return exitErr
 	}
 
-	m, err := tui.NewModel(srv, rootDir, watcher, dirWatcher)
+	// Comment repository
+	store, err := comment.NewRepository(absRootDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create comment repository: %v\n", err)
+		return exitErr
+	}
+
+	// Comment file watcher
+	commentWatcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create comment watcher: %v\n", err)
+		return exitErr
+	}
+	defer func() { _ = commentWatcher.Close() }()
+
+	commentDir := filepath.Dir(store.DataPath())
+	if err := commentWatcher.Add(commentDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to watch comment directory: %v\n", err)
+		return exitErr
+	}
+
+	m, err := tui.NewModel(srv, store, rootDir, watcher, dirWatcher, commentWatcher)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create TUI model: %v\n", err)
 		return exitErr

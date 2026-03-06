@@ -6,29 +6,143 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// mockMCPServer satisfies the MCPServer interface for testing.
-type mockMCPServer struct {
-	port int
+func TestHandleOpenDiff(t *testing.T) {
+	m := newTestModel(t)
+
+	msg := OpenDiffMsg{
+		FilePath: "diff.go",
+		Contents: "line1\nline2\nline3",
+		Accept:   func(string) {},
+		Reject:   func() {},
+	}
+	m.Update(msg)
+
+	if len(m.tabs) != 1 {
+		t.Fatalf("expected 1 tab, got %d", len(m.tabs))
+	}
+	if m.tabs[0].kind != diffTab {
+		t.Errorf("expected diffTab, got %d", m.tabs[0].kind)
+	}
+	if m.activeTab != 0 {
+		t.Errorf("expected activeTab=0, got %d", m.activeTab)
+	}
+	if m.focusPane != paneEditor {
+		t.Errorf("expected focusPane=paneEditor, got %d", m.focusPane)
+	}
+	if len(m.tabs[0].lines) != 3 {
+		t.Errorf("expected 3 lines, got %d", len(m.tabs[0].lines))
+	}
 }
 
-func (m *mockMCPServer) Port() int { return m.port }
-func (m *mockMCPServer) NotifySelectionChanged(string, string, int, int, int, int) {
+func TestHandleCloseDiff(t *testing.T) {
+	m := newTestModel(t)
+
+	// Add a file tab and a diff tab.
+	ft := newFileTab()
+	ft.filePath = "file.go"
+	ft.lines = []string{"hello"}
+	m.tabs = append(m.tabs, ft)
+
+	dt := newDiffTab("diff.go", []string{"diff1", "diff2"}, func(string) {}, func() {})
+	m.tabs = append(m.tabs, dt)
+	m.activeTab = 1
+
+	m.Update(CloseDiffMsg{})
+
+	if len(m.tabs) != 1 {
+		t.Fatalf("expected 1 tab after close diff, got %d", len(m.tabs))
+	}
+	if m.tabs[0].kind != fileTab {
+		t.Errorf("expected remaining tab to be fileTab, got %d", m.tabs[0].kind)
+	}
 }
 
-func newTestModel() *Model {
-	return &Model{
-		server:    &mockMCPServer{port: 12345},
-		width:     80,
-		height:    24,
-		keys:      newKeyMap(),
-		focusPane: paneEditor,
-		treeWidth: 30,
-		tabs:      []*tab{},
+func TestHandleFileChanged(t *testing.T) {
+	content := "line1\nline2\nline3"
+	m := newTestModelWithFile(t, content)
+
+	// Move cursor to end.
+	tab := m.tabs[0]
+	tab.cursorLine = 2
+	tab.cursorChar = 5
+
+	// Simulate file change with fewer lines.
+	m.Update(fileChangedMsg{lines: []string{"only one line"}})
+
+	if tab.cursorLine != 0 {
+		t.Errorf("expected cursorLine clipped to 0, got %d", tab.cursorLine)
+	}
+}
+
+func TestHandleWindowSize(t *testing.T) {
+	m := newTestModel(t)
+	m.treeWidth = 80
+
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
+
+	if m.width != 100 {
+		t.Errorf("expected width=100, got %d", m.width)
+	}
+	if m.height != 50 {
+		t.Errorf("expected height=50, got %d", m.height)
+	}
+
+	maxWidth := 100 * maxTreeWidthPercent / 100
+	if m.treeWidth > maxWidth {
+		t.Errorf("expected treeWidth <= %d, got %d", maxWidth, m.treeWidth)
+	}
+}
+
+func TestKeyNavigation_UpDown(t *testing.T) {
+	content := "line1\nline2\nline3\nline4\nline5"
+	m := newTestModelWithFile(t, content)
+	tab := m.tabs[0]
+	tab.cursorLine = 0
+
+	srv := m.server.(*mockServer)
+
+	// Move down.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if tab.cursorLine != 1 {
+		t.Errorf("expected cursorLine=1 after down, got %d", tab.cursorLine)
+	}
+
+	n, ok := srv.lastNotification()
+	if !ok {
+		t.Fatal("expected notification after cursor move")
+	}
+	if n.startLine != 1 {
+		t.Errorf("expected notification startLine=1, got %d", n.startLine)
+	}
+
+	// Move up.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if tab.cursorLine != 0 {
+		t.Errorf("expected cursorLine=0 after up, got %d", tab.cursorLine)
+	}
+}
+
+func TestMouseClick_TreeEntry(t *testing.T) {
+	m := newTestModel(t)
+	m.fileTree = []fileEntry{
+		{path: "dir1", name: "dir1", isDir: true, depth: 0},
+		{path: "file1.go", name: "file1.go", isDir: false, depth: 0},
+	}
+
+	// Click on second tree entry (y = contentStartY + 1).
+	m.Update(tea.MouseClickMsg{
+		X:      5,
+		Y:      contentStartY + 1,
+		Button: tea.MouseLeft,
+	})
+
+	if m.treeCursor != 1 {
+		t.Errorf("expected treeCursor=1, got %d", m.treeCursor)
 	}
 }
 
 func TestAcceptDiff_CallsOnAccept(t *testing.T) {
-	m := newTestModel()
+	m := newTestModel(t)
 
 	var accepted bool
 	var acceptedContents string
@@ -59,7 +173,7 @@ func TestAcceptDiff_CallsOnAccept(t *testing.T) {
 }
 
 func TestRejectDiff_CallsOnReject(t *testing.T) {
-	m := newTestModel()
+	m := newTestModel(t)
 
 	var rejected bool
 	dt := newDiffTab("/workspace/file.go",
@@ -83,7 +197,7 @@ func TestRejectDiff_CallsOnReject(t *testing.T) {
 }
 
 func TestCloseTab_CallsOnReject(t *testing.T) {
-	m := newTestModel()
+	m := newTestModel(t)
 
 	var rejected bool
 	dt := newDiffTab("/workspace/file.go",
@@ -107,7 +221,7 @@ func TestCloseTab_CallsOnReject(t *testing.T) {
 }
 
 func TestCloseDiffTabs_CallsOnReject(t *testing.T) {
-	m := newTestModel()
+	m := newTestModel(t)
 
 	var rejectCount int
 	for range 3 {
@@ -130,8 +244,120 @@ func TestCloseDiffTabs_CallsOnReject(t *testing.T) {
 	}
 }
 
+func TestCommentSubmit_EnterSavesComment_Enhanced(t *testing.T) {
+	content := "line1\nline2\nline3"
+	m := newTestModelWithFile(t, content)
+	m.enhancedKeyboard = true
+	tab := m.tabs[0]
+
+	tab.inputMode = true
+	tab.inputStart = 0
+	tab.inputEnd = 0
+	tab.commentInput.Focus()
+	tab.commentInput.SetValue("test comment")
+
+	msg := tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})
+	m.Update(msg)
+
+	if tab.inputMode {
+		t.Fatal("expected inputMode=false after Enter submit")
+	}
+	comments, err := m.commentRepo.List("", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment in store, got %d", len(comments))
+	}
+	if comments[0].Text != "test comment" {
+		t.Errorf("expected comment text 'test comment', got %q",
+			comments[0].Text)
+	}
+}
+
+func TestCommentSubmit_EnterInsertsNewline_Basic(t *testing.T) {
+	content := "line1\nline2\nline3"
+	m := newTestModelWithFile(t, content)
+	m.enhancedKeyboard = false
+	tab := m.tabs[0]
+
+	tab.inputMode = true
+	tab.inputStart = 0
+	tab.inputEnd = 0
+	tab.commentInput.Focus()
+	tab.commentInput.SetValue("first line")
+
+	msg := tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})
+	m.Update(msg)
+
+	if !tab.inputMode {
+		t.Fatal("expected inputMode=true: Enter should not submit without enhanced keyboard")
+	}
+}
+
+func TestCommentSubmit_ShiftEnterInsertsNewline_Enhanced(t *testing.T) {
+	content := "line1\nline2\nline3"
+	m := newTestModelWithFile(t, content)
+	m.enhancedKeyboard = true
+	tab := m.tabs[0]
+
+	tab.inputMode = true
+	tab.inputStart = 0
+	tab.inputEnd = 0
+	tab.commentInput.Focus()
+	tab.commentInput.SetValue("first line")
+
+	msg := tea.KeyPressMsg(tea.Key{
+		Code: tea.KeyEnter,
+		Mod:  tea.ModShift,
+	})
+	m.Update(msg)
+
+	if !tab.inputMode {
+		t.Fatal("expected inputMode=true after Shift+Enter")
+	}
+	comments, err := m.commentRepo.List("", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 0 {
+		t.Fatalf("expected 0 comments (not submitted), got %d",
+			len(comments))
+	}
+}
+
+func TestCommentSubmit_CtrlDSavesComment(t *testing.T) {
+	content := "line1\nline2\nline3"
+	m := newTestModelWithFile(t, content)
+	tab := m.tabs[0]
+
+	tab.inputMode = true
+	tab.inputStart = 1
+	tab.inputEnd = 1
+	tab.commentInput.Focus()
+	tab.commentInput.SetValue("ctrl-d comment")
+
+	msg := tea.KeyPressMsg(tea.Key{Code: 'd', Mod: tea.ModCtrl})
+	m.Update(msg)
+
+	if tab.inputMode {
+		t.Fatal("expected inputMode=false after Ctrl+D submit")
+	}
+	comments, err := m.commentRepo.List("", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment in store, got %d", len(comments))
+	}
+	if comments[0].Text != "ctrl-d comment" {
+		t.Errorf("expected 'ctrl-d comment', got %q",
+			comments[0].Text)
+	}
+}
+
 func TestAcceptDiff_NotCalledOnFileTab(t *testing.T) {
-	m := newTestModel()
+	m := newTestModel(t)
 
 	ft := newFileTab()
 	ft.lines = []string{"line1"}
@@ -148,7 +374,7 @@ func TestAcceptDiff_NotCalledOnFileTab(t *testing.T) {
 }
 
 func TestContextKeyMap_DiffReviewBindings(t *testing.T) {
-	m := newTestModel()
+	m := newTestModel(t)
 
 	dt := newDiffTab("/workspace/file.go",
 		[]string{"line1"},
@@ -170,7 +396,7 @@ func TestContextKeyMap_DiffReviewBindings(t *testing.T) {
 }
 
 func TestContextKeyMap_NoDiffReviewOnFileTab(t *testing.T) {
-	m := newTestModel()
+	m := newTestModel(t)
 
 	ft := newFileTab()
 	ft.lines = []string{"line1"}
