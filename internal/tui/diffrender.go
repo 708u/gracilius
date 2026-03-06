@@ -191,18 +191,14 @@ func renderWordDiffText(
 // writePaddedText writes truncated text to sb, padding to targetWidth
 // with optional background color.
 func writePaddedText(sb *strings.Builder, truncated string, targetWidth int, bg string) {
-	visW := ansi.StringWidth(truncated)
 	if bg != "" {
 		sb.WriteString(bg)
-		sb.WriteString(truncated)
-		if visW < targetWidth {
-			sb.WriteString(strings.Repeat(" ", targetWidth-visW))
-		}
+	}
+	sb.WriteString(truncated)
+	if visW := ansi.StringWidth(truncated); visW < targetWidth {
+		sb.WriteString(strings.Repeat(" ", targetWidth-visW))
+	}
+	if bg != "" {
 		sb.WriteString(ansiReset)
-	} else {
-		sb.WriteString(truncated)
-		if visW < targetWidth {
-			sb.WriteString(strings.Repeat(" ", targetWidth-visW))
-		}
 	}
 }
