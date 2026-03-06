@@ -346,6 +346,10 @@ func (m *Model) renderFooter() string {
 			default:
 				sb.WriteString(emptyStateMsg)
 			}
+		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
+			if m.gitCursor < len(m.gitChangedFiles) {
+				sb.WriteString(m.gitChangedFiles[m.gitCursor].name)
+			}
 		case m.treeCursor < len(m.fileTree):
 			entry := m.fileTree[m.treeCursor]
 			sb.WriteString(entry.path)
@@ -364,6 +368,8 @@ func (m *Model) renderLeftPane(width, height int) []string {
 	switch m.activePanel {
 	case panelFiles:
 		body = m.renderTree(width, bodyHeight)
+	case panelGitDiff:
+		body = m.renderGitPanel(width, bodyHeight)
 	default:
 		body = renderChangedFiles(nil, width, bodyHeight)
 	}

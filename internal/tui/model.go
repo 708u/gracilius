@@ -159,6 +159,18 @@ type Model struct {
 	// comment persistence
 	commentRepo    CommentRepository
 	commentWatcher *fsnotify.Watcher
+
+	// git panel state
+	gitChangedFiles []changedFileEntry
+	gitCursor       int
+	gitScrollOffset int
+	gitLoaded       bool
+}
+
+// gitChangedFilesMsg carries the result of loading git changed files.
+type gitChangedFilesMsg struct {
+	entries []changedFileEntry
+	err     error
 }
 
 // lineKind distinguishes the type of a visual row.

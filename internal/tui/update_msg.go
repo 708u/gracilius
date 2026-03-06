@@ -132,7 +132,12 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 func (m *Model) adjustScroll() {
 	lo := m.computeLayout()
 	if m.focusPane == paneTree {
-		m.adjustTreeScroll(lo.contentHeight)
+		switch m.activePanel {
+		case panelGitDiff:
+			m.adjustGitScroll(lo.contentHeight - 1) // -1 for panel header
+		default:
+			m.adjustTreeScroll(lo.contentHeight - 1) // -1 for panel header
+		}
 	} else if t, ok := m.activeTabState(); ok {
 		if t.diffViewData != nil {
 			maxOffset := t.diffMaxOffset()

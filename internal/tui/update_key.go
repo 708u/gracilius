@@ -47,6 +47,8 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.gPending = false
 		if key.Matches(msg, m.keys.GoTop) {
 			switch {
+			case m.focusPane == paneTree && m.activePanel == panelGitDiff:
+				m.gitCursor = 0
 			case m.focusPane == paneTree:
 				m.treeCursor = 0
 			case hasTab && t.diffViewData != nil:
@@ -207,6 +209,11 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.activePanel = (m.activePanel + 1) % panelCount
 		m.treeScrollOffset = 0
 		m.treeCursor = 0
+		if m.activePanel == panelGitDiff && !m.gitLoaded {
+			m.adjustScroll()
+			cmd := m.loadGitChanges()
+			return m, cmd
+		}
 	case key.Matches(msg, m.keys.ToggleSidebar):
 		m.sidebarVisible = !m.sidebarVisible
 		if !m.sidebarVisible {
@@ -227,8 +234,15 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case key.Matches(msg, m.keys.Enter):
-		if m.focusPane == paneTree && len(m.fileTree) > 0 {
-			m.toggleTreeEntry(m.treeCursor)
+		if m.focusPane == paneTree {
+			switch m.activePanel {
+			case panelFiles:
+				if len(m.fileTree) > 0 {
+					m.toggleTreeEntry(m.treeCursor)
+				}
+			case panelGitDiff:
+				m.openGitDiffEntry()
+			}
 		}
 	case key.Matches(msg, m.keys.Left):
 		if m.focusPane == paneTree {
@@ -268,6 +282,10 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, m.keys.Up):
 		switch {
+		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
+			if m.gitCursor > 0 {
+				m.gitCursor--
+			}
 		case m.focusPane == paneTree:
 			if m.treeCursor > 0 {
 				m.treeCursor--
@@ -286,6 +304,10 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, m.keys.Down):
 		switch {
+		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
+			if m.gitCursor < len(m.gitChangedFiles)-1 {
+				m.gitCursor++
+			}
 		case m.focusPane == paneTree:
 			if m.treeCursor < len(m.fileTree)-1 {
 				m.treeCursor++
@@ -385,6 +407,10 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, m.keys.GoBottom):
 		switch {
+		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
+			if len(m.gitChangedFiles) > 0 {
+				m.gitCursor = len(m.gitChangedFiles) - 1
+			}
 		case m.focusPane == paneTree:
 			if len(m.fileTree) > 0 {
 				m.treeCursor = len(m.fileTree) - 1
@@ -401,6 +427,12 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.moveToParagraphBoundary(dirUp)
 	case key.Matches(msg, m.keys.BlockDown):
 		m.moveToParagraphBoundary(dirDown)
+	case key.Matches(msg, m.keys.Refresh):
+		if m.focusPane == paneTree && m.activePanel == panelGitDiff {
+			m.gitLoaded = false
+			cmd := m.loadGitChanges()
+			return m, cmd
+		}
 	case key.Matches(msg, m.keys.CloseTab):
 		if len(m.tabs) > 0 {
 			m.closeTab(m.activeTab)

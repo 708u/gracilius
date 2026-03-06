@@ -70,19 +70,26 @@ func (m *Model) moveToParagraphBoundary(dir direction) {
 	m.notifySelectionChanged()
 }
 
+// clampScroll adjusts scrollOffset so cursor stays visible in a list of
+// totalItems within contentHeight rows.
+func clampScroll(scrollOffset, cursor, totalItems, contentHeight int) int {
+	if scrollOffset > cursor {
+		scrollOffset = cursor
+	}
+	if cursor >= scrollOffset+contentHeight {
+		scrollOffset = cursor - contentHeight + 1
+	}
+	maxOffset := max(totalItems-contentHeight, 0)
+	if scrollOffset > maxOffset {
+		scrollOffset = maxOffset
+	}
+	return scrollOffset
+}
+
 // adjustTreeScroll adjusts the tree scroll so the tree cursor
 // stays visible.
 func (m *Model) adjustTreeScroll(contentHeight int) {
-	if m.treeScrollOffset > m.treeCursor {
-		m.treeScrollOffset = m.treeCursor
-	}
-	if m.treeCursor >= m.treeScrollOffset+contentHeight {
-		m.treeScrollOffset = m.treeCursor - contentHeight + 1
-	}
-	maxOffset := max(len(m.fileTree)-contentHeight, 0)
-	if m.treeScrollOffset > maxOffset {
-		m.treeScrollOffset = maxOffset
-	}
+	m.treeScrollOffset = clampScroll(m.treeScrollOffset, m.treeCursor, len(m.fileTree), contentHeight)
 }
 
 // Update implements tea.Model.
@@ -130,6 +137,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleTreeChanged()
 	case commentsChangedMsg:
 		return m.handleCommentsChanged()
+	case gitChangedFilesMsg:
+		return m.handleGitChangedFiles(msg)
 	case OpenDiffMsg:
 		return m.handleOpenDiff(msg)
 	case CloseDiffMsg:
