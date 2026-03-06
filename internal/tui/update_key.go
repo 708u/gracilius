@@ -25,6 +25,16 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		})
 	}
 
+	if m.clearAllPending {
+		m.clearAllPending = false
+		if key.Matches(msg, m.keys.Confirm) {
+			if hasTab {
+				t.comments = nil
+			}
+		}
+		return m, nil
+	}
+
 	if hasTab && t.inputMode {
 		return m.handleKeyInputMode(t, msg)
 	}
@@ -292,8 +302,8 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			)
 		}
 	case key.Matches(msg, m.keys.ClearAll):
-		if hasTab && m.focusPane == paneEditor {
-			t.comments = nil
+		if hasTab && m.focusPane == paneEditor && len(t.comments) > 0 {
+			m.clearAllPending = true
 		}
 	case key.Matches(msg, m.keys.NextTab):
 		if len(m.tabs) > 0 {

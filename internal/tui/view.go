@@ -294,6 +294,15 @@ func (m *Model) renderFooter() string {
 		return sb.String()
 	}
 
+	if m.clearAllPending {
+		n := 0
+		if hasTab {
+			n = len(t.comments)
+		}
+		fmt.Fprintf(&sb, "Clear %d comments? (y/n)", n)
+		return sb.String()
+	}
+
 	if hasTab && t.inputMode {
 		hint := commentHintBasic
 		if m.enhancedKeyboard {

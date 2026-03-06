@@ -88,6 +88,9 @@ type Model struct {
 	// quit confirmation
 	quitPending bool
 
+	// clear-all confirmation
+	clearAllPending bool
+
 	// gg sequence
 	gPending bool
 
