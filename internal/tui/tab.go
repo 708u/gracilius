@@ -38,7 +38,8 @@ type tab struct {
 	inputStart   int
 	inputEnd     int
 
-	diff *diffState // non-nil for diff review tabs
+	diff         *diffState // non-nil for diff review tabs
+	diffViewData *diffData  // side-by-side diff data (nil for file tabs)
 }
 
 // diffState holds accept/reject callbacks for a diff review tab.
@@ -113,6 +114,14 @@ func (t *tab) configureGutter(digitWidth int) {
 func (t *tab) syncContent(lines []string) {
 	t.vp.SetContentLines(lines)
 	t.configureGutter(lineNumWidthFor(len(lines)) - 2)
+}
+
+// diffMaxOffset returns the maximum scroll offset for a diff view.
+func (t *tab) diffMaxOffset() int {
+	if t.diffViewData == nil {
+		return 0
+	}
+	return max(len(t.diffViewData.rows)-1, 0)
 }
 
 // rejectAndClear calls onReject if set and nils the diff state.

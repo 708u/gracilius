@@ -2,6 +2,7 @@ package tui
 
 import (
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -61,10 +62,20 @@ func (m *Model) handleTreeChanged() (tea.Model, tea.Cmd) {
 
 // handleOpenDiff opens a new diff tab.
 func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
-	lines := splitLines([]byte(msg.Contents))
-	dt := newDiffTab(msg.FilePath, lines, msg.Accept, msg.Reject)
-	dt.syncContent(lines)
+	newLines := splitLines([]byte(msg.Contents))
+	dt := newDiffTab(msg.FilePath, newLines, msg.Accept, msg.Reject)
+	dt.syncContent(newLines)
 	dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents, m.theme)
+
+	var oldLines []string
+	if oldContent, err := os.ReadFile(msg.FilePath); err == nil {
+		oldLines = splitLines(oldContent)
+	}
+	dt.diffViewData = buildDiffData(oldLines, newLines)
+	if len(dt.diffViewData.hunks) > 0 {
+		dt.vp.SetYOffset(dt.diffViewData.hunks[0].startIdx)
+	}
+
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1
 	m.focusPane = paneEditor
@@ -122,8 +133,15 @@ func (m *Model) adjustScroll() {
 	lo := m.computeLayout()
 	if m.focusPane == paneTree {
 		m.adjustTreeScroll(lo.contentHeight)
-	} else if t, ok := m.activeTabState(); ok && len(t.lines) > 0 {
-		t.adjustScrollForCursor(lo.contentHeight, lo.textWidth)
+	} else if t, ok := m.activeTabState(); ok {
+		if t.diffViewData != nil {
+			maxOffset := t.diffMaxOffset()
+			if t.vp.YOffset() > maxOffset {
+				t.vp.SetYOffset(maxOffset)
+			}
+		} else if len(t.lines) > 0 {
+			t.adjustScrollForCursor(lo.contentHeight, lo.textWidth)
+		}
 	}
 }
 

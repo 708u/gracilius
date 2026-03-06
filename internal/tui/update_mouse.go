@@ -125,15 +125,26 @@ func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	t, hasTab := m.activeTabState()
-	if !hasTab || len(t.lines) == 0 {
+	if !hasTab {
 		return m, nil
 	}
 	lo := m.computeLayout()
 	if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
-		t.vp, _ = t.vp.Update(msg)
-		maxOff := t.maxScrollOffset(lo.contentHeight, lo.textWidth)
-		if t.vp.YOffset() > maxOff {
-			t.vp.SetYOffset(maxOff)
+		if t.diffViewData != nil {
+			delta := 3
+			if msg.Button == tea.MouseWheelUp {
+				delta = -3
+			}
+			newOff := t.vp.YOffset() + delta
+			maxOff := t.diffMaxOffset()
+			newOff = max(0, min(newOff, maxOff))
+			t.vp.SetYOffset(newOff)
+		} else if len(t.lines) > 0 {
+			t.vp, _ = t.vp.Update(msg)
+			maxOff := t.maxScrollOffset(lo.contentHeight, lo.textWidth)
+			if t.vp.YOffset() > maxOff {
+				t.vp.SetYOffset(maxOff)
+			}
 		}
 	}
 	return m, nil
