@@ -63,6 +63,16 @@ func (m *Model) handleTreeChanged() (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// handleGitIndexChanged reloads git changes when .git/index changes
+// (e.g. after commit, add, reset).
+func (m *Model) handleGitIndexChanged() (tea.Model, tea.Cmd) {
+	cmds := []tea.Cmd{m.watchGitIndex()}
+	if m.gitLoaded {
+		cmds = append(cmds, m.loadGitChanges())
+	}
+	return m, tea.Batch(cmds...)
+}
+
 // handleOpenDiff opens a new diff tab.
 func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 	newLines := splitLines([]byte(msg.Contents))

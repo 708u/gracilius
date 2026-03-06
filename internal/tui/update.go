@@ -23,7 +23,7 @@ type statusClearMsg struct{}
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.watchFile(), m.watchDir(), m.watchComments(), tea.RequestBackgroundColor)
+	return tea.Batch(m.watchFile(), m.watchDir(), m.watchComments(), m.watchGitIndex(), tea.RequestBackgroundColor)
 }
 
 type direction int
@@ -133,6 +133,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleCommentsChanged()
 	case gitChangedFilesMsg:
 		return m.handleGitChangedFiles(msg)
+	case gitIndexChangedMsg:
+		return m.handleGitIndexChanged()
 	case OpenDiffMsg:
 		return m.handleOpenDiff(msg)
 	case CloseDiffMsg:

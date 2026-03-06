@@ -134,7 +134,22 @@ func run() int {
 		return exitErr
 	}
 
-	m, err := tui.NewModel(srv, store, rootDir, watcher, dirWatcher, commentWatcher)
+	// Git index watcher
+	gitIndexWatcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create git index watcher: %v\n", err)
+		return exitErr
+	}
+	defer func() { _ = gitIndexWatcher.Close() }()
+
+	gitIndexPath := filepath.Join(rootDir, ".git", "index")
+	if _, statErr := os.Stat(gitIndexPath); statErr == nil {
+		if err := gitIndexWatcher.Add(filepath.Dir(gitIndexPath)); err != nil {
+			log.Printf("Failed to watch .git directory: %v", err)
+		}
+	}
+
+	m, err := tui.NewModel(srv, store, rootDir, watcher, dirWatcher, commentWatcher, gitIndexWatcher)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create TUI model: %v\n", err)
 		return exitErr
