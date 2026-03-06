@@ -41,7 +41,7 @@ func ChangedFiles(dir string) ([]ChangedFile, error) {
 	}
 
 	var files []ChangedFile
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		fields := strings.Split(line, "\t")
 		if len(fields) < 2 {
 			continue
