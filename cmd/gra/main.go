@@ -14,45 +14,50 @@ import (
 	"github.com/708u/gracilius/internal/comment"
 	"github.com/708u/gracilius/internal/server"
 	"github.com/708u/gracilius/internal/tui"
+	"github.com/alecthomas/kong"
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
 )
 
-const (
-	exitOK  = 0
-	exitErr = 1
-)
-
-func main() {
-	if len(os.Args) > 1 && os.Args[1] == "mcp" {
-		os.Exit(runMCP())
-		return
-	}
-	os.Exit(run())
+type CLI struct {
+	View ViewCmd `cmd:"" default:"withargs" help:"Start TUI viewer"`
+	Mcp  McpCmd  `cmd:"" help:"Start MCP server"`
 }
 
-func run() int {
+type ViewCmd struct {
+	Path string `arg:"" optional:"" default:"." help:"Target directory"`
+}
+
+func main() {
+	var cli CLI
+	ctx := kong.Parse(&cli,
+		kong.Name("gra"),
+		kong.Description("TUI viewer for reviewing code from Claude Code"),
+	)
+	if err := ctx.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func (c *ViewCmd) Run() error {
 	// Log file setup
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get home directory: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 	logDir := filepath.Join(homeDir, ".gracilius", "logs")
 	if err := os.MkdirAll(logDir, 0700); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to create log directory: %w", err)
 	}
 	id, err := uuid.NewV7()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to generate UUIDv7: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to generate UUIDv7: %w", err)
 	}
 	logPath := filepath.Join(logDir, id.String()+".log")
 	logFile, err := os.Create(logPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create log file: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to create log file: %w", err)
 	}
 	// Create latest symlink
 	latestLink := filepath.Join(logDir, "latest")
@@ -64,29 +69,20 @@ func run() int {
 	log.SetOutput(logFile)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.LUTC)
 
-	// Get directory argument
-	rootDir := "."
-	if len(os.Args) > 1 {
-		rootDir = os.Args[1]
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	absRootDir, err := filepath.Abs(rootDir)
+	absRootDir, err := filepath.Abs(c.Path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to resolve root directory: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to resolve root directory: %w", err)
 	}
 	srv, err := server.New([]string{absRootDir})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create server: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to create server: %w", err)
 	}
 
 	if err := srv.Listen(); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start server: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to start server: %w", err)
 	}
 
 	go srv.Serve()
@@ -95,49 +91,42 @@ func run() int {
 	// File watcher
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create watcher: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to create watcher: %w", err)
 	}
 	defer func() { _ = watcher.Close() }()
 
 	// Directory watcher
 	dirWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create dir watcher: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to create dir watcher: %w", err)
 	}
 	defer func() { _ = dirWatcher.Close() }()
 
 	if err := tui.WatchDirRecursive(dirWatcher, absRootDir); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to watch root dir: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to watch root dir: %w", err)
 	}
 
 	// Comment repository
 	store, err := comment.NewRepository(absRootDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create comment repository: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to create comment repository: %w", err)
 	}
 
 	// Comment file watcher
 	commentWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create comment watcher: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to create comment watcher: %w", err)
 	}
 	defer func() { _ = commentWatcher.Close() }()
 
 	commentDir := filepath.Dir(store.DataPath())
 	if err := commentWatcher.Add(commentDir); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to watch comment directory: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to watch comment directory: %w", err)
 	}
 
-	m, err := tui.NewModel(srv, store, rootDir, watcher, dirWatcher, commentWatcher)
+	m, err := tui.NewModel(srv, store, c.Path, watcher, dirWatcher, commentWatcher)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create TUI model: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to create TUI model: %w", err)
 	}
 	p := tea.NewProgram(m,
 		tea.WithContext(ctx),
@@ -171,9 +160,8 @@ func run() int {
 	})
 
 	if _, err := p.Run(); err != nil && !errors.Is(err, tea.ErrProgramKilled) {
-		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
-		return exitErr
+		return fmt.Errorf("TUI error: %w", err)
 	}
 
-	return exitOK
+	return nil
 }

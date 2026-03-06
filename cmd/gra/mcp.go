@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"os"
 	"path/filepath"
 
 	"github.com/708u/gracilius/internal/comment"
@@ -21,22 +19,19 @@ type commentIDInput struct {
 	ID string `json:"id" jsonschema:"comment ID"`
 }
 
-func runMCP() int {
-	rootDir := "."
-	if len(os.Args) > 2 {
-		rootDir = os.Args[2]
-	}
+type McpCmd struct {
+	Path string `arg:"" optional:"" default:"." help:"Target directory"`
+}
 
-	absRootDir, err := filepath.Abs(rootDir)
+func (c *McpCmd) Run() error {
+	absRootDir, err := filepath.Abs(c.Path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to resolve root directory: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to resolve root directory: %w", err)
 	}
 
 	store, err := comment.NewRepository(absRootDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create comment repository: %v\n", err)
-		return exitErr
+		return fmt.Errorf("failed to create comment repository: %w", err)
 	}
 
 	server := mcp.NewServer(
@@ -93,9 +88,8 @@ func runMCP() int {
 
 	ctx := context.Background()
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
-		log.Printf("MCP server error: %v", err)
-		return exitErr
+		return fmt.Errorf("MCP server error: %w", err)
 	}
 
-	return exitOK
+	return nil
 }
