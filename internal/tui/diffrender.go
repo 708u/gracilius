@@ -62,10 +62,13 @@ type diffSideCtx struct {
 	gutterW   int
 	textWidth int
 	colors    diffColors
+	fillerPad string // precomputed spaces for filler lines (sideWidth)
+	gutterPad string // precomputed spaces for continuation gutter
 }
 
 // renderSideBySide renders a side-by-side diff view.
 // It returns exactly height lines, each padded to width.
+// Long lines are soft-wrapped within each side.
 func renderSideBySide(
 	data *diffData,
 	theme themeConfig,
@@ -87,6 +90,8 @@ func renderSideBySide(
 		gutterW:   gutterW,
 		textWidth: max(sideWidth-gutterW, 1),
 		colors:    colors,
+		fillerPad: strings.Repeat(" ", sideWidth),
+		gutterPad: strings.Repeat(" ", gutterW),
 	}
 
 	lines := make([]string, 0, height)
@@ -94,12 +99,28 @@ func renderSideBySide(
 	for i := offset; i < len(data.rows) && len(lines) < height; i++ {
 		row := data.rows[i]
 
-		var sb strings.Builder
-		renderDiffSide(&sb, row.oldLineNum, row.oldText, row.oldSpans, row.rowType, true, ctx)
-		sb.WriteString(diffSeparator)
-		renderDiffSide(&sb, row.newLineNum, row.newText, row.newSpans, row.rowType, false, ctx)
+		oldVisuals := wrapDiffSide(row.oldLineNum, row.oldText, row.oldSpans, row.rowType, true, ctx)
+		newVisuals := wrapDiffSide(row.newLineNum, row.newText, row.newSpans, row.rowType, false, ctx)
 
-		lines = append(lines, padRight(sb.String(), width))
+		rowCount := max(len(oldVisuals), len(newVisuals))
+		for j := range rowCount {
+			if len(lines) >= height {
+				break
+			}
+			var sb strings.Builder
+			if j < len(oldVisuals) {
+				sb.WriteString(oldVisuals[j])
+			} else {
+				writeDiffFiller(&sb, row.oldLineNum, row.rowType, true, ctx)
+			}
+			sb.WriteString(diffSeparator)
+			if j < len(newVisuals) {
+				sb.WriteString(newVisuals[j])
+			} else {
+				writeDiffFiller(&sb, row.newLineNum, row.rowType, false, ctx)
+			}
+			lines = append(lines, padRight(sb.String(), width))
+		}
 	}
 
 	for len(lines) < height {
@@ -109,55 +130,101 @@ func renderSideBySide(
 	return lines
 }
 
-// renderDiffSide renders one side (old or new) of a diff row.
-func renderDiffSide(
-	sb *strings.Builder,
+// diffSideBg returns the line and word background colors for a diff side.
+func diffSideBg(rowType diffRowType, isOld bool, colors diffColors) (lineBg, wordBg string) {
+	switch rowType {
+	case diffRowModified:
+		if isOld {
+			return colors.delBg, colors.wordDelBg
+		}
+		return colors.addBg, colors.wordAddBg
+	case diffRowAdded:
+		return colors.addBg, ""
+	case diffRowDeleted:
+		return colors.delBg, ""
+	}
+	return "", ""
+}
+
+// wrapDiffSide renders one side of a diff row, returning one string per
+// visual line. Long text is soft-wrapped at ctx.textWidth boundaries.
+func wrapDiffSide(
 	lineNum int,
 	text string,
 	spans []wordSpan,
 	rowType diffRowType,
 	isOld bool,
 	ctx diffSideCtx,
-) {
+) []string {
+	if lineNum == 0 {
+		filler := ctx.colors.fillerBg + ctx.fillerPad + ansiReset
+		return []string{filler}
+	}
+
+	lineBg, wordBg := diffSideBg(rowType, isOld, ctx.colors)
+	digits := ctx.gutterW - 1
+	gutterStyle := ansiFaint
+	if lineBg != "" {
+		gutterStyle = lineBg + ansiFaint
+	}
+
+	expanded := expandTabs(text)
+	bp := wrapBreakpoints(expanded, ctx.textWidth)
+
+	if bp == nil {
+		var sb strings.Builder
+		numStr := fmt.Sprintf("%*d ", digits, lineNum)
+		writeStyledText(&sb, gutterStyle, numStr)
+		if spans != nil {
+			renderWordDiffText(&sb, spans, lineBg, wordBg, ctx.textWidth)
+		} else {
+			truncated := ansi.Truncate(expanded, ctx.textWidth, "")
+			writePaddedText(&sb, truncated, ctx.textWidth, lineBg)
+		}
+		return []string{sb.String()}
+	}
+
+	// Soft-wrapped: split into segments.
+	runes := []rune(expanded)
+	segments := make([]string, 0, len(bp)+1)
+	prev := 0
+	for si := 0; si <= len(bp); si++ {
+		end := len(runes)
+		if si < len(bp) {
+			end = bp[si]
+		}
+		seg := string(runes[prev:end])
+
+		var sb strings.Builder
+		if si == 0 {
+			numStr := fmt.Sprintf("%*d ", digits, lineNum)
+			writeStyledText(&sb, gutterStyle, numStr)
+		} else {
+			writeStyledText(&sb, gutterStyle, ctx.gutterPad)
+		}
+		writePaddedText(&sb, seg, ctx.textWidth, lineBg)
+		segments = append(segments, sb.String())
+		prev = end
+	}
+	return segments
+}
+
+// writeDiffFiller writes a continuation filler line for a side whose
+// content has fewer wrap rows than the other side.
+func writeDiffFiller(sb *strings.Builder, lineNum int, rowType diffRowType, isOld bool, ctx diffSideCtx) {
 	if lineNum == 0 {
 		sb.WriteString(ctx.colors.fillerBg)
-		sb.WriteString(strings.Repeat(" ", ctx.sideWidth))
+		sb.WriteString(ctx.fillerPad)
 		sb.WriteString(ansiReset)
 		return
 	}
-
-	var lineBg, wordBg string
-	switch rowType {
-	case diffRowModified:
-		if isOld {
-			lineBg = ctx.colors.delBg
-			wordBg = ctx.colors.wordDelBg
-		} else {
-			lineBg = ctx.colors.addBg
-			wordBg = ctx.colors.wordAddBg
-		}
-	case diffRowAdded:
-		lineBg = ctx.colors.addBg
-	case diffRowDeleted:
-		lineBg = ctx.colors.delBg
-	}
-
-	digits := ctx.gutterW - 1
-	numStr := fmt.Sprintf("%*d ", digits, lineNum)
-
+	lineBg, _ := diffSideBg(rowType, isOld, ctx.colors)
+	gutterStyle := ansiFaint
 	if lineBg != "" {
-		writeStyledText(sb, lineBg+ansiFaint, numStr)
-	} else {
-		writeStyledText(sb, ansiFaint, numStr)
+		gutterStyle = lineBg + ansiFaint
 	}
-
-	if spans != nil {
-		renderWordDiffText(sb, spans, lineBg, wordBg, ctx.textWidth)
-	} else {
-		expanded := expandTabs(text)
-		truncated := ansi.Truncate(expanded, ctx.textWidth, "")
-		writePaddedText(sb, truncated, ctx.textWidth, lineBg)
-	}
+	writeStyledText(sb, gutterStyle, ctx.gutterPad)
+	writePaddedText(sb, "", ctx.textWidth, lineBg)
 }
 
 // renderWordDiffText renders word-level diff spans with background highlights.

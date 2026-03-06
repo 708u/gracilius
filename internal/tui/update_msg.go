@@ -72,6 +72,9 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 		oldLines = splitLines(oldContent)
 	}
 	dt.diffViewData = buildDiffData(oldLines, newLines)
+	if len(dt.diffViewData.hunks) > 0 {
+		dt.vp.SetYOffset(dt.diffViewData.hunks[0].startIdx)
+	}
 
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1
@@ -130,8 +133,15 @@ func (m *Model) adjustScroll() {
 	lo := m.computeLayout()
 	if m.focusPane == paneTree {
 		m.adjustTreeScroll(lo.contentHeight)
-	} else if t, ok := m.activeTabState(); ok && len(t.lines) > 0 {
-		t.adjustScrollForCursor(lo.contentHeight, lo.textWidth)
+	} else if t, ok := m.activeTabState(); ok {
+		if t.diffViewData != nil {
+			maxOffset := t.diffMaxOffset()
+			if t.vp.YOffset() > maxOffset {
+				t.vp.SetYOffset(maxOffset)
+			}
+		} else if len(t.lines) > 0 {
+			t.adjustScrollForCursor(lo.contentHeight, lo.textWidth)
+		}
 	}
 }
 

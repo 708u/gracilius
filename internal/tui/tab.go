@@ -116,6 +116,14 @@ func (t *tab) syncContent(lines []string) {
 	t.configureGutter(lineNumWidthFor(len(lines)) - 2)
 }
 
+// diffMaxOffset returns the maximum scroll offset for a diff view.
+func (t *tab) diffMaxOffset() int {
+	if t.diffViewData == nil {
+		return 0
+	}
+	return max(len(t.diffViewData.rows)-1, 0)
+}
+
 // rejectAndClear calls onReject if set and nils the diff state.
 func (t *tab) rejectAndClear() {
 	if t.diff != nil && t.diff.onReject != nil {

@@ -131,6 +131,8 @@ func (m *Model) View() tea.View {
 	switch {
 	case hasTab && t.inputMode:
 		cp = m.commentCursorScreenPos(lo)
+	case hasTab && t.diffViewData != nil:
+		// No text cursor for diff view (scroll-only).
 	case hasTab:
 		cp = m.cursorScreenPos(lo)
 	}
@@ -412,7 +414,7 @@ func (m *Model) renderEditor(lo layout) []string {
 	// Diff view dispatch: render side-by-side diff instead of normal editor.
 	if hasTab && t.diffViewData != nil {
 		offset := t.vp.YOffset()
-		maxOffset := max(len(t.diffViewData.rows)-height, 0)
+		maxOffset := t.diffMaxOffset()
 		if offset > maxOffset {
 			offset = maxOffset
 			t.vp.SetYOffset(offset)
