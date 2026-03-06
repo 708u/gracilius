@@ -40,6 +40,7 @@ var (
 	styleComment   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	styleInput     = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	styleBodyWhite = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+	styleWarning   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	styleFooter    = lipgloss.NewStyle().
 			BorderTop(true).
 			BorderStyle(separatorBorder)
@@ -299,7 +300,8 @@ func (m *Model) renderFooter() string {
 		if hasTab {
 			n = len(t.comments)
 		}
-		fmt.Fprintf(&sb, "Clear %d comments? (y/n)", n)
+		sb.WriteString(styleWarning.Render(
+			fmt.Sprintf("Clear %d comments? (y/n)", n)))
 		return sb.String()
 	}
 
