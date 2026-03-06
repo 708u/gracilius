@@ -72,12 +72,7 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 		oldLines = splitLines(oldContent)
 	}
 	dt.diffViewData = buildDiffData(oldLines, newLines)
-	// Buffer by height so viewport's internal max never constrains
-	// below diffMaxOffset (diff rows may soft-wrap in side-by-side view).
-	dt.vp.SetContentLines(make([]string, len(dt.diffViewData.rows)+dt.vp.Height()))
-	if len(dt.diffViewData.hunks) > 0 {
-		dt.vp.SetYOffset(dt.diffViewData.hunks[0].startIdx)
-	}
+	dt.initDiffContent(m.theme, dt.vp.Width())
 
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1
@@ -143,11 +138,9 @@ func (m *Model) adjustScroll() {
 		}
 	} else if t, ok := m.activeTabState(); ok {
 		if t.diffViewData != nil {
-			maxOffset := t.diffMaxOffset()
-			if t.vp.YOffset() > maxOffset {
-				t.vp.SetYOffset(maxOffset)
-			}
-		} else if len(t.lines) > 0 {
+			return // viewport manages its own scroll limits
+		}
+		if len(t.lines) > 0 {
 			t.adjustScrollForCursor(lo.contentHeight, lo.textWidth)
 		}
 	}

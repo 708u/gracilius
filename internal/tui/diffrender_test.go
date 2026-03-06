@@ -8,6 +8,20 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// renderDiff is a test helper that pre-renders diff lines via viewport.
+func renderDiff(data *diffData, theme themeConfig, width, height, offset int) []string {
+	result := renderAllDiffLines(data, theme, width)
+	// Simulate viewport slicing.
+	start := min(offset, len(result.lines))
+	end := min(start+height, len(result.lines))
+	lines := make([]string, 0, height)
+	lines = append(lines, result.lines[start:end]...)
+	for len(lines) < height {
+		lines = append(lines, padRight("", width))
+	}
+	return lines
+}
+
 func TestRenderSideBySide_LineCount(t *testing.T) {
 	old := []string{"aaa", "bbb", "ccc"}
 	new := []string{"aaa", "BBB", "ccc"}
@@ -15,7 +29,7 @@ func TestRenderSideBySide_LineCount(t *testing.T) {
 
 	heights := []int{5, 10, 20}
 	for _, h := range heights {
-		lines := renderSideBySide(data, darkTheme, 80, h, 0)
+		lines := renderDiff(data, darkTheme, 80, h, 0)
 		if len(lines) != h {
 			t.Errorf("height=%d: expected %d lines, got %d", h, h, len(lines))
 		}
@@ -25,7 +39,7 @@ func TestRenderSideBySide_LineCount(t *testing.T) {
 func TestRenderSideBySide_EmptyDiff(t *testing.T) {
 	data := buildDiffData(nil, nil)
 
-	lines := renderSideBySide(data, darkTheme, 80, 10, 0)
+	lines := renderDiff(data, darkTheme, 80, 10, 0)
 	if len(lines) != 10 {
 		t.Fatalf("expected 10 lines, got %d", len(lines))
 	}
@@ -37,7 +51,7 @@ func TestRenderSideBySide_ColumnWidths(t *testing.T) {
 	data := buildDiffData(old, new)
 
 	width := 80
-	lines := renderSideBySide(data, darkTheme, width, 5, 0)
+	lines := renderDiff(data, darkTheme, width, 5, 0)
 	for i, line := range lines {
 		w := ansi.StringWidth(line)
 		if w != width {
@@ -51,7 +65,7 @@ func TestRenderSideBySide_Separator(t *testing.T) {
 	new := []string{"aaa", "BBB"}
 	data := buildDiffData(old, new)
 
-	lines := renderSideBySide(data, darkTheme, 80, 5, 0)
+	lines := renderDiff(data, darkTheme, 80, 5, 0)
 	for i, line := range lines[:len(data.rows)] {
 		stripped := ansi.Strip(line)
 		if !strings.Contains(stripped, "\u2502") {
@@ -65,7 +79,7 @@ func TestRenderSideBySide_ScrollOffset(t *testing.T) {
 	new := []string{"aaa", "bbb", "ccc", "ddd", "eee"}
 	data := buildDiffData(old, new)
 
-	lines := renderSideBySide(data, darkTheme, 80, 5, 2)
+	lines := renderDiff(data, darkTheme, 80, 5, 2)
 	stripped := ansi.Strip(lines[0])
 	if !strings.Contains(stripped, "3") {
 		t.Errorf("expected line number 3 in first row, got %q", stripped)
@@ -77,7 +91,7 @@ func TestRenderSideBySide_LineNumbers(t *testing.T) {
 	new := []string{"aaa", "BBB", "ccc"}
 	data := buildDiffData(old, new)
 
-	lines := renderSideBySide(data, darkTheme, 80, 5, 0)
+	lines := renderDiff(data, darkTheme, 80, 5, 0)
 	for i, row := range data.rows {
 		stripped := ansi.Strip(lines[i])
 		oldNum := strings.SplitN(stripped, "\u2502", 2)[0]
@@ -93,7 +107,7 @@ func TestRenderSideBySide_LineNumbers(t *testing.T) {
 func TestRenderSideBySide_FillerLine(t *testing.T) {
 	data := buildDiffData(nil, []string{"aaa", "bbb"})
 
-	lines := renderSideBySide(data, darkTheme, 80, 5, 0)
+	lines := renderDiff(data, darkTheme, 80, 5, 0)
 	for i := range data.rows {
 		stripped := ansi.Strip(lines[i])
 		parts := strings.SplitN(stripped, "\u2502", 2)

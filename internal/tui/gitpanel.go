@@ -86,12 +86,7 @@ func (m *Model) openGitDiffEntry() {
 	dt.vp.SetWidth(lo.editorWidth)
 	dt.vp.SetHeight(lo.contentHeight)
 	dt.diffViewData = buildDiffData(oldContent, newContent)
-	// Buffer by contentHeight so viewport's internal max never constrains
-	// below diffMaxOffset (diff rows may soft-wrap in side-by-side view).
-	dt.vp.SetContentLines(make([]string, len(dt.diffViewData.rows)+lo.contentHeight))
-	if len(dt.diffViewData.hunks) > 0 {
-		dt.vp.SetYOffset(dt.diffViewData.hunks[0].startIdx)
-	}
+	dt.initDiffContent(m.theme, lo.editorWidth)
 
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1

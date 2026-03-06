@@ -187,14 +187,7 @@ func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
 		if t.diffViewData != nil {
-			delta := 3
-			if msg.Button == tea.MouseWheelUp {
-				delta = -3
-			}
-			newOff := t.vp.YOffset() + delta
-			maxOff := t.diffMaxOffset()
-			newOff = max(0, min(newOff, maxOff))
-			t.vp.SetYOffset(newOff)
+			t.vp, _ = t.vp.Update(msg)
 		} else if len(t.lines) > 0 {
 			t.vp, _ = t.vp.Update(msg)
 			maxOff := t.maxScrollOffset(lo.contentHeight, lo.textWidth)

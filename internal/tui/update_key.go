@@ -313,9 +313,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.treeCursor++
 			}
 		case hasTab && t.diffViewData != nil:
-			if t.vp.YOffset() < t.diffMaxOffset() {
-				t.vp.SetYOffset(t.vp.YOffset() + 1)
-			}
+			t.vp.SetYOffset(t.vp.YOffset() + 1)
 		case hasTab:
 			if t.cursorLine < len(t.lines)-1 {
 				t.cursorLine++
@@ -416,7 +414,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.treeCursor = len(m.fileTree) - 1
 			}
 		case hasTab && t.diffViewData != nil:
-			t.vp.SetYOffset(t.diffMaxOffset())
+			t.vp.GotoBottom()
 		case hasTab && len(t.lines) > 0:
 			t.cursorLine = len(t.lines) - 1
 			t.cursorChar = 0

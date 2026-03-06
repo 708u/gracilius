@@ -40,6 +40,11 @@ type tab struct {
 
 	diff         *diffState // non-nil for diff review tabs
 	diffViewData *diffData  // side-by-side diff data (nil for file tabs)
+
+	// diff render cache (invalidated on width/theme change)
+	diffCachedLines []string // pre-rendered visual lines (same as viewport content)
+	diffCacheWidth  int
+	diffCacheTheme  string
 }
 
 // diffState holds accept/reject callbacks for a diff review tab.
@@ -116,12 +121,36 @@ func (t *tab) syncContent(lines []string) {
 	t.configureGutter(lineNumWidthFor(len(lines)) - 2)
 }
 
-// diffMaxOffset returns the maximum scroll offset for a diff view.
-func (t *tab) diffMaxOffset() int {
-	if t.diffViewData == nil {
-		return 0
+// renderDiffContent pre-renders diff lines and updates viewport content.
+// Returns the hunk visual offsets for initial scroll positioning.
+func (t *tab) renderDiffContent(theme themeConfig, width int) []int {
+	result := renderAllDiffLines(t.diffViewData, theme, width)
+	t.diffCachedLines = result.lines
+	t.vp.SetContentLines(result.lines)
+	t.diffCacheWidth = width
+	t.diffCacheTheme = theme.name
+	return result.hunkVisualOffs
+}
+
+// initDiffContent pre-renders diff lines and jumps to the first hunk.
+func (t *tab) initDiffContent(theme themeConfig, width int) {
+	if width <= diffSeparatorWidth {
+		return
 	}
-	return max(len(t.diffViewData.rows)-1, 0)
+	hunkOffs := t.renderDiffContent(theme, width)
+	if len(hunkOffs) > 0 {
+		t.vp.SetYOffset(hunkOffs[0])
+	}
+}
+
+// ensureDiffContent refreshes the diff render cache if width/theme changed.
+func (t *tab) ensureDiffContent(theme themeConfig, width int) {
+	if width <= diffSeparatorWidth || (t.diffCacheWidth == width && t.diffCacheTheme == theme.name) {
+		return
+	}
+	off := t.vp.YOffset()
+	t.renderDiffContent(theme, width)
+	t.vp.SetYOffset(off)
 }
 
 // rejectAndClear calls onReject if set and nils the diff state.

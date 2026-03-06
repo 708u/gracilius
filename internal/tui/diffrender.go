@@ -66,20 +66,14 @@ type diffSideCtx struct {
 	gutterPad string // precomputed spaces for continuation gutter
 }
 
-// renderSideBySide renders a side-by-side diff view.
-// It returns exactly height lines, each padded to width.
-// Long lines are soft-wrapped within each side.
-func renderSideBySide(
-	data *diffData,
-	theme themeConfig,
-	width int,
-	height int,
-	offset int,
-) []string {
-	if height <= 0 {
-		return nil
-	}
+// diffRenderResult holds pre-rendered diff lines and row-to-visual-line mapping.
+type diffRenderResult struct {
+	lines          []string // flat visual lines for viewport content
+	hunkVisualOffs []int    // visual line offset for each hunk
+}
 
+// renderAllDiffLines pre-renders all diff rows into a flat visual line slice.
+func renderAllDiffLines(data *diffData, theme themeConfig, width int) diffRenderResult {
 	colors := diffColorsFor(theme)
 	maxLine := max(data.maxLineNum, 1)
 
@@ -94,19 +88,18 @@ func renderSideBySide(
 		gutterPad: strings.Repeat(" ", gutterW),
 	}
 
-	lines := make([]string, 0, height)
+	// Build row-start mapping for hunk offset conversion.
+	rowVisualStart := make([]int, len(data.rows))
+	var lines []string
 
-	for i := offset; i < len(data.rows) && len(lines) < height; i++ {
-		row := data.rows[i]
+	for i, row := range data.rows {
+		rowVisualStart[i] = len(lines)
 
 		oldVisuals := wrapDiffSide(row.oldLineNum, row.oldText, row.oldSpans, row.rowType, true, ctx)
 		newVisuals := wrapDiffSide(row.newLineNum, row.newText, row.newSpans, row.rowType, false, ctx)
 
 		rowCount := max(len(oldVisuals), len(newVisuals))
 		for j := range rowCount {
-			if len(lines) >= height {
-				break
-			}
 			var sb strings.Builder
 			if j < len(oldVisuals) {
 				sb.WriteString(oldVisuals[j])
@@ -123,11 +116,15 @@ func renderSideBySide(
 		}
 	}
 
-	for len(lines) < height {
-		lines = append(lines, padRight("", width))
+	// Convert hunk start indices (row-based) to visual line offsets.
+	hunkOffs := make([]int, len(data.hunks))
+	for i, h := range data.hunks {
+		if h.startIdx < len(rowVisualStart) {
+			hunkOffs[i] = rowVisualStart[h.startIdx]
+		}
 	}
 
-	return lines
+	return diffRenderResult{lines: lines, hunkVisualOffs: hunkOffs}
 }
 
 // diffSideBg returns the line and word background colors for a diff side.

@@ -291,9 +291,9 @@ func TestGitDiffView_ScrollWithKeys(t *testing.T) {
 		t.Fatalf("expected paneEditor, got %d", m.focusPane)
 	}
 
-	maxOff := tab.diffMaxOffset()
-	if maxOff == 0 {
-		t.Fatal("expected diffMaxOffset > 0 for large diff")
+	// Viewport should have content lines (pre-rendered diff).
+	if tab.vp.TotalLineCount() == 0 {
+		t.Fatal("expected viewport content lines for diff")
 	}
 
 	// Set offset to 0 to test scrolling down.
