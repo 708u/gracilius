@@ -2,6 +2,7 @@ package tui
 
 import (
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -61,10 +62,17 @@ func (m *Model) handleTreeChanged() (tea.Model, tea.Cmd) {
 
 // handleOpenDiff opens a new diff tab.
 func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
-	lines := splitLines([]byte(msg.Contents))
-	dt := newDiffTab(msg.FilePath, lines, msg.Accept, msg.Reject)
-	dt.syncContent(lines)
+	newLines := splitLines([]byte(msg.Contents))
+	dt := newDiffTab(msg.FilePath, newLines, msg.Accept, msg.Reject)
+	dt.syncContent(newLines)
 	dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents, m.theme)
+
+	var oldLines []string
+	if oldContent, err := os.ReadFile(msg.FilePath); err == nil {
+		oldLines = splitLines(oldContent)
+	}
+	dt.diffViewData = buildDiffData(oldLines, newLines)
+
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1
 	m.focusPane = paneEditor

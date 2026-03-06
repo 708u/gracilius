@@ -38,7 +38,8 @@ type tab struct {
 	inputStart   int
 	inputEnd     int
 
-	diff *diffState // non-nil for diff review tabs
+	diff         *diffState // non-nil for diff review tabs
+	diffViewData *diffData  // side-by-side diff data (nil for file tabs)
 }
 
 // diffState holds accept/reject callbacks for a diff review tab.

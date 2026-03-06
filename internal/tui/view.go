@@ -409,6 +409,21 @@ func (m *Model) renderEditor(lo layout) []string {
 	lines := make([]string, 0, height)
 	var mapping []visualEntry
 
+	// Diff view dispatch: render side-by-side diff instead of normal editor.
+	if hasTab && t.diffViewData != nil {
+		offset := t.vp.YOffset()
+		maxOffset := max(len(t.diffViewData.rows)-height, 0)
+		if offset > maxOffset {
+			offset = maxOffset
+			t.vp.SetYOffset(offset)
+		}
+		diffLines := renderSideBySide(
+			t.diffViewData, m.theme,
+			width, height, offset)
+		m.lastMapping = nil
+		return diffLines
+	}
+
 	if !hasTab || len(t.lines) == 0 {
 		emptyMsg := emptyStateMsg
 		lines = append(lines, padRight(emptyMsg, width))
