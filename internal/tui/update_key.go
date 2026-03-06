@@ -46,11 +46,12 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.gPending {
 		m.gPending = false
 		if key.Matches(msg, m.keys.GoTop) {
-			if m.focusPane == paneTree {
+			switch {
+			case m.focusPane == paneTree:
 				m.treeCursor = 0
-			} else if hasTab && t.diffViewData != nil {
+			case hasTab && t.diffViewData != nil:
 				t.vp.SetYOffset(0)
-			} else if hasTab && len(t.lines) > 0 {
+			case hasTab && len(t.lines) > 0:
 				t.cursorLine = 0
 				t.cursorChar = 0
 				t.syncAnchorToCursor()
@@ -254,15 +255,16 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.notifySelectionChanged()
 		}
 	case key.Matches(msg, m.keys.Up):
-		if m.focusPane == paneTree {
+		switch {
+		case m.focusPane == paneTree:
 			if m.treeCursor > 0 {
 				m.treeCursor--
 			}
-		} else if hasTab && t.diffViewData != nil {
+		case hasTab && t.diffViewData != nil:
 			if t.vp.YOffset() > 0 {
 				t.vp.SetYOffset(t.vp.YOffset() - 1)
 			}
-		} else if hasTab {
+		case hasTab:
 			if t.cursorLine > 0 {
 				t.cursorLine--
 				t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
@@ -271,15 +273,16 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case key.Matches(msg, m.keys.Down):
-		if m.focusPane == paneTree {
+		switch {
+		case m.focusPane == paneTree:
 			if m.treeCursor < len(m.fileTree)-1 {
 				m.treeCursor++
 			}
-		} else if hasTab && t.diffViewData != nil {
+		case hasTab && t.diffViewData != nil:
 			if t.vp.YOffset() < t.diffMaxOffset() {
 				t.vp.SetYOffset(t.vp.YOffset() + 1)
 			}
-		} else if hasTab {
+		case hasTab:
 			if t.cursorLine < len(t.lines)-1 {
 				t.cursorLine++
 				t.cursorChar = min(t.cursorChar, t.lineLen(t.cursorLine))
@@ -369,13 +372,14 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
 		}
 	case key.Matches(msg, m.keys.GoBottom):
-		if m.focusPane == paneTree {
+		switch {
+		case m.focusPane == paneTree:
 			if len(m.fileTree) > 0 {
 				m.treeCursor = len(m.fileTree) - 1
 			}
-		} else if hasTab && t.diffViewData != nil {
+		case hasTab && t.diffViewData != nil:
 			t.vp.SetYOffset(t.diffMaxOffset())
-		} else if hasTab && len(t.lines) > 0 {
+		case hasTab && len(t.lines) > 0:
 			t.cursorLine = len(t.lines) - 1
 			t.cursorChar = 0
 			t.syncAnchorToCursor()
