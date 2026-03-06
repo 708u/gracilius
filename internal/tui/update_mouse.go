@@ -6,6 +6,24 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
+// tabIndexAtX returns the tab index at screen X coordinate, or -1 if none.
+func (m *Model) tabIndexAtX(x int) int {
+	lo := m.computeLayout()
+	pos := lo.editorStartX
+	for i, t := range m.tabs {
+		if i > 0 {
+			pos += tabSeparatorWidth
+		}
+		label := tabLabel(t)
+		w := len([]rune(label))
+		if x >= pos && x < pos+w {
+			return i
+		}
+		pos += w
+	}
+	return -1
+}
+
 // handleMouseClick handles mouse click events.
 func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	t, hasTab := m.activeTabState()
@@ -20,6 +38,14 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 			} else if closeOverlay {
 				m.openFile.close()
 			}
+		}
+		return m, nil
+	}
+
+	if msg.Button == tea.MouseLeft &&
+		msg.Y >= headerHeight && msg.Y < headerHeight+tabBarHeight {
+		if idx := m.tabIndexAtX(msg.X); idx >= 0 {
+			m.activeTab = idx
 		}
 		return m, nil
 	}

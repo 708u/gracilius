@@ -12,6 +12,22 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// tabLabel returns the display label for a tab (with leading/trailing space).
+func tabLabel(t *tab) string {
+	name := "[empty]"
+	if t.filePath != "" {
+		name = filepath.Base(t.filePath)
+	}
+	if t.kind == diffTab {
+		if t.diff != nil {
+			name = "[review] " + name
+		} else {
+			name = "[diff] " + name
+		}
+	}
+	return " " + name + " "
+}
+
 // cursorPosition represents screen-space cursor coordinates.
 // A zero value means no cursor is visible.
 type cursorPosition struct {
@@ -253,19 +269,7 @@ func (m *Model) renderTabBar(offset int) string {
 	var borders []string
 
 	for i, t := range m.tabs {
-		name := "[empty]"
-		if t.filePath != "" {
-			name = filepath.Base(t.filePath)
-		}
-		if t.kind == diffTab {
-			if t.diff != nil {
-				name = "[review] " + name
-			} else {
-				name = "[diff] " + name
-			}
-		}
-
-		label := " " + name + " "
+		label := tabLabel(t)
 		w := len([]rune(label))
 		if i == m.activeTab {
 			labels = append(labels, styleActive.Render(label))

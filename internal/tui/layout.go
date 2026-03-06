@@ -7,6 +7,7 @@ const (
 	footerHeight        = 4 // border-top + help + status
 	separatorWidth      = 3
 	minLineNumberWidth  = 4
+	tabSeparatorWidth   = 1 // " " between tab labels
 	minTreeWidth        = 15
 	defaultTreePercent  = 30
 	maxTreeWidthPercent = 70
