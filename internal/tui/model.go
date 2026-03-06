@@ -17,6 +17,30 @@ const (
 	paneEditor
 )
 
+// panel identifies which panel is shown in the left pane.
+type panel int
+
+const (
+	panelFiles panel = iota
+	panelGitDiff
+	panelPR
+	panelCount // cycling sentinel
+)
+
+// label returns the display name for the panel.
+func (p panel) label() string {
+	switch p {
+	case panelFiles:
+		return "Files"
+	case panelGitDiff:
+		return "Git Changes"
+	case panelPR:
+		return "PR Changes"
+	default:
+		return "Files"
+	}
+}
+
 // MCPServer is the interface that the TUI uses to communicate with
 // the WebSocket server. server.Server satisfies this implicitly.
 type MCPServer interface {
@@ -82,6 +106,10 @@ type Model struct {
 	treeCursor int
 	focusPane  pane // 0: tree, 1: editor
 	rootDir    string
+
+	// panel system
+	activePanel    panel // which panel is shown in the left pane
+	sidebarVisible bool  // whether the left pane is visible
 
 	// mouse
 	lastMouseLine int
@@ -236,6 +264,8 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 		dirWatcher:     dirWatcher,
 		tabs:           []*tab{},
 		treeWidth:      30,
+		activePanel:    panelFiles,
+		sidebarVisible: true,
 		keys:           newKeyMap(),
 		help:           help.New(),
 		iconMode:       im,

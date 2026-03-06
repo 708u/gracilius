@@ -87,17 +87,25 @@ func lineNumWidthFor(n int) int {
 }
 
 func (m *Model) computeLayout() layout {
-	tw := m.getTreeWidth()
 	lnw := minLineNumberWidth
 	t, ok := m.activeTabState()
 	if ok && len(t.lines) > 0 {
 		lnw = lineNumWidthFor(len(t.lines))
 	}
-	ew := m.width - tw - separatorWidth
+
+	tw := 0
+	sx := 0
+	ew := m.width
+	if m.sidebarVisible {
+		tw = m.getTreeWidth()
+		sx = tw + separatorWidth
+		ew = m.width - tw - separatorWidth
+	}
+
 	return layout{
 		contentHeight: m.getContentHeight(),
 		treeWidth:     tw,
-		editorStartX:  tw + separatorWidth,
+		editorStartX:  sx,
 		editorWidth:   ew,
 		lineNumWidth:  lnw,
 		textWidth:     ew - lnw,
