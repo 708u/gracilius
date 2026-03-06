@@ -56,8 +56,11 @@ func (m *Model) handleTreeChanged() (tea.Model, tea.Cmd) {
 	if m.treeCursor >= len(m.fileTree) {
 		m.treeCursor = max(0, len(m.fileTree)-1)
 	}
-	cmd := m.watchDir()
-	return m, cmd
+	cmds := []tea.Cmd{m.watchDir()}
+	if m.gitLoaded {
+		cmds = append(cmds, m.loadGitChanges())
+	}
+	return m, tea.Batch(cmds...)
 }
 
 // handleOpenDiff opens a new diff tab.

@@ -425,12 +425,6 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.moveToParagraphBoundary(dirUp)
 	case key.Matches(msg, m.keys.BlockDown):
 		m.moveToParagraphBoundary(dirDown)
-	case key.Matches(msg, m.keys.Refresh):
-		if m.activePanel == panelGitDiff {
-			m.gitLoaded = false
-			cmd := m.loadGitChanges()
-			return m, cmd
-		}
 	case key.Matches(msg, m.keys.CloseTab):
 		if len(m.tabs) > 0 {
 			m.closeTab(m.activeTab)

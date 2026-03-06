@@ -190,50 +190,6 @@ func TestGitPanelNavigation(t *testing.T) {
 	}
 }
 
-func TestGitPanelRefresh(t *testing.T) {
-	m := newTestModel(t)
-	m.focusPane = paneTree
-	m.activePanel = panelGitDiff
-	m.gitLoaded = true
-	m.gitChangedFiles = []changedFileEntry{
-		{name: "a.go", status: "M"},
-	}
-
-	_, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
-
-	if m.gitLoaded {
-		t.Error("expected gitLoaded=false after refresh")
-	}
-	if cmd == nil {
-		t.Error("expected cmd to be returned for loading")
-	}
-}
-
-func TestGitPanelRefresh_FromEditorPane(t *testing.T) {
-	m := newTestModel(t)
-	m.focusPane = paneEditor
-	m.activePanel = panelGitDiff
-	m.gitLoaded = true
-	m.gitChangedFiles = []changedFileEntry{
-		{name: "a.go", status: "M"},
-	}
-
-	ft := newFileTab()
-	ft.filePath = "/tmp/a.go"
-	ft.lines = []string{"line1"}
-	m.tabs = append(m.tabs, ft)
-	m.activeTab = 0
-
-	_, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
-
-	if m.gitLoaded {
-		t.Error("expected gitLoaded=false after refresh from editor pane")
-	}
-	if cmd == nil {
-		t.Error("expected cmd to be returned for loading")
-	}
-}
-
 func TestPanelSwitchTriggersLoad(t *testing.T) {
 	m := newTestModel(t)
 	m.focusPane = paneTree

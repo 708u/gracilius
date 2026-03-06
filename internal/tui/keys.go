@@ -32,7 +32,6 @@ type keyMap struct {
 	RejectDiff    key.Binding
 	SwitchPanel   key.Binding
 	ToggleSidebar key.Binding
-	Refresh       key.Binding
 	Confirm       key.Binding
 }
 
@@ -142,10 +141,6 @@ func newKeyMap() keyMap {
 			key.WithKeys("ctrl+b"),
 			key.WithHelp("Ctrl+b", "toggle sidebar"),
 		),
-		Refresh: key.NewBinding(
-			key.WithKeys("r"),
-			key.WithHelp("r", "refresh"),
-		),
 		Confirm: key.NewBinding(
 			key.WithKeys("y"),
 		),
@@ -157,7 +152,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.SwitchPane, k.SwitchPanel, k.ToggleSidebar,
 		k.PrevTab, k.NextTab, k.CloseTab,
-		k.CharSelect, k.LineSelect, k.Copy, k.OpenFile, k.Refresh,
+		k.CharSelect, k.LineSelect, k.Copy, k.OpenFile,
 		k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit,
 	}
 }
@@ -167,7 +162,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown},
 		{k.Enter, k.SwitchPane, k.SwitchPanel, k.ToggleSidebar, k.PrevTab, k.NextTab, k.CloseTab},
-		{k.CharSelect, k.LineSelect, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.Refresh, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
+		{k.CharSelect, k.LineSelect, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
 	}
 }
 
@@ -190,6 +185,5 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km.SwitchPane.SetEnabled(hasTab && m.sidebarVisible)
 	km.SwitchPanel.SetEnabled(true)
 	km.ToggleSidebar.SetEnabled(true)
-	km.Refresh.SetEnabled(m.activePanel == panelGitDiff)
 	return km
 }
