@@ -75,7 +75,6 @@ func (m *Model) watchComments() tea.Cmd {
 // watchGitIndex returns a tea.Cmd that watches .git/index for changes.
 func (m *Model) watchGitIndex() tea.Cmd {
 	w := m.gitIndexWatcher
-	indexPath := filepath.Join(m.rootDir, ".git", "index")
 	return func() tea.Msg {
 		if w == nil {
 			return nil
@@ -86,7 +85,7 @@ func (m *Model) watchGitIndex() tea.Cmd {
 				if !ok {
 					return nil
 				}
-				if event.Name != indexPath {
+				if filepath.Base(event.Name) != "index" {
 					continue
 				}
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {

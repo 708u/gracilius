@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	tea "charm.land/bubbletea/v2"
@@ -142,10 +144,12 @@ func run() int {
 	}
 	defer func() { _ = gitIndexWatcher.Close() }()
 
-	gitIndexPath := filepath.Join(rootDir, ".git", "index")
-	if _, statErr := os.Stat(gitIndexPath); statErr == nil {
-		if err := gitIndexWatcher.Add(filepath.Dir(gitIndexPath)); err != nil {
-			log.Printf("Failed to watch .git directory: %v", err)
+	if gitDir, gdErr := resolveGitDir(rootDir); gdErr == nil {
+		indexPath := filepath.Join(gitDir, "index")
+		if _, statErr := os.Stat(indexPath); statErr == nil {
+			if err := gitIndexWatcher.Add(gitDir); err != nil {
+				log.Printf("Failed to watch git directory: %v", err)
+			}
 		}
 	}
 
@@ -191,4 +195,19 @@ func run() int {
 	}
 
 	return exitOK
+}
+
+// resolveGitDir returns the actual .git directory for the given path,
+// handling both normal repos and worktrees.
+func resolveGitDir(dir string) (string, error) {
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "--git-dir")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	gitDir := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(dir, gitDir)
+	}
+	return gitDir, nil
 }
