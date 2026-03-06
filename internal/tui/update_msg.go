@@ -72,6 +72,9 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 		oldLines = splitLines(oldContent)
 	}
 	dt.diffViewData = buildDiffData(oldLines, newLines)
+	// Buffer by height so viewport's internal max never constrains
+	// below diffMaxOffset (diff rows may soft-wrap in side-by-side view).
+	dt.vp.SetContentLines(make([]string, len(dt.diffViewData.rows)+dt.vp.Height()))
 	if len(dt.diffViewData.hunks) > 0 {
 		dt.vp.SetYOffset(dt.diffViewData.hunks[0].startIdx)
 	}

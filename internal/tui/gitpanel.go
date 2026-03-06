@@ -75,6 +75,7 @@ func (m *Model) openGitDiffEntry() {
 		newContent = []string{}
 	}
 
+	lo := m.computeLayout()
 	dt := &tab{
 		kind:         diffTab,
 		filePath:     entry.absPath,
@@ -82,7 +83,12 @@ func (m *Model) openGitDiffEntry() {
 		commentInput: newTextarea(),
 		vp:           newViewport(),
 	}
+	dt.vp.SetWidth(lo.editorWidth)
+	dt.vp.SetHeight(lo.contentHeight)
 	dt.diffViewData = buildDiffData(oldContent, newContent)
+	// Buffer by contentHeight so viewport's internal max never constrains
+	// below diffMaxOffset (diff rows may soft-wrap in side-by-side view).
+	dt.vp.SetContentLines(make([]string, len(dt.diffViewData.rows)+lo.contentHeight))
 	if len(dt.diffViewData.hunks) > 0 {
 		dt.vp.SetYOffset(dt.diffViewData.hunks[0].startIdx)
 	}

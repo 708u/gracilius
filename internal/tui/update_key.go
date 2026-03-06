@@ -428,7 +428,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.BlockDown):
 		m.moveToParagraphBoundary(dirDown)
 	case key.Matches(msg, m.keys.Refresh):
-		if m.focusPane == paneTree && m.activePanel == panelGitDiff {
+		if m.activePanel == panelGitDiff {
 			m.gitLoaded = false
 			cmd := m.loadGitChanges()
 			return m, cmd

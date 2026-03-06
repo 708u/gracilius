@@ -190,6 +190,6 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km.SwitchPane.SetEnabled(hasTab && m.sidebarVisible)
 	km.SwitchPanel.SetEnabled(true)
 	km.ToggleSidebar.SetEnabled(true)
-	km.Refresh.SetEnabled(m.focusPane == paneTree && m.activePanel == panelGitDiff)
+	km.Refresh.SetEnabled(m.activePanel == panelGitDiff)
 	return km
 }

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -208,6 +209,31 @@ func TestGitPanelRefresh(t *testing.T) {
 	}
 }
 
+func TestGitPanelRefresh_FromEditorPane(t *testing.T) {
+	m := newTestModel(t)
+	m.focusPane = paneEditor
+	m.activePanel = panelGitDiff
+	m.gitLoaded = true
+	m.gitChangedFiles = []changedFileEntry{
+		{name: "a.go", status: "M"},
+	}
+
+	ft := newFileTab()
+	ft.filePath = "/tmp/a.go"
+	ft.lines = []string{"line1"}
+	m.tabs = append(m.tabs, ft)
+	m.activeTab = 0
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+
+	if m.gitLoaded {
+		t.Error("expected gitLoaded=false after refresh from editor pane")
+	}
+	if cmd == nil {
+		t.Error("expected cmd to be returned for loading")
+	}
+}
+
 func TestPanelSwitchTriggersLoad(t *testing.T) {
 	m := newTestModel(t)
 	m.focusPane = paneTree
@@ -227,6 +253,67 @@ func TestPanelSwitchTriggersLoad(t *testing.T) {
 	}
 	if m.activePanel != panelGitDiff {
 		t.Errorf("expected panelGitDiff, got %d", m.activePanel)
+	}
+}
+
+func TestGitDiffView_ScrollWithKeys(t *testing.T) {
+	m := newTestModel(t)
+	m.activePanel = panelGitDiff
+
+	// Create a large diff (more lines than screen height).
+	old := make([]string, 100)
+	new_ := make([]string, 100)
+	for i := range 100 {
+		old[i] = fmt.Sprintf("old line %d", i)
+		new_[i] = fmt.Sprintf("new line %d", i)
+	}
+
+	m.gitChangedFiles = []changedFileEntry{
+		{
+			name:       "big.go",
+			status:     "M",
+			absPath:    "/tmp/big.go",
+			oldContent: old,
+			newContent: new_,
+		},
+	}
+	m.gitCursor = 0
+	m.openGitDiffEntry()
+
+	if len(m.tabs) != 1 {
+		t.Fatalf("expected 1 tab, got %d", len(m.tabs))
+	}
+	tab := m.tabs[0]
+	if tab.diffViewData == nil {
+		t.Fatal("expected diffViewData to be set")
+	}
+	if m.focusPane != paneEditor {
+		t.Fatalf("expected paneEditor, got %d", m.focusPane)
+	}
+
+	maxOff := tab.diffMaxOffset()
+	if maxOff == 0 {
+		t.Fatal("expected diffMaxOffset > 0 for large diff")
+	}
+
+	// Set offset to 0 to test scrolling down.
+	tab.vp.SetYOffset(0)
+	initialOffset := tab.vp.YOffset()
+
+	// Press 'j' to scroll down.
+	m.Update(tea.KeyPressMsg{Code: 'j', Text: "j"})
+
+	if tab.vp.YOffset() != initialOffset+1 {
+		t.Errorf("expected offset=%d after j, got %d",
+			initialOffset+1, tab.vp.YOffset())
+	}
+
+	// Press 'k' to scroll up.
+	m.Update(tea.KeyPressMsg{Code: 'k', Text: "k"})
+
+	if tab.vp.YOffset() != initialOffset {
+		t.Errorf("expected offset=%d after k, got %d",
+			initialOffset, tab.vp.YOffset())
 	}
 }
 
