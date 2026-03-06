@@ -41,6 +41,7 @@ var (
 	styleComment   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	styleInput     = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	styleBodyWhite = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+	styleWarning   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	styleFooter    = lipgloss.NewStyle().
 			BorderTop(true).
 			BorderStyle(separatorBorder)
@@ -292,6 +293,16 @@ func (m *Model) renderFooter() string {
 
 	if m.quitPending {
 		sb.WriteString("Press Ctrl+C again to quit")
+		return sb.String()
+	}
+
+	if m.clearAllPending {
+		n := 0
+		if hasTab {
+			n = len(t.comments)
+		}
+		sb.WriteString(styleWarning.Render(
+			fmt.Sprintf("Clear %d comments? (y/n)", n)))
 		return sb.String()
 	}
 
