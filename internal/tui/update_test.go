@@ -395,6 +395,95 @@ func TestContextKeyMap_DiffReviewBindings(t *testing.T) {
 	}
 }
 
+func TestTabIndexAtX(t *testing.T) {
+	m := newTestModel(t)
+
+	// No tabs: always -1.
+	if got := m.tabIndexAtX(40); got != -1 {
+		t.Errorf("no tabs: expected -1, got %d", got)
+	}
+
+	// Add two tabs.
+	t1 := newFileTab()
+	t1.filePath = "/workspace/main.go"
+	t2 := newFileTab()
+	t2.filePath = "/workspace/util.go"
+	m.tabs = []*tab{t1, t2}
+
+	lo := m.computeLayout()
+	// Tab 0 label: " main.go " (9 runes), starts at editorStartX.
+	label0 := tabLabel(t1)
+	w0 := len([]rune(label0))
+
+	// Click on first tab start.
+	if got := m.tabIndexAtX(lo.editorStartX); got != 0 {
+		t.Errorf("first tab start: expected 0, got %d", got)
+	}
+	// Click on first tab end - 1.
+	if got := m.tabIndexAtX(lo.editorStartX + w0 - 1); got != 0 {
+		t.Errorf("first tab end-1: expected 0, got %d", got)
+	}
+
+	// Second tab starts at editorStartX + w0 + 1 (separator).
+	secondStart := lo.editorStartX + w0 + 1
+	if got := m.tabIndexAtX(secondStart); got != 1 {
+		t.Errorf("second tab start: expected 1, got %d", got)
+	}
+
+	// Click before tabs.
+	if got := m.tabIndexAtX(0); got != -1 {
+		t.Errorf("before tabs: expected -1, got %d", got)
+	}
+
+	// Click after all tabs.
+	label1 := tabLabel(t2)
+	w1 := len([]rune(label1))
+	afterAll := secondStart + w1
+	if got := m.tabIndexAtX(afterAll); got != -1 {
+		t.Errorf("after all tabs: expected -1, got %d", got)
+	}
+}
+
+func TestMouseClick_TabBar(t *testing.T) {
+	m := newTestModel(t)
+
+	t1 := newFileTab()
+	t1.filePath = "/workspace/main.go"
+	t1.lines = []string{"package main"}
+	t2 := newFileTab()
+	t2.filePath = "/workspace/util.go"
+	t2.lines = []string{"package util"}
+	m.tabs = []*tab{t1, t2}
+	m.activeTab = 0
+
+	lo := m.computeLayout()
+	label0 := tabLabel(t1)
+	w0 := len([]rune(label0))
+	secondTabX := lo.editorStartX + w0 + 1
+
+	// Click on second tab (Y = headerHeight, the label row).
+	m.Update(tea.MouseClickMsg{
+		X:      secondTabX,
+		Y:      headerHeight,
+		Button: tea.MouseLeft,
+	})
+
+	if m.activeTab != 1 {
+		t.Errorf("expected activeTab=1 after click, got %d", m.activeTab)
+	}
+
+	// Click on first tab (Y = headerHeight+1, the underline row).
+	m.Update(tea.MouseClickMsg{
+		X:      lo.editorStartX,
+		Y:      headerHeight + 1,
+		Button: tea.MouseLeft,
+	})
+
+	if m.activeTab != 0 {
+		t.Errorf("expected activeTab=0 after click, got %d", m.activeTab)
+	}
+}
+
 func TestContextKeyMap_NoDiffReviewOnFileTab(t *testing.T) {
 	m := newTestModel(t)
 
