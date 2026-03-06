@@ -23,7 +23,7 @@ type statusClearMsg struct{}
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.watchFile(), m.watchDir(), tea.RequestBackgroundColor)
+	return tea.Batch(m.watchFile(), m.watchDir(), m.watchComments(), tea.RequestBackgroundColor)
 }
 
 type direction int
@@ -93,7 +93,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.MouseClickMsg,
 			tea.WindowSizeMsg,
-			fileChangedMsg, treeChangedMsg,
+			fileChangedMsg, treeChangedMsg, commentsChangedMsg,
 			OpenDiffMsg, CloseDiffMsg,
 			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
 			// Fall through to normal handling below.
@@ -128,6 +128,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleFileChanged(msg)
 	case treeChangedMsg:
 		return m.handleTreeChanged()
+	case commentsChangedMsg:
+		return m.handleCommentsChanged()
 	case OpenDiffMsg:
 		return m.handleOpenDiff(msg)
 	case CloseDiffMsg:

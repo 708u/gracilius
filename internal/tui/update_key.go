@@ -2,13 +2,15 @@ package tui
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/comment"
+	"github.com/google/uuid"
 )
 
 // handleKeyPress dispatches key press events to the appropriate handler.
@@ -28,8 +30,10 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.clearAllPending {
 		m.clearAllPending = false
 		if key.Matches(msg, m.keys.Confirm) {
-			if hasTab {
-				t.comments = nil
+			if hasTab && t.filePath != "" {
+				if err := m.commentRepo.DeleteByFile(t.filePath); err != nil {
+					log.Printf("Failed to clear comments from store: %v", err)
+				}
 			}
 		}
 		return m, nil
@@ -76,19 +80,7 @@ func (m *Model) handleKeyInputMode(t *tab, msg tea.KeyPressMsg) (tea.Model, tea.
 		t.commentInput.Reset()
 		t.commentInput.Blur()
 	case isSubmit:
-		val := t.commentInput.Value()
-		idx := t.findComment(t.inputStart)
-		if idx >= 0 {
-			t.comments = slices.Delete(t.comments, idx, idx+1)
-		}
-		if val != "" {
-			t.comments = append(t.comments, comment{
-				startLine: t.inputStart,
-				endLine:   t.inputEnd,
-				text:      val,
-			})
-			m.notifyComment(t.inputStart, t.inputEnd, val)
-		}
+		m.submitComment(t)
 		t.inputMode = false
 		t.commentInput.Reset()
 		t.commentInput.Blur()
@@ -105,6 +97,59 @@ func (m *Model) handleKeyInputMode(t *tab, msg tea.KeyPressMsg) (tea.Model, tea.
 		return m, cmd
 	}
 	return m, nil
+}
+
+// captureSnippet returns the text of lines[startLine:endLine+1].
+func (t *tab) captureSnippet(startLine, endLine int) string {
+	if startLine < 0 || startLine >= len(t.lines) {
+		return ""
+	}
+	end := min(endLine+1, len(t.lines))
+	return strings.Join(t.lines[startLine:end], "\n")
+}
+
+// submitComment persists the current comment input to the store.
+func (m *Model) submitComment(t *tab) {
+	val := t.commentInput.Value()
+	idx := t.findComment(t.inputStart)
+	var oldID string
+	if idx >= 0 {
+		oldID = t.comments[idx].ID
+	}
+
+	if val == "" && oldID != "" {
+		if err := m.commentRepo.Delete(oldID); err != nil {
+			log.Printf("Failed to delete comment: %v", err)
+		}
+		return
+	}
+	if val == "" {
+		return
+	}
+
+	id, err := uuid.NewV7()
+	if err != nil {
+		log.Printf("Failed to generate UUID: %v", err)
+	}
+	m.notifyComment(t.inputStart, t.inputEnd, val)
+	sc := comment.Entry{
+		ID:        id.String(),
+		FilePath:  t.filePath,
+		StartLine: t.inputStart,
+		EndLine:   t.inputEnd,
+		Text:      val,
+		Snippet:   t.captureSnippet(t.inputStart, t.inputEnd),
+		CreatedAt: time.Now(),
+	}
+	if oldID != "" {
+		if err := m.commentRepo.Replace(oldID, sc); err != nil {
+			log.Printf("Failed to update comment: %v", err)
+		}
+		return
+	}
+	if err := m.commentRepo.Add(sc); err != nil {
+		log.Printf("Failed to persist comment: %v", err)
+	}
 }
 
 // handleKeyOpenFile handles key events when the open-file overlay is active.
@@ -285,9 +330,9 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			t.commentInput.Reset()
 			if idx := t.findComment(t.inputStart); idx >= 0 {
-				t.inputStart = t.comments[idx].startLine
-				t.inputEnd = t.comments[idx].endLine
-				t.commentInput.SetValue(t.comments[idx].text)
+				t.inputStart = t.comments[idx].StartLine
+				t.inputEnd = t.comments[idx].EndLine
+				t.commentInput.SetValue(t.comments[idx].Text)
 			}
 			t.commentInput.Focus()
 		}
@@ -302,7 +347,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			)
 		}
 	case key.Matches(msg, m.keys.ClearAll):
-		if hasTab && m.focusPane == paneEditor && len(t.comments) > 0 {
+		if hasTab && m.focusPane == paneEditor && t.filePath != "" && len(t.comments) > 0 {
 			m.clearAllPending = true
 		}
 	case key.Matches(msg, m.keys.NextTab):

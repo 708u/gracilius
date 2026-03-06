@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"charm.land/bubbles/v2/help"
+	"github.com/708u/gracilius/internal/comment"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -24,6 +25,17 @@ type MCPServer interface {
 		filePath, text string,
 		startLine, startChar, endLine, endChar int,
 	)
+}
+
+// CommentRepository is the interface for comment persistence.
+// comment.Repository satisfies this implicitly.
+type CommentRepository interface {
+	List(filePath string, includeResolved bool) ([]comment.Entry, error)
+	Add(c comment.Entry) error
+	Replace(oldID string, c comment.Entry) error
+	Delete(id string) error
+	DeleteByFile(filePath string) error
+	DataPath() string
 }
 
 // OpenDiffMsg notifies the TUI to open a diff tab.
@@ -47,6 +59,9 @@ type fileChangedMsg struct {
 
 // treeChangedMsg notifies the TUI that the directory tree has changed.
 type treeChangedMsg struct{}
+
+// commentsChangedMsg notifies the TUI that comments.json has changed on disk.
+type commentsChangedMsg struct{}
 
 // Model holds the entire TUI state.
 type Model struct {
@@ -112,6 +127,10 @@ type Model struct {
 
 	// keyboard enhancement (Kitty protocol)
 	enhancedKeyboard bool
+
+	// comment persistence
+	commentRepo    CommentRepository
+	commentWatcher *fsnotify.Watcher
 }
 
 // lineKind distinguishes the type of a visual row.
@@ -198,7 +217,7 @@ func (m *Model) toggleTreeEntry(idx int) {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher) (*Model, error) {
+func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher) (*Model, error) {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root directory: %w", err)
@@ -208,20 +227,22 @@ func NewModel(srv MCPServer, rootDir string, watcher *fsnotify.Watcher, dirWatch
 
 	im := detectIconMode()
 	return &Model{
-		server:     srv,
-		rootDir:    absRootDir,
-		fileTree:   ft,
-		treeCursor: 0,
-		focusPane:  paneTree,
-		watcher:    watcher,
-		dirWatcher: dirWatcher,
-		tabs:       []*tab{},
-		treeWidth:  30,
-		keys:       newKeyMap(),
-		help:       help.New(),
-		iconMode:   im,
-		openFile:   newOpenFileOverlay(im, darkTheme),
-		isDark:     true,
-		theme:      darkTheme,
+		server:         srv,
+		rootDir:        absRootDir,
+		fileTree:       ft,
+		treeCursor:     0,
+		focusPane:      paneTree,
+		watcher:        watcher,
+		dirWatcher:     dirWatcher,
+		tabs:           []*tab{},
+		treeWidth:      30,
+		keys:           newKeyMap(),
+		help:           help.New(),
+		iconMode:       im,
+		openFile:       newOpenFileOverlay(im, darkTheme),
+		isDark:         true,
+		theme:          darkTheme,
+		commentRepo:    store,
+		commentWatcher: commentWatcher,
 	}, nil
 }

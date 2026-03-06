@@ -69,6 +69,13 @@ func (m *Model) loadFileIntoTab(t *tab, filePath string) error {
 	t.syncContent(t.lines)
 	t.highlightedLines = highlightFile(absPath, string(content), m.theme)
 
+	// Load persisted comments for this file.
+	stored, err := m.commentRepo.List(absPath, false)
+	if err != nil {
+		log.Printf("Failed to load comments for %s: %v", absPath, err)
+	}
+	t.comments = append(t.comments, stored...)
+
 	return nil
 }
 

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"log"
 	"strings"
 	"time"
 
@@ -26,6 +27,23 @@ func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	cmd := m.watchFile()
+	return m, cmd
+}
+
+// handleCommentsChanged reloads comments from the store for all open tabs.
+func (m *Model) handleCommentsChanged() (tea.Model, tea.Cmd) {
+	for _, t := range m.tabs {
+		if t.filePath == "" || t.kind != fileTab {
+			continue
+		}
+		stored, err := m.commentRepo.List(t.filePath, false)
+		if err != nil {
+			log.Printf("Failed to reload comments for %s: %v", t.filePath, err)
+			continue
+		}
+		t.comments = stored
+	}
+	cmd := m.watchComments()
 	return m, cmd
 }
 
