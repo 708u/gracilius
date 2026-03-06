@@ -133,11 +133,12 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 func (m *Model) adjustScroll() {
 	lo := m.computeLayout()
 	if m.focusPane == paneTree {
+		h := lo.contentHeight - 1 // -1 for panel header
 		switch m.activePanel {
 		case panelGitDiff:
-			m.adjustGitScroll(lo.contentHeight - 1) // -1 for panel header
+			m.gitScrollOffset = clampScroll(m.gitScrollOffset, m.gitCursor, len(m.gitChangedFiles), h)
 		default:
-			m.adjustTreeScroll(lo.contentHeight - 1) // -1 for panel header
+			m.treeScrollOffset = clampScroll(m.treeScrollOffset, m.treeCursor, len(m.fileTree), h)
 		}
 	} else if t, ok := m.activeTabState(); ok {
 		if t.diffViewData != nil {

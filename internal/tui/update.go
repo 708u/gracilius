@@ -86,12 +86,6 @@ func clampScroll(scrollOffset, cursor, totalItems, contentHeight int) int {
 	return scrollOffset
 }
 
-// adjustTreeScroll adjusts the tree scroll so the tree cursor
-// stays visible.
-func (m *Model) adjustTreeScroll(contentHeight int) {
-	m.treeScrollOffset = clampScroll(m.treeScrollOffset, m.treeCursor, len(m.fileTree), contentHeight)
-}
-
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Route non-key messages (e.g. cursor blink) to the open-file overlay

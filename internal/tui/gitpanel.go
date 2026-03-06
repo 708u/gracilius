@@ -143,8 +143,3 @@ func (m *Model) renderGitPanel(width, height int) []string {
 
 	return lines
 }
-
-// adjustGitScroll keeps gitCursor visible within the panel.
-func (m *Model) adjustGitScroll(contentHeight int) {
-	m.gitScrollOffset = clampScroll(m.gitScrollOffset, m.gitCursor, len(m.gitChangedFiles), contentHeight)
-}
