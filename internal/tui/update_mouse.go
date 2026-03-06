@@ -27,14 +27,14 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	lo := m.computeLayout()
 
 	borderX := lo.treeWidth
-	isBorderArea := msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= contentStartY
+	isBorderArea := m.sidebarVisible && msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= contentStartY
 
 	if isBorderArea && msg.Button == tea.MouseLeft {
 		m.resizingPane = true
 		return m, nil
 	}
 
-	if msg.X < lo.treeWidth && msg.Y >= contentStartY && msg.Button == tea.MouseLeft {
+	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= contentStartY && msg.Button == tea.MouseLeft {
 		treeIdx := msg.Y - contentStartY + m.treeScrollOffset
 		if treeIdx >= 0 && treeIdx < len(m.fileTree) {
 			m.treeCursor = treeIdx

@@ -30,6 +30,8 @@ type keyMap struct {
 	OpenFile      key.Binding
 	AcceptDiff    key.Binding
 	RejectDiff    key.Binding
+	SwitchPanel   key.Binding
+	ToggleSidebar key.Binding
 	Confirm       key.Binding
 }
 
@@ -131,6 +133,14 @@ func newKeyMap() keyMap {
 			key.WithKeys("esc"),
 			key.WithHelp("Esc", "reject diff"),
 		),
+		SwitchPanel: key.NewBinding(
+			key.WithKeys("shift+tab"),
+			key.WithHelp("Shift+Tab", "switch panel"),
+		),
+		ToggleSidebar: key.NewBinding(
+			key.WithKeys("ctrl+b"),
+			key.WithHelp("Ctrl+b", "toggle sidebar"),
+		),
 		Confirm: key.NewBinding(
 			key.WithKeys("y"),
 		),
@@ -140,7 +150,8 @@ func newKeyMap() keyMap {
 // ShortHelp returns key bindings for the short help view.
 func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
-		k.SwitchPane, k.PrevTab, k.NextTab, k.CloseTab,
+		k.SwitchPane, k.SwitchPanel, k.ToggleSidebar,
+		k.PrevTab, k.NextTab, k.CloseTab,
 		k.CharSelect, k.LineSelect, k.Copy, k.OpenFile,
 		k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit,
 	}
@@ -150,7 +161,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown},
-		{k.Enter, k.SwitchPane, k.PrevTab, k.NextTab, k.CloseTab},
+		{k.Enter, k.SwitchPane, k.SwitchPanel, k.ToggleSidebar, k.PrevTab, k.NextTab, k.CloseTab},
 		{k.CharSelect, k.LineSelect, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
 	}
 }
@@ -169,8 +180,10 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km.NextTab.SetEnabled(hasTab)
 	km.PrevTab.SetEnabled(hasTab)
 	km.CloseTab.SetEnabled(hasTab)
-	km.SwitchPane.SetEnabled(hasTab)
 	km.AcceptDiff.SetEnabled(isDiffReview && m.focusPane == paneEditor)
 	km.RejectDiff.SetEnabled(isDiffReview && m.focusPane == paneEditor)
+	km.SwitchPane.SetEnabled(hasTab && m.sidebarVisible)
+	km.SwitchPanel.SetEnabled(true)
+	km.ToggleSidebar.SetEnabled(true)
 	return km
 }

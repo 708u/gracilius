@@ -80,8 +80,6 @@ func (m *Model) View() tea.View {
 	// content
 	lo := m.computeLayout()
 
-	treeLines := m.renderTree(lo.treeWidth, lo.contentHeight)
-
 	var editorLines []string
 	if !hasTab {
 		editorLines = renderWelcome(lo.editorWidth, lo.contentHeight, m.theme)
@@ -89,17 +87,24 @@ func (m *Model) View() tea.View {
 		editorLines = m.renderEditor(lo)
 	}
 
-	sepLines := make([]string, lo.contentHeight)
-	for i := range sepLines {
-		sepLines[i] = " \u2502 "
-	}
+	var content string
+	if m.sidebarVisible {
+		panelLines := m.renderLeftPane(lo.treeWidth, lo.contentHeight)
 
-	content := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		strings.Join(treeLines, "\n"),
-		strings.Join(sepLines, "\n"),
-		strings.Join(editorLines, "\n"),
-	)
+		sepLines := make([]string, lo.contentHeight)
+		for i := range sepLines {
+			sepLines[i] = " \u2502 "
+		}
+
+		content = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			strings.Join(panelLines, "\n"),
+			strings.Join(sepLines, "\n"),
+			strings.Join(editorLines, "\n"),
+		)
+	} else {
+		content = strings.Join(editorLines, "\n")
+	}
 
 	// footer
 	footer := m.renderFooter()
@@ -344,6 +349,22 @@ func (m *Model) renderFooter() string {
 	}
 
 	return sb.String()
+}
+
+// renderLeftPane generates the left pane lines with a header and panel body.
+func (m *Model) renderLeftPane(width, height int) []string {
+	header := renderPanelHeader(m.activePanel.label(), width, m.theme)
+	bodyHeight := height - 1
+
+	var body []string
+	switch m.activePanel {
+	case panelFiles:
+		body = m.renderTree(width, bodyHeight)
+	default:
+		body = renderChangedFiles(nil, width, bodyHeight)
+	}
+
+	return append([]string{header}, body...)
 }
 
 // renderTree generates the tree pane lines.

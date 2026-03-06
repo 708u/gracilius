@@ -203,8 +203,20 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.notifyClearSelection()
 			return m, nil
 		}
+	case key.Matches(msg, m.keys.SwitchPanel):
+		m.activePanel = (m.activePanel + 1) % panelCount
+		m.treeScrollOffset = 0
+		m.treeCursor = 0
+	case key.Matches(msg, m.keys.ToggleSidebar):
+		m.sidebarVisible = !m.sidebarVisible
+		if !m.sidebarVisible {
+			m.resizingPane = false
+			if m.focusPane == paneTree {
+				m.focusPane = paneEditor
+			}
+		}
 	case key.Matches(msg, m.keys.SwitchPane):
-		if hasTab && len(t.lines) > 0 {
+		if hasTab && len(t.lines) > 0 && m.sidebarVisible {
 			if m.focusPane == paneEditor {
 				m.notifyClearSelection()
 			}

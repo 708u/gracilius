@@ -47,16 +47,17 @@ func newTestModel(t *testing.T) *Model {
 	tmpDir := t.TempDir()
 	srv := &mockServer{port: 18765}
 	m := &Model{
-		server:      srv,
-		commentRepo: &mockCommentRepository{},
-		rootDir:     tmpDir,
-		tabs:        []*tab{},
-		treeWidth:   30,
-		keys:        newKeyMap(),
-		iconMode:    iconSymbol,
-		openFile:    newOpenFileOverlay(iconSymbol, darkTheme),
-		width:       120,
-		height:      40,
+		server:         srv,
+		commentRepo:    &mockCommentRepository{},
+		rootDir:        tmpDir,
+		tabs:           []*tab{},
+		treeWidth:      30,
+		sidebarVisible: true,
+		keys:           newKeyMap(),
+		iconMode:       iconSymbol,
+		openFile:       newOpenFileOverlay(iconSymbol, darkTheme),
+		width:          120,
+		height:         40,
 	}
 	return m
 }
