@@ -23,6 +23,8 @@ type diffRow struct {
 	oldText    string
 	newText    string
 	rowType    diffRowType
+	oldSpans   []wordSpan // word-level diff spans (modified rows only)
+	newSpans   []wordSpan
 }
 
 // diffHunk represents a contiguous range of changed rows with context.
@@ -40,9 +42,10 @@ type diffStats struct {
 
 // diffData holds the complete processed diff for rendering.
 type diffData struct {
-	rows  []diffRow
-	hunks []diffHunk
-	stats diffStats
+	rows       []diffRow
+	hunks      []diffHunk
+	stats      diffStats
+	maxLineNum int // largest line number across all rows
 }
 
 // splitDiffLines splits a Diff's text into individual lines,
@@ -151,12 +154,27 @@ func buildDiffData(oldLines, newLines []string) *diffData {
 		}
 	}
 
+	// Pre-compute word-level diffs and max line number.
+	maxLine := 0
+	for i := range rows {
+		if rows[i].oldLineNum > maxLine {
+			maxLine = rows[i].oldLineNum
+		}
+		if rows[i].newLineNum > maxLine {
+			maxLine = rows[i].newLineNum
+		}
+		if rows[i].rowType == diffRowModified {
+			rows[i].oldSpans, rows[i].newSpans = computeWordDiff(rows[i].oldText, rows[i].newText)
+		}
+	}
+
 	hunks := detectHunks(rows, 3)
 
 	return &diffData{
-		rows:  rows,
-		hunks: hunks,
-		stats: stats,
+		rows:       rows,
+		hunks:      hunks,
+		stats:      stats,
+		maxLineNum: maxLine,
 	}
 }
 
