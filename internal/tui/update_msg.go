@@ -58,7 +58,7 @@ func (m *Model) handleTreeChanged() (tea.Model, tea.Cmd) {
 	}
 	cmds := []tea.Cmd{m.watchDir()}
 	if m.gitLoaded {
-		cmds = append(cmds, m.loadGitChanges())
+		cmds = append(cmds, m.scheduleGitSync())
 	}
 	return m, tea.Batch(cmds...)
 }
@@ -68,9 +68,28 @@ func (m *Model) handleTreeChanged() (tea.Model, tea.Cmd) {
 func (m *Model) handleGitIndexChanged() (tea.Model, tea.Cmd) {
 	cmds := []tea.Cmd{m.watchGitIndex()}
 	if m.gitLoaded {
-		cmds = append(cmds, m.loadGitChanges())
+		cmds = append(cmds, m.scheduleGitSync())
 	}
 	return m, tea.Batch(cmds...)
+}
+
+// scheduleGitSync bumps the generation counter and schedules a
+// debounced git reload. Only the latest scheduled sync fires.
+func (m *Model) scheduleGitSync() tea.Cmd {
+	m.gitSyncGen++
+	gen := m.gitSyncGen
+	return tea.Tick(gitSyncDebounce, func(time.Time) tea.Msg {
+		return gitSyncMsg{gen: gen}
+	})
+}
+
+// handleGitSync executes the git reload if the generation still matches.
+func (m *Model) handleGitSync(msg gitSyncMsg) (tea.Model, tea.Cmd) {
+	if msg.gen != m.gitSyncGen {
+		return m, nil
+	}
+	cmd := m.loadGitChanges()
+	return m, cmd
 }
 
 // handleOpenDiff opens a new diff tab.

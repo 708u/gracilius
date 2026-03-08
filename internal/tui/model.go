@@ -90,6 +90,11 @@ type commentsChangedMsg struct{}
 // gitIndexChangedMsg notifies the TUI that .git/index has changed.
 type gitIndexChangedMsg struct{}
 
+// gitSyncMsg fires after debounce delay to trigger git reload.
+type gitSyncMsg struct {
+	gen int
+}
+
 // Model holds the entire TUI state.
 type Model struct {
 	width  int
@@ -171,6 +176,7 @@ type Model struct {
 	gitCursor       int
 	gitScrollOffset int
 	gitLoaded       bool
+	gitSyncGen      int // generation counter for debounced git sync
 }
 
 // gitChangedFilesMsg carries the result of loading git changed files.

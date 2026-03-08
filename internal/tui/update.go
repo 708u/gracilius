@@ -13,6 +13,7 @@ import (
 const (
 	quitTimeout        = 750 * time.Millisecond
 	statusClearTimeout = 2 * time.Second
+	gitSyncDebounce    = 200 * time.Millisecond
 )
 
 // quitTimeoutMsg is sent when the quit confirmation window expires.
@@ -135,6 +136,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleGitChangedFiles(msg)
 	case gitIndexChangedMsg:
 		return m.handleGitIndexChanged()
+	case gitSyncMsg:
+		return m.handleGitSync(msg)
 	case OpenDiffMsg:
 		return m.handleOpenDiff(msg)
 	case CloseDiffMsg:
