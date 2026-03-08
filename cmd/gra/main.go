@@ -30,11 +30,11 @@ type ViewCmd struct {
 
 func main() {
 	var cli CLI
-	ctx := kong.Parse(&cli,
+	cmd := kong.Parse(&cli,
 		kong.Name("gra"),
 		kong.Description("TUI viewer for reviewing code from Claude Code"),
 	)
-	if err := ctx.Run(); err != nil {
+	if err := cmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
