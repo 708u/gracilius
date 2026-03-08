@@ -19,13 +19,17 @@ import (
 	"github.com/google/uuid"
 )
 
+type pathArg struct {
+	Path string `arg:"" optional:"" default:"." help:"Target directory"`
+}
+
 type CLI struct {
 	View ViewCmd `cmd:"" default:"withargs" help:"Start TUI viewer"`
 	Mcp  McpCmd  `cmd:"" help:"Start MCP server"`
 }
 
 type ViewCmd struct {
-	Path string `arg:"" optional:"" default:"." help:"Target directory"`
+	pathArg
 }
 
 func main() {

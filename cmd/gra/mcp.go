@@ -20,7 +20,7 @@ type commentIDInput struct {
 }
 
 type McpCmd struct {
-	Path string `arg:"" optional:"" default:"." help:"Target directory"`
+	pathArg
 }
 
 func (c *McpCmd) Run() error {
