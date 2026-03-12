@@ -7,6 +7,7 @@ require (
 	charm.land/bubbletea/v2 v2.0.1
 	charm.land/lipgloss/v2 v2.0.0
 	github.com/alecthomas/chroma/v2 v2.23.1
+	github.com/alecthomas/kong v1.14.0
 	github.com/charmbracelet/x/ansi v0.11.6
 	github.com/epilande/go-devicons v0.0.0-20250505162540-0661cab71a28
 	github.com/fsnotify/fsnotify v1.9.0
