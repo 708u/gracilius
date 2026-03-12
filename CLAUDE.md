@@ -56,6 +56,8 @@ cmd/gra/
   main.go          Entry point, wiring, callback registration
 
 internal/
+  config/
+    config.go      DataDir() for data directory path
   tui/
     model.go       MCPServer interface, Model struct,
                    message types, NewModel
@@ -83,9 +85,12 @@ internal/
 ### Dependency Graph
 
 ```txt
+cmd/gra → internal/config   (DataDir)
 cmd/gra → internal/tui      (Model, message types)
 cmd/gra → internal/server   (Server creation, callbacks)
-       internal/server → internal/protocol
+       internal/server  → internal/config
+       internal/server  → internal/protocol
+       internal/comment → internal/config
 ```
 
 `tui` has zero dependencies on other internal packages.
@@ -160,7 +165,7 @@ WebSocket server based on `gorilla/websocket`.
 - Bind: `127.0.0.1:{port}` (default 18765)
 - Port retry: up to 10 attempts, incrementing port
 - Auth: `x-claude-code-ide-authorization` header
-- Auth token: persisted at `~/.gracilius/token` (UUID v4)
+- Auth token: persisted at `~/.config/gracilius/token` (UUID v4)
 - Keepalive: 30s ping / 60s timeout
 - Selection notification debounce: 100ms
 
