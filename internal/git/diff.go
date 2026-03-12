@@ -18,14 +18,32 @@ type ChangedFile struct {
 	Binary     bool
 }
 
-// blobReader reads content of a file from some source.
-type blobReader func(dir, path string) ([]string, bool, error)
+// contentReader reads old/new content for diff comparison.
+type contentReader interface {
+	ReadOld(dir, path string) ([]string, bool, error)
+	ReadNew(dir, path string) ([]string, bool, error)
+}
 
-// workFileReader returns a blobReader that reads from the working tree.
-func workFileReader(root string) blobReader {
-	return func(_, relPath string) ([]string, bool, error) {
-		return readWorkFile(root, relPath)
-	}
+// unstagedReader reads old from index, new from working tree.
+type unstagedReader struct{ root string }
+
+func (r *unstagedReader) ReadOld(dir, path string) ([]string, bool, error) {
+	return readGitBlob(dir, path)
+}
+
+func (r *unstagedReader) ReadNew(_, path string) ([]string, bool, error) {
+	return readWorkFile(r.root, path)
+}
+
+// stagedReader reads old from HEAD, new from index.
+type stagedReader struct{}
+
+func (r *stagedReader) ReadOld(dir, path string) ([]string, bool, error) {
+	return readHEADBlob(dir, path)
+}
+
+func (r *stagedReader) ReadNew(dir, path string) ([]string, bool, error) {
+	return readGitBlob(dir, path)
 }
 
 // ChangedFiles returns unstaged changed files.
@@ -41,7 +59,7 @@ func ChangedFiles(dir string) ([]ChangedFile, error) {
 		return nil, fmt.Errorf("git diff: %w", err)
 	}
 
-	return parseChangedFiles(dir, out, readGitBlob, workFileReader(root))
+	return parseChangedFiles(dir, out, &unstagedReader{root: root})
 }
 
 // StagedFiles returns staged (cached) changed files.
@@ -57,7 +75,7 @@ func StagedFiles(dir string) ([]ChangedFile, error) {
 		return nil, fmt.Errorf("git diff --cached: %w", err)
 	}
 
-	return parseChangedFiles(dir, out, readHEADBlob, readGitBlob)
+	return parseChangedFiles(dir, out, &stagedReader{})
 }
 
 // UntrackedFiles returns untracked files.
@@ -102,11 +120,11 @@ func UntrackedFiles(dir string) ([]ChangedFile, error) {
 }
 
 // parseChangedFiles parses git diff --name-status output
-// using the provided blob readers for old and new content.
+// using the provided contentReader for old and new content.
 func parseChangedFiles(
 	dir string,
 	nameStatusOutput []byte,
-	readOld, readNew blobReader,
+	reader contentReader,
 ) ([]ChangedFile, error) {
 	output := strings.TrimSpace(string(nameStatusOutput))
 	if output == "" {
@@ -127,7 +145,7 @@ func parseChangedFiles(
 		case status == "A":
 			cf.Status = "A"
 			cf.Path = fields[1]
-			content, bin, readErr := readNew(dir, cf.Path)
+			content, bin, readErr := reader.ReadNew(dir, cf.Path)
 			if readErr != nil {
 				return nil, readErr
 			}
@@ -139,11 +157,11 @@ func parseChangedFiles(
 		case status == "M":
 			cf.Status = "M"
 			cf.Path = fields[1]
-			old, oldBin, oldErr := readOld(dir, cf.Path)
+			old, oldBin, oldErr := reader.ReadOld(dir, cf.Path)
 			if oldErr != nil {
 				return nil, oldErr
 			}
-			new_, newBin, newErr := readNew(dir, cf.Path)
+			new_, newBin, newErr := reader.ReadNew(dir, cf.Path)
 			if newErr != nil {
 				return nil, newErr
 			}
@@ -156,7 +174,7 @@ func parseChangedFiles(
 		case status == "D":
 			cf.Status = "D"
 			cf.Path = fields[1]
-			old, bin, oldErr := readOld(dir, cf.Path)
+			old, bin, oldErr := reader.ReadOld(dir, cf.Path)
 			if oldErr != nil {
 				return nil, oldErr
 			}
@@ -173,11 +191,11 @@ func parseChangedFiles(
 			oldPath := fields[1]
 			newPath := fields[2]
 			cf.Path = newPath
-			old, oldBin, oldErr := readOld(dir, oldPath)
+			old, oldBin, oldErr := reader.ReadOld(dir, oldPath)
 			if oldErr != nil {
 				return nil, oldErr
 			}
-			new_, newBin, newErr := readNew(dir, newPath)
+			new_, newBin, newErr := reader.ReadNew(dir, newPath)
 			if newErr != nil {
 				return nil, newErr
 			}
@@ -226,8 +244,7 @@ func readHEADBlob(dir, path string) ([]string, bool, error) {
 	data, err := gitCmd(dir, "show", "HEAD:"+path)
 	if err != nil {
 		// HEAD doesn't exist (no commits) or file not in HEAD.
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if _, ok := errors.AsType[*exec.ExitError](err); ok {
 			return nil, false, nil
 		}
 		return nil, false, fmt.Errorf("git show HEAD:%s: %w", path, err)
