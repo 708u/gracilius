@@ -160,11 +160,11 @@ func (m *Model) openGitDiffEntry() {
 }
 
 var gitStatusStyles = map[string]lipgloss.Style{
-	"A": lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // green
-	"D": lipgloss.NewStyle().Foreground(lipgloss.Color("1")), // red
-	"M": lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // yellow
-	"R": lipgloss.NewStyle().Foreground(lipgloss.Color("6")), // cyan
-	"?": lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // green
+	git.StatusAdded:     lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // green
+	git.StatusDeleted:   lipgloss.NewStyle().Foreground(lipgloss.Color("1")), // red
+	git.StatusModified:  lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // yellow
+	git.StatusRenamed:   lipgloss.NewStyle().Foreground(lipgloss.Color("6")), // cyan
+	git.StatusUntracked: lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // green
 }
 
 // styleCategoryHeader is the style for category header lines.

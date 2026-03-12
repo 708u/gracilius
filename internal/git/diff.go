@@ -9,10 +9,19 @@ import (
 	"strings"
 )
 
+// Git file status constants.
+const (
+	StatusAdded     = "A"
+	StatusModified  = "M"
+	StatusDeleted   = "D"
+	StatusRenamed   = "R"
+	StatusUntracked = "?"
+)
+
 // ChangedFile represents a file changed in the working tree.
 type ChangedFile struct {
 	Path       string
-	Status     string   // A, M, D, R, ?
+	Status     string
 	OldContent []string // nil for new files
 	NewContent []string // nil for deleted files
 	Binary     bool
@@ -103,7 +112,7 @@ func UntrackedFiles(dir string) ([]ChangedFile, error) {
 		}
 		cf := ChangedFile{
 			Path:   path,
-			Status: "?",
+			Status: StatusUntracked,
 		}
 		content, bin, readErr := readWorkFile(root, path)
 		if readErr != nil {
@@ -142,8 +151,8 @@ func parseChangedFiles(
 		cf := ChangedFile{}
 
 		switch {
-		case status == "A":
-			cf.Status = "A"
+		case status == StatusAdded:
+			cf.Status = StatusAdded
 			cf.Path = fields[1]
 			content, bin, readErr := reader.ReadNew(dir, cf.Path)
 			if readErr != nil {
@@ -154,8 +163,8 @@ func parseChangedFiles(
 				cf.NewContent = content
 			}
 
-		case status == "M":
-			cf.Status = "M"
+		case status == StatusModified:
+			cf.Status = StatusModified
 			cf.Path = fields[1]
 			old, oldBin, oldErr := reader.ReadOld(dir, cf.Path)
 			if oldErr != nil {
@@ -171,8 +180,8 @@ func parseChangedFiles(
 				cf.NewContent = new_
 			}
 
-		case status == "D":
-			cf.Status = "D"
+		case status == StatusDeleted:
+			cf.Status = StatusDeleted
 			cf.Path = fields[1]
 			old, bin, oldErr := reader.ReadOld(dir, cf.Path)
 			if oldErr != nil {
@@ -183,8 +192,8 @@ func parseChangedFiles(
 				cf.OldContent = old
 			}
 
-		case strings.HasPrefix(status, "R"):
-			cf.Status = "R"
+		case strings.HasPrefix(status, StatusRenamed):
+			cf.Status = StatusRenamed
 			if len(fields) < 3 {
 				continue
 			}

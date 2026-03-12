@@ -77,7 +77,7 @@ func TestChangedFiles_Modified(t *testing.T) {
 	}
 
 	f := files[0]
-	if f.Status != "M" {
+	if f.Status != StatusModified {
 		t.Fatalf("expected status M, got %s", f.Status)
 	}
 	if f.Path != "hello.txt" {
@@ -131,7 +131,7 @@ func TestChangedFiles_DeletedFile(t *testing.T) {
 	}
 
 	f := files[0]
-	if f.Status != "D" {
+	if f.Status != StatusDeleted {
 		t.Fatalf("expected status D, got %s", f.Status)
 	}
 	if f.OldContent == nil {
@@ -205,7 +205,7 @@ func TestChangedFiles_RenamedFile(t *testing.T) {
 		t.Fatalf("expected 1 file, got %d", len(files))
 	}
 	f := files[0]
-	if f.Status != "M" {
+	if f.Status != StatusModified {
 		t.Fatalf("expected status M, got %s", f.Status)
 	}
 	if f.Path != "new.txt" {
@@ -258,7 +258,7 @@ func TestStagedFiles_StagedModified(t *testing.T) {
 	}
 
 	f := files[0]
-	if f.Status != "M" {
+	if f.Status != StatusModified {
 		t.Fatalf("expected status M, got %s", f.Status)
 	}
 	if f.Path != "hello.txt" {
@@ -289,7 +289,7 @@ func TestStagedFiles_StagedNewFile(t *testing.T) {
 	if len(files) != 1 {
 		t.Fatalf("expected 1 file, got %d", len(files))
 	}
-	if files[0].Status != "A" {
+	if files[0].Status != StatusAdded {
 		t.Fatalf("expected status A, got %s", files[0].Status)
 	}
 	if files[0].Path != "second.txt" {
@@ -313,7 +313,7 @@ func TestStagedFiles_StagedDeleted(t *testing.T) {
 	if len(files) != 1 {
 		t.Fatalf("expected 1 file, got %d", len(files))
 	}
-	if files[0].Status != "D" {
+	if files[0].Status != StatusDeleted {
 		t.Fatalf("expected status D, got %s", files[0].Status)
 	}
 	if files[0].OldContent == nil {
@@ -336,7 +336,7 @@ func TestStagedFiles_StagedRenamed(t *testing.T) {
 	if len(files) != 1 {
 		t.Fatalf("expected 1 file, got %d", len(files))
 	}
-	if files[0].Status != "R" {
+	if files[0].Status != StatusRenamed {
 		t.Fatalf("expected status R, got %s", files[0].Status)
 	}
 	if files[0].Path != "new.txt" {
@@ -359,7 +359,7 @@ func TestStagedFiles_EmptyRepo(t *testing.T) {
 	if len(files) != 1 {
 		t.Fatalf("expected 1 file, got %d", len(files))
 	}
-	if files[0].Status != "A" {
+	if files[0].Status != StatusAdded {
 		t.Fatalf("expected status A, got %s", files[0].Status)
 	}
 }
@@ -394,7 +394,7 @@ func TestUntrackedFiles_NewFile(t *testing.T) {
 	if len(files) != 1 {
 		t.Fatalf("expected 1 file, got %d", len(files))
 	}
-	if files[0].Status != "?" {
+	if files[0].Status != StatusUntracked {
 		t.Fatalf("expected status ?, got %s", files[0].Status)
 	}
 	if files[0].Path != "untracked.txt" {
