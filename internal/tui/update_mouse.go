@@ -61,10 +61,19 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= contentStartY && msg.Button == tea.MouseLeft {
-		treeIdx := msg.Y - contentStartY + m.treeScrollOffset
-		if treeIdx >= 0 && treeIdx < len(m.fileTree) {
-			m.treeCursor = treeIdx
-			m.toggleTreeEntry(treeIdx)
+		switch m.activePanel {
+		case panelGitDiff:
+			idx := msg.Y - contentStartY + m.gitScrollOffset
+			if idx >= 0 && idx < len(m.gitChangedFiles) {
+				m.gitCursor = idx
+				m.openGitDiffEntry()
+			}
+		default:
+			treeIdx := msg.Y - contentStartY + m.treeScrollOffset
+			if treeIdx >= 0 && treeIdx < len(m.fileTree) {
+				m.treeCursor = treeIdx
+				m.toggleTreeEntry(treeIdx)
+			}
 		}
 		return m, nil
 	}
@@ -150,21 +159,35 @@ func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	if m.openFile.active {
 		return m, nil
 	}
+	lo := m.computeLayout()
+
+	// Left pane scrolling.
+	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= contentStartY {
+		delta := 3
+		if msg.Button == tea.MouseWheelUp {
+			delta = -3
+		}
+		bodyHeight := lo.contentHeight - 1 // -1 for panel header
+		switch m.activePanel {
+		case panelGitDiff:
+			m.gitScrollOffset = max(0, m.gitScrollOffset+delta)
+			maxOff := max(len(m.gitChangedFiles)-bodyHeight, 0)
+			m.gitScrollOffset = min(m.gitScrollOffset, maxOff)
+		default:
+			m.treeScrollOffset = max(0, m.treeScrollOffset+delta)
+			maxOff := max(len(m.fileTree)-bodyHeight, 0)
+			m.treeScrollOffset = min(m.treeScrollOffset, maxOff)
+		}
+		return m, nil
+	}
+
 	t, hasTab := m.activeTabState()
 	if !hasTab {
 		return m, nil
 	}
-	lo := m.computeLayout()
 	if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
 		if t.diffViewData != nil {
-			delta := 3
-			if msg.Button == tea.MouseWheelUp {
-				delta = -3
-			}
-			newOff := t.vp.YOffset() + delta
-			maxOff := t.diffMaxOffset()
-			newOff = max(0, min(newOff, maxOff))
-			t.vp.SetYOffset(newOff)
+			t.vp, _ = t.vp.Update(msg)
 		} else if len(t.lines) > 0 {
 			t.vp, _ = t.vp.Update(msg)
 			maxOff := t.maxScrollOffset(lo.contentHeight, lo.textWidth)

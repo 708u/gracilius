@@ -4,10 +4,14 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// changedFileEntry represents a file with changes (placeholder for future use).
+// changedFileEntry represents a file with changes.
 type changedFileEntry struct {
-	name   string
-	status string // A, M, D, R
+	name       string
+	status     string // A, M, D, R
+	absPath    string
+	oldContent []string
+	newContent []string
+	binary     bool
 }
 
 // stylePanelHeader is the style for panel header labels.

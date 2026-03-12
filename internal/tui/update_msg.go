@@ -56,7 +56,39 @@ func (m *Model) handleTreeChanged() (tea.Model, tea.Cmd) {
 	if m.treeCursor >= len(m.fileTree) {
 		m.treeCursor = max(0, len(m.fileTree)-1)
 	}
-	cmd := m.watchDir()
+	cmds := []tea.Cmd{m.watchDir()}
+	if m.gitLoaded {
+		cmds = append(cmds, m.scheduleGitSync())
+	}
+	return m, tea.Batch(cmds...)
+}
+
+// handleGitIndexChanged reloads git changes when .git/index changes
+// (e.g. after commit, add, reset).
+func (m *Model) handleGitIndexChanged() (tea.Model, tea.Cmd) {
+	cmds := []tea.Cmd{m.watchGitIndex()}
+	if m.gitLoaded {
+		cmds = append(cmds, m.scheduleGitSync())
+	}
+	return m, tea.Batch(cmds...)
+}
+
+// scheduleGitSync bumps the generation counter and schedules a
+// debounced git reload. Only the latest scheduled sync fires.
+func (m *Model) scheduleGitSync() tea.Cmd {
+	m.gitSyncGen++
+	gen := m.gitSyncGen
+	return tea.Tick(gitSyncDebounce, func(time.Time) tea.Msg {
+		return gitSyncMsg{gen: gen}
+	})
+}
+
+// handleGitSync executes the git reload if the generation still matches.
+func (m *Model) handleGitSync(msg gitSyncMsg) (tea.Model, tea.Cmd) {
+	if msg.gen != m.gitSyncGen {
+		return m, nil
+	}
+	cmd := m.loadGitChanges()
 	return m, cmd
 }
 
@@ -72,9 +104,7 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 		oldLines = splitLines(oldContent)
 	}
 	dt.diffViewData = buildDiffData(oldLines, newLines)
-	if len(dt.diffViewData.hunks) > 0 {
-		dt.vp.SetYOffset(dt.diffViewData.hunks[0].startIdx)
-	}
+	dt.initDiffContent(m.theme, dt.vp.Width())
 
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1
@@ -132,14 +162,18 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 func (m *Model) adjustScroll() {
 	lo := m.computeLayout()
 	if m.focusPane == paneTree {
-		m.adjustTreeScroll(lo.contentHeight)
+		h := lo.contentHeight - 1 // -1 for panel header
+		switch m.activePanel {
+		case panelGitDiff:
+			m.gitScrollOffset = clampScroll(m.gitScrollOffset, m.gitCursor, len(m.gitChangedFiles), h)
+		default:
+			m.treeScrollOffset = clampScroll(m.treeScrollOffset, m.treeCursor, len(m.fileTree), h)
+		}
 	} else if t, ok := m.activeTabState(); ok {
 		if t.diffViewData != nil {
-			maxOffset := t.diffMaxOffset()
-			if t.vp.YOffset() > maxOffset {
-				t.vp.SetYOffset(maxOffset)
-			}
-		} else if len(t.lines) > 0 {
+			return // viewport manages its own scroll limits
+		}
+		if len(t.lines) > 0 {
 			t.adjustScrollForCursor(lo.contentHeight, lo.textWidth)
 		}
 	}

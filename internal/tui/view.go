@@ -346,6 +346,10 @@ func (m *Model) renderFooter() string {
 			default:
 				sb.WriteString(emptyStateMsg)
 			}
+		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
+			if m.gitCursor < len(m.gitChangedFiles) {
+				sb.WriteString(m.gitChangedFiles[m.gitCursor].name)
+			}
 		case m.treeCursor < len(m.fileTree):
 			entry := m.fileTree[m.treeCursor]
 			sb.WriteString(entry.path)
@@ -364,6 +368,8 @@ func (m *Model) renderLeftPane(width, height int) []string {
 	switch m.activePanel {
 	case panelFiles:
 		body = m.renderTree(width, bodyHeight)
+	case panelGitDiff:
+		body = m.renderGitPanel(width, bodyHeight)
 	default:
 		body = renderChangedFiles(nil, width, bodyHeight)
 	}
@@ -436,18 +442,19 @@ func (m *Model) renderEditor(lo layout) []string {
 	lines := make([]string, 0, height)
 	var mapping []visualEntry
 
-	// Diff view dispatch: render side-by-side diff instead of normal editor.
+	// Diff view dispatch: viewport owns scroll, we slice cached lines directly.
 	if hasTab && t.diffViewData != nil {
-		offset := t.vp.YOffset()
-		maxOffset := t.diffMaxOffset()
-		if offset > maxOffset {
-			offset = maxOffset
-			t.vp.SetYOffset(offset)
-		}
-		diffLines := renderSideBySide(
-			t.diffViewData, m.theme,
-			width, height, offset)
+		t.ensureDiffContent(m.theme, width)
 		m.lastMapping = nil
+		off := t.vp.YOffset()
+		end := min(off+height, len(t.diffCachedLines))
+		diffLines := make([]string, 0, height)
+		if off < len(t.diffCachedLines) {
+			diffLines = append(diffLines, t.diffCachedLines[off:end]...)
+		}
+		for len(diffLines) < height {
+			diffLines = append(diffLines, padRight("", width))
+		}
 		return diffLines
 	}
 

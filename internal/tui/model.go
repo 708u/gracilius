@@ -87,6 +87,14 @@ type treeChangedMsg struct{}
 // commentsChangedMsg notifies the TUI that comments.json has changed on disk.
 type commentsChangedMsg struct{}
 
+// gitIndexChangedMsg notifies the TUI that .git/index has changed.
+type gitIndexChangedMsg struct{}
+
+// gitSyncMsg fires after debounce delay to trigger git reload.
+type gitSyncMsg struct {
+	gen int
+}
+
 // Model holds the entire TUI state.
 type Model struct {
 	width  int
@@ -159,6 +167,22 @@ type Model struct {
 	// comment persistence
 	commentRepo    CommentRepository
 	commentWatcher *fsnotify.Watcher
+
+	// git index watcher
+	gitIndexWatcher *fsnotify.Watcher
+
+	// git panel state
+	gitChangedFiles []changedFileEntry
+	gitCursor       int
+	gitScrollOffset int
+	gitLoaded       bool
+	gitSyncGen      int // generation counter for debounced git sync
+}
+
+// gitChangedFilesMsg carries the result of loading git changed files.
+type gitChangedFilesMsg struct {
+	entries []changedFileEntry
+	err     error
 }
 
 // lineKind distinguishes the type of a visual row.
@@ -245,7 +269,7 @@ func (m *Model) toggleTreeEntry(idx int) {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher) (*Model, error) {
+func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher, gitIndexWatcher *fsnotify.Watcher) (*Model, error) {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root directory: %w", err)
@@ -255,24 +279,25 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 
 	im := detectIconMode()
 	return &Model{
-		server:         srv,
-		rootDir:        absRootDir,
-		fileTree:       ft,
-		treeCursor:     0,
-		focusPane:      paneTree,
-		watcher:        watcher,
-		dirWatcher:     dirWatcher,
-		tabs:           []*tab{},
-		treeWidth:      30,
-		activePanel:    panelFiles,
-		sidebarVisible: true,
-		keys:           newKeyMap(),
-		help:           help.New(),
-		iconMode:       im,
-		openFile:       newOpenFileOverlay(im, darkTheme),
-		isDark:         true,
-		theme:          darkTheme,
-		commentRepo:    store,
-		commentWatcher: commentWatcher,
+		server:          srv,
+		rootDir:         absRootDir,
+		fileTree:        ft,
+		treeCursor:      0,
+		focusPane:       paneTree,
+		watcher:         watcher,
+		dirWatcher:      dirWatcher,
+		tabs:            []*tab{},
+		treeWidth:       30,
+		activePanel:     panelFiles,
+		sidebarVisible:  true,
+		keys:            newKeyMap(),
+		help:            help.New(),
+		iconMode:        im,
+		openFile:        newOpenFileOverlay(im, darkTheme),
+		isDark:          true,
+		theme:           darkTheme,
+		commentRepo:     store,
+		commentWatcher:  commentWatcher,
+		gitIndexWatcher: gitIndexWatcher,
 	}, nil
 }

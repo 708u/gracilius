@@ -3,6 +3,7 @@ package tui
 import (
 	"log"
 	"os"
+	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/fsnotify/fsnotify"
@@ -66,6 +67,36 @@ func (m *Model) watchComments() tea.Cmd {
 					return nil
 				}
 				log.Printf("Comment watcher error: %v", err)
+			}
+		}
+	}
+}
+
+// watchGitIndex returns a tea.Cmd that watches .git/index for changes.
+func (m *Model) watchGitIndex() tea.Cmd {
+	w := m.gitIndexWatcher
+	return func() tea.Msg {
+		if w == nil {
+			return nil
+		}
+		for {
+			select {
+			case event, ok := <-w.Events:
+				if !ok {
+					return nil
+				}
+				if filepath.Base(event.Name) != "index" {
+					continue
+				}
+				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
+					log.Printf("Git index changed: %s (%s)", event.Name, event.Op)
+					return gitIndexChangedMsg{}
+				}
+			case err, ok := <-w.Errors:
+				if !ok {
+					return nil
+				}
+				log.Printf("Git index watcher error: %v", err)
 			}
 		}
 	}

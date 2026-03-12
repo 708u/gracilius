@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	tea "charm.land/bubbletea/v2"
@@ -128,7 +130,23 @@ func (c *ViewCmd) Run() error {
 		return fmt.Errorf("failed to watch comment directory: %w", err)
 	}
 
-	m, err := tui.NewModel(srv, store, c.Path, watcher, dirWatcher, commentWatcher)
+	// Git index watcher
+	gitIndexWatcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create git index watcher: %w", err)
+	}
+	defer func() { _ = gitIndexWatcher.Close() }()
+
+	if gitDir, gdErr := resolveGitDir(absRootDir); gdErr == nil {
+		indexPath := filepath.Join(gitDir, "index")
+		if _, statErr := os.Stat(indexPath); statErr == nil {
+			if err := gitIndexWatcher.Add(gitDir); err != nil {
+				log.Printf("Failed to watch git directory: %v", err)
+			}
+		}
+	}
+
+	m, err := tui.NewModel(srv, store, c.Path, watcher, dirWatcher, commentWatcher, gitIndexWatcher)
 	if err != nil {
 		return fmt.Errorf("failed to create TUI model: %w", err)
 	}
@@ -168,4 +186,19 @@ func (c *ViewCmd) Run() error {
 	}
 
 	return nil
+}
+
+// resolveGitDir returns the actual .git directory for the given path,
+// handling both normal repos and worktrees.
+func resolveGitDir(dir string) (string, error) {
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "--git-dir")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	gitDir := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(dir, gitDir)
+	}
+	return gitDir, nil
 }
