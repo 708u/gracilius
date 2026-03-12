@@ -165,7 +165,8 @@ func (m *Model) adjustScroll() {
 		h := lo.contentHeight - 1 // -1 for panel header
 		switch m.activePanel {
 		case panelGitDiff:
-			m.gitScrollOffset = clampScroll(m.gitScrollOffset, m.gitCursor, len(m.gitChangedFiles), h)
+			visualIdx := m.gitCursorVisualIdx()
+			m.gitScrollOffset = clampScroll(m.gitScrollOffset, visualIdx, len(m.gitVisualRows), h)
 		default:
 			m.treeScrollOffset = clampScroll(m.treeScrollOffset, m.treeCursor, len(m.fileTree), h)
 		}

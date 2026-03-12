@@ -63,10 +63,13 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= contentStartY && msg.Button == tea.MouseLeft {
 		switch m.activePanel {
 		case panelGitDiff:
-			idx := msg.Y - contentStartY + m.gitScrollOffset
-			if idx >= 0 && idx < len(m.gitChangedFiles) {
-				m.gitCursor = idx
-				m.openGitDiffEntry()
+			rowIdx := msg.Y - contentStartY + m.gitScrollOffset
+			if rowIdx >= 0 && rowIdx < len(m.gitVisualRows) {
+				row := m.gitVisualRows[rowIdx]
+				if !row.isHeader {
+					m.gitCursor = row.entryIdx
+					m.openGitDiffEntry()
+				}
 			}
 		default:
 			treeIdx := msg.Y - contentStartY + m.treeScrollOffset
@@ -171,7 +174,7 @@ func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 		switch m.activePanel {
 		case panelGitDiff:
 			m.gitScrollOffset = max(0, m.gitScrollOffset+delta)
-			maxOff := max(len(m.gitChangedFiles)-bodyHeight, 0)
+			maxOff := max(len(m.gitVisualRows)-bodyHeight, 0)
 			m.gitScrollOffset = min(m.gitScrollOffset, maxOff)
 		default:
 			m.treeScrollOffset = max(0, m.treeScrollOffset+delta)

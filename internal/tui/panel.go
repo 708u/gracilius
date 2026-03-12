@@ -4,14 +4,31 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// fileCategory classifies a changed file entry.
+type fileCategory int
+
+const (
+	categoryStaged fileCategory = iota
+	categoryUnstaged
+	categoryUntracked
+)
+
 // changedFileEntry represents a file with changes.
 type changedFileEntry struct {
 	name       string
-	status     string // A, M, D, R
+	status     string // A, M, D, R, ?
 	absPath    string
 	oldContent []string
 	newContent []string
 	binary     bool
+	category   fileCategory
+}
+
+// gitVisualRow represents a visual row in the git panel.
+type gitVisualRow struct {
+	isHeader bool
+	label    string // header text (header rows only)
+	entryIdx int    // index into gitChangedFiles (file rows only)
 }
 
 // stylePanelHeader is the style for panel header labels.
