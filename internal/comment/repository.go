@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/708u/gracilius/internal/config"
 )
 
 // Entry represents a review comment attached to a file.
@@ -95,18 +97,18 @@ type Repository struct {
 }
 
 // NewRepository creates a new Repository for the given rootDir.
-// The store directory is ~/.gracilius/projects/{basename-hash8}/
+// The store directory is ~/.config/gracilius/projects/{basename-hash8}/
 func NewRepository(rootDir string) (*Repository, error) {
-	homeDir, err := os.UserHomeDir()
+	dataDir, err := config.DataDir()
 	if err != nil {
-		return nil, fmt.Errorf("get home directory: %w", err)
+		return nil, fmt.Errorf("get data directory: %w", err)
 	}
 
 	base := filepath.Base(rootDir)
 	hash := sha256.Sum256([]byte(rootDir))
 	name := fmt.Sprintf("%s-%x", base, hash[:4])
 
-	dir := filepath.Join(homeDir, ".gracilius", "projects", name)
+	dir := filepath.Join(dataDir, "projects", name)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("create project directory: %w", err)
 	}
