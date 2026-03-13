@@ -78,7 +78,7 @@ func (s *StatusReader) ChangedFiles() ([]ChangedFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("git diff: %w", err)
 	}
-	return s.parseChangedFiles(out, s.unstaged)
+	return parseChangedFiles(s.dir, out, s.unstaged)
 }
 
 // StagedFiles returns staged (cached) changed files.
@@ -87,7 +87,7 @@ func (s *StatusReader) StagedFiles() ([]ChangedFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("git diff --cached: %w", err)
 	}
-	return s.parseChangedFiles(out, s.staged)
+	return parseChangedFiles(s.dir, out, s.staged)
 }
 
 // UntrackedFiles returns untracked files.
@@ -127,7 +127,8 @@ func (s *StatusReader) UntrackedFiles() ([]ChangedFile, error) {
 
 // parseChangedFiles parses git diff --name-status output
 // using the provided diffReader for old and new content.
-func (s *StatusReader) parseChangedFiles(
+func parseChangedFiles(
+	dir string,
 	nameStatusOutput []byte,
 	readers diffReader,
 ) ([]ChangedFile, error) {
@@ -150,7 +151,7 @@ func (s *StatusReader) parseChangedFiles(
 		case status == StatusAdded:
 			cf.Status = StatusAdded
 			cf.Path = fields[1]
-			content, bin, readErr := readers.readNew(s.dir, cf.Path)
+			content, bin, readErr := readers.readNew(dir, cf.Path)
 			if readErr != nil {
 				return nil, readErr
 			}
@@ -162,11 +163,11 @@ func (s *StatusReader) parseChangedFiles(
 		case status == StatusModified:
 			cf.Status = StatusModified
 			cf.Path = fields[1]
-			old, oldBin, oldErr := readers.readOld(s.dir, cf.Path)
+			old, oldBin, oldErr := readers.readOld(dir, cf.Path)
 			if oldErr != nil {
 				return nil, oldErr
 			}
-			new_, newBin, newErr := readers.readNew(s.dir, cf.Path)
+			new_, newBin, newErr := readers.readNew(dir, cf.Path)
 			if newErr != nil {
 				return nil, newErr
 			}
@@ -179,7 +180,7 @@ func (s *StatusReader) parseChangedFiles(
 		case status == StatusDeleted:
 			cf.Status = StatusDeleted
 			cf.Path = fields[1]
-			old, bin, oldErr := readers.readOld(s.dir, cf.Path)
+			old, bin, oldErr := readers.readOld(dir, cf.Path)
 			if oldErr != nil {
 				return nil, oldErr
 			}
@@ -196,11 +197,11 @@ func (s *StatusReader) parseChangedFiles(
 			oldPath := fields[1]
 			newPath := fields[2]
 			cf.Path = newPath
-			old, oldBin, oldErr := readers.readOld(s.dir, oldPath)
+			old, oldBin, oldErr := readers.readOld(dir, oldPath)
 			if oldErr != nil {
 				return nil, oldErr
 			}
-			new_, newBin, newErr := readers.readNew(s.dir, newPath)
+			new_, newBin, newErr := readers.readNew(dir, newPath)
 			if newErr != nil {
 				return nil, newErr
 			}
@@ -238,11 +239,7 @@ func BranchDiff(dir, baseRef string) ([]ChangedFile, error) {
 		readNew: readHEADBlob,
 	}
 
-	sr, err := NewStatusReader(dir)
-	if err != nil {
-		return nil, err
-	}
-	return sr.parseChangedFiles(out, dr)
+	return parseChangedFiles(dir, out, dr)
 }
 
 // MergeBase returns the merge-base between HEAD and the given ref.

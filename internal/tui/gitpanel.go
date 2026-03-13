@@ -50,43 +50,48 @@ func (m *Model) loadGitChangesForMode(mode gitDiffMode) tea.Cmd {
 			if err != nil {
 				return gitChangedFilesMsg{mode: mode, err: err}
 			}
-
-			type catResult struct {
-				files []git.ChangedFile
-				cat   fileCategory
-				err   error
-			}
-
-			results := make([]catResult, 3)
-			var wg sync.WaitGroup
-			wg.Add(3)
-			go func() {
-				defer wg.Done()
-				f, e := reader.StagedFiles()
-				results[0] = catResult{f, categoryStaged, e}
-			}()
-			go func() {
-				defer wg.Done()
-				f, e := reader.ChangedFiles()
-				results[1] = catResult{f, categoryUnstaged, e}
-			}()
-			go func() {
-				defer wg.Done()
-				f, e := reader.UntrackedFiles()
-				results[2] = catResult{f, categoryUntracked, e}
-			}()
-			wg.Wait()
-
-			var entries []changedFileEntry
-			for _, r := range results {
-				if r.err != nil {
-					return gitChangedFilesMsg{mode: mode, err: r.err}
-				}
-				entries = append(entries, toEntries(dir, r.files, r.cat)...)
-			}
-			return gitChangedFilesMsg{mode: mode, entries: entries}
+			return loadWorkingChanges(reader, dir, mode)
 		}
 	}
+}
+
+// loadWorkingChanges fetches staged, unstaged, and untracked files
+// in parallel using the given StatusReader.
+func loadWorkingChanges(reader *git.StatusReader, dir string, mode gitDiffMode) gitChangedFilesMsg {
+	type catResult struct {
+		files []git.ChangedFile
+		cat   fileCategory
+		err   error
+	}
+
+	results := make([]catResult, 3)
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		f, e := reader.StagedFiles()
+		results[0] = catResult{f, categoryStaged, e}
+	}()
+	go func() {
+		defer wg.Done()
+		f, e := reader.ChangedFiles()
+		results[1] = catResult{f, categoryUnstaged, e}
+	}()
+	go func() {
+		defer wg.Done()
+		f, e := reader.UntrackedFiles()
+		results[2] = catResult{f, categoryUntracked, e}
+	}()
+	wg.Wait()
+
+	var entries []changedFileEntry
+	for _, r := range results {
+		if r.err != nil {
+			return gitChangedFilesMsg{mode: mode, err: r.err}
+		}
+		entries = append(entries, toEntries(dir, r.files, r.cat)...)
+	}
+	return gitChangedFilesMsg{mode: mode, entries: entries}
 }
 
 // initGitBranchInfoAsync returns a tea.Cmd that resolves the default branch
