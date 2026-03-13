@@ -11,7 +11,9 @@ import (
 
 // handleFileChanged processes file change notifications.
 func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
-	if t, ok := m.activeTabState(); ok {
+	// Update the active file tab if its path matches.
+	if t, ok := m.activeTabState(); ok &&
+		t.kind == fileTab && t.filePath == msg.path {
 		t.lines = msg.lines
 		t.syncContent(msg.lines)
 		t.highlightedLines = highlightFile(
@@ -27,6 +29,23 @@ func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
 			m.notifySelectionChanged()
 		}
 	}
+
+	// Update diff tabs whose old-side file matches.
+	oldSource := strings.Join(msg.lines, "\n")
+	for _, t := range m.tabs {
+		if t.kind != diffTab || t.filePath != msg.path {
+			continue
+		}
+		t.diffOldSource = oldSource
+		t.diffOldHighlights = highlightFile(t.filePath, oldSource, m.theme)
+		t.diffViewData = buildDiffData(msg.lines, t.lines)
+		if t.vp.Width() > diffSeparatorWidth {
+			off := t.vp.YOffset()
+			t.renderDiffContent(m.theme, t.vp.Width())
+			t.vp.SetYOffset(off)
+		}
+	}
+
 	cmd := m.watchFile()
 	return m, cmd
 }
@@ -117,6 +136,13 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1
 	m.focusPane = paneEditor
+
+	if m.watcher != nil {
+		if err := m.watcher.Add(msg.FilePath); err != nil {
+			log.Printf("Failed to watch diff file: %v", err)
+		}
+	}
+
 	return m, nil
 }
 
