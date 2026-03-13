@@ -73,7 +73,7 @@ type diffRenderResult struct {
 }
 
 // renderAllDiffLines pre-renders all diff rows into a flat visual line slice.
-func renderAllDiffLines(data *diffData, theme themeConfig, width int) diffRenderResult {
+func renderAllDiffLines(data *diffData, theme themeConfig, width int, oldHL, newHL []highlightedLine) diffRenderResult {
 	colors := diffColorsFor(theme)
 	maxLine := max(data.maxLineNum, 1)
 
@@ -95,8 +95,16 @@ func renderAllDiffLines(data *diffData, theme themeConfig, width int) diffRender
 	for i, row := range data.rows {
 		rowVisualStart[i] = len(lines)
 
-		oldVisuals := wrapDiffSide(row.oldLineNum, row.oldText, row.oldSpans, row.rowType, true, ctx)
-		newVisuals := wrapDiffSide(row.newLineNum, row.newText, row.newSpans, row.rowType, false, ctx)
+		var oldRuns, newRuns []styledRun
+		if row.oldLineNum > 0 && oldHL != nil && row.oldLineNum-1 < len(oldHL) {
+			oldRuns = oldHL[row.oldLineNum-1].runs
+		}
+		if row.newLineNum > 0 && newHL != nil && row.newLineNum-1 < len(newHL) {
+			newRuns = newHL[row.newLineNum-1].runs
+		}
+
+		oldVisuals := wrapDiffSide(row.oldLineNum, row.oldText, row.oldSpans, oldRuns, row.rowType, true, ctx)
+		newVisuals := wrapDiffSide(row.newLineNum, row.newText, row.newSpans, newRuns, row.rowType, false, ctx)
 
 		rowCount := max(len(oldVisuals), len(newVisuals))
 		for j := range rowCount {
@@ -149,6 +157,7 @@ func wrapDiffSide(
 	lineNum int,
 	text string,
 	spans []wordSpan,
+	syntaxRuns []styledRun,
 	rowType diffRowType,
 	isOld bool,
 	ctx diffSideCtx,
@@ -168,20 +177,45 @@ func wrapDiffSide(
 	expanded := expandTabs(text)
 	bp := wrapBreakpoints(expanded, ctx.textWidth)
 
+	// Case A & C: no soft-wrap
 	if bp == nil {
 		var sb strings.Builder
 		numStr := fmt.Sprintf("%*d ", digits, lineNum)
 		writeStyledText(&sb, gutterStyle, numStr)
-		if spans != nil {
-			renderWordDiffText(&sb, spans, lineBg, wordBg, ctx.textWidth)
-		} else {
+		switch {
+		case spans != nil:
+			// Case C: word-diff
+			renderWordDiffWithSyntax(&sb, spans, syntaxRuns, lineBg, wordBg, ctx.textWidth)
+		case syntaxRuns != nil:
+			// Case A: syntax highlight without word-diff
+			renderSyntaxWithBg(&sb, syntaxRuns, lineBg, ctx.textWidth)
+		default:
 			truncated := ansi.Truncate(expanded, ctx.textWidth, "")
 			writePaddedText(&sb, truncated, ctx.textWidth, lineBg)
 		}
 		return []string{sb.String()}
 	}
 
-	// Soft-wrapped: split into segments.
+	// Case B: soft-wrapped with syntax highlighting
+	if syntaxRuns != nil && spans == nil {
+		expRuns := expandStyledRuns(syntaxRuns)
+		runSegments := splitRunsAtBreakpoints(expRuns, bp)
+		segments := make([]string, 0, len(runSegments))
+		for si, seg := range runSegments {
+			var sb strings.Builder
+			if si == 0 {
+				numStr := fmt.Sprintf("%*d ", digits, lineNum)
+				writeStyledText(&sb, gutterStyle, numStr)
+			} else {
+				writeStyledText(&sb, gutterStyle, ctx.gutterPad)
+			}
+			renderSyntaxWithBg(&sb, seg, lineBg, ctx.textWidth)
+			segments = append(segments, sb.String())
+		}
+		return segments
+	}
+
+	// Soft-wrapped without syntax: split into segments.
 	runes := []rune(expanded)
 	segments := make([]string, 0, len(bp)+1)
 	prev := 0
@@ -265,4 +299,97 @@ func writePaddedText(sb *strings.Builder, truncated string, targetWidth int, bg 
 	if bg != "" {
 		sb.WriteString(ansiReset)
 	}
+}
+
+// writeColoredChunk writes text with optional foreground and background ANSI codes.
+func writeColoredChunk(sb *strings.Builder, fg, bg, text string) {
+	if fg != "" || bg != "" {
+		sb.WriteString(fg)
+		sb.WriteString(bg)
+		sb.WriteString(text)
+		sb.WriteString(ansiReset)
+	} else {
+		sb.WriteString(text)
+	}
+}
+
+// expandStyledRuns returns a copy of runs with tabs expanded to spaces.
+func expandStyledRuns(runs []styledRun) []styledRun {
+	out := make([]styledRun, len(runs))
+	for i, r := range runs {
+		out[i] = styledRun{Text: expandTabs(r.Text), ANSI: r.ANSI}
+	}
+	return out
+}
+
+// renderSyntaxWithBg renders styledRuns with a diff background color,
+// truncating to textWidth and padding with spaces.
+func renderSyntaxWithBg(sb *strings.Builder, runs []styledRun, bg string, textWidth int) {
+	var raw strings.Builder
+	for _, r := range runs {
+		expanded := expandTabs(r.Text)
+		writeColoredChunk(&raw, r.ANSI, bg, expanded)
+	}
+	truncated := ansi.Truncate(raw.String(), textWidth, "")
+	writePaddedText(sb, truncated, textWidth, bg)
+}
+
+// renderWordDiffWithSyntax merges word-diff spans with syntax runs,
+// applying both foreground (syntax) and background (diff) colors.
+// Falls back to renderWordDiffText when syntaxRuns is nil.
+func renderWordDiffWithSyntax(
+	sb *strings.Builder,
+	spans []wordSpan,
+	syntaxRuns []styledRun,
+	lineBg, wordBg string,
+	textWidth int,
+) {
+	if syntaxRuns == nil {
+		renderWordDiffText(sb, spans, lineBg, wordBg, textWidth)
+		return
+	}
+
+	// Build a flat slice of syntax foreground colors aligned by rune position.
+	var syntaxFg []string
+	for _, r := range syntaxRuns {
+		for range []rune(r.Text) {
+			syntaxFg = append(syntaxFg, r.ANSI)
+		}
+	}
+
+	var raw strings.Builder
+	syntaxPos := 0
+	for _, span := range spans {
+		expanded := expandTabs(span.text)
+		bg := lineBg
+		if span.op == diffOpInsert || span.op == diffOpDelete {
+			bg = wordBg
+		}
+
+		spanRunes := []rune(span.text)
+		expandedRunes := []rune(expanded)
+
+		// Walk original runes to track the syntax position correctly.
+		ei := 0
+		for oi := range spanRunes {
+			var fg string
+			if syntaxPos < len(syntaxFg) {
+				fg = syntaxFg[syntaxPos]
+			}
+			syntaxPos++
+
+			// Determine how many expanded runes this original rune covers.
+			advanceBy := 1
+			if spanRunes[oi] == '\t' {
+				advanceBy = 4 // expandTabs converts to 4 spaces
+			}
+
+			chunk := string(expandedRunes[ei : ei+advanceBy])
+			ei += advanceBy
+			writeColoredChunk(&raw, fg, bg, chunk)
+		}
+	}
+
+	truncated := ansi.Truncate(raw.String(), textWidth, "")
+	writePaddedText(sb, truncated, textWidth, lineBg)
 }
