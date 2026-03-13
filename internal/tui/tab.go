@@ -101,6 +101,38 @@ func newDiffTab(filePath string, lines []string, onAccept func(string), onReject
 	}
 }
 
+// selectionInfo holds the selection state for MCP notification.
+type selectionInfo struct {
+	text      string
+	startLine int
+	startChar int
+	endLine   int
+	endChar   int
+}
+
+// getSelectionInfo returns current selection state for MCP notification.
+func (t *tab) getSelectionInfo() selectionInfo {
+	if t.kind == diffTab {
+		return selectionInfo{}
+	}
+	startLine, startChar, endLine, endChar := t.normalizedSelection()
+	return selectionInfo{
+		text:      t.selectedTextRange(startLine, startChar, endLine, endChar),
+		startLine: startLine,
+		startChar: startChar,
+		endLine:   endLine,
+		endChar:   endChar,
+	}
+}
+
+// getCursorPos returns cursor position as (line, char).
+func (t *tab) getCursorPos() (int, int) {
+	if t.kind == diffTab {
+		return 0, 0
+	}
+	return t.cursorLine, t.cursorChar
+}
+
 // configureGutter sets up the LeftGutterFunc for line numbers
 // with comment markers.
 func (t *tab) configureGutter(digitWidth int) {
@@ -195,7 +227,11 @@ func commentDisplayRows(text string) int {
 // selectedText returns the text within the current selection range.
 func (t *tab) selectedText() string {
 	startLine, startChar, endLine, endChar := t.normalizedSelection()
+	return t.selectedTextRange(startLine, startChar, endLine, endChar)
+}
 
+// selectedTextRange returns the text within the given range.
+func (t *tab) selectedTextRange(startLine, startChar, endLine, endChar int) string {
 	if startLine == endLine {
 		if startLine < len(t.lines) {
 			runes := []rune(t.lines[startLine])
