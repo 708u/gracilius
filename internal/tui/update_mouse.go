@@ -54,7 +54,6 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 
 	borderX := lo.treeWidth
 	isBorderArea := m.sidebarVisible && msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= contentStartY
-
 	if isBorderArea && msg.Button == tea.MouseLeft {
 		m.resizingPane = true
 		return m, nil
@@ -64,10 +63,13 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		switch m.activePanel {
 		case panelGitDiff:
 			gs := m.gitState()
-			idx := msg.Y - contentStartY + gs.scrollOffset
-			if idx >= 0 && idx < len(gs.entries) {
-				gs.cursor = idx
-				m.openGitDiffEntry()
+			rowIdx := msg.Y - contentStartY + gs.scrollOffset
+			if rowIdx >= 0 && rowIdx < len(gs.visualRows) {
+				row := gs.visualRows[rowIdx]
+				if !row.isHeader {
+					gs.cursor = row.entryIdx
+					m.openGitDiffEntry()
+				}
 			}
 		default:
 			treeIdx := msg.Y - contentStartY + m.treeScrollOffset
@@ -173,7 +175,7 @@ func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 		case panelGitDiff:
 			gs := m.gitState()
 			gs.scrollOffset = max(0, gs.scrollOffset+delta)
-			maxOff := max(len(gs.entries)-bodyHeight, 0)
+			maxOff := max(len(gs.visualRows)-bodyHeight, 0)
 			gs.scrollOffset = min(gs.scrollOffset, maxOff)
 		default:
 			m.treeScrollOffset = max(0, m.treeScrollOffset+delta)

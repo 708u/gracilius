@@ -98,6 +98,20 @@ type gitSyncMsg struct {
 	gen int
 }
 
+// gitChangedFilesMsg carries the result of loading git changed files.
+type gitChangedFilesMsg struct {
+	mode    gitDiffMode
+	entries []changedFileEntry
+	err     error
+}
+
+// gitBranchInfoMsg carries the result of async branch info resolution.
+type gitBranchInfoMsg struct {
+	mergeBase     string
+	defaultBranch string
+	err           string
+}
+
 // Model holds the entire TUI state.
 type Model struct {
 	width  int
@@ -174,20 +188,13 @@ type Model struct {
 	// git directory watcher (.git/index, .git/HEAD)
 	gitDirWatcher *fsnotify.Watcher
 
-	// git panel state
+	// git panel state (per-mode)
 	gitDiffMode      gitDiffMode
 	gitModeState     [gitDiffModeCount]gitPanelState
 	gitAnyLoaded     bool // true once any mode has been loaded
 	gitSyncGen       int  // generation counter for debounced git sync
 	gitMergeBase     string
 	gitDefaultBranch string
-}
-
-// gitChangedFilesMsg carries the result of loading git changed files.
-type gitChangedFilesMsg struct {
-	mode    gitDiffMode
-	entries []changedFileEntry
-	err     error
 }
 
 // lineKind distinguishes the type of a visual row.

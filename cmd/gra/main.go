@@ -14,6 +14,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/708u/gracilius/internal/comment"
+	"github.com/708u/gracilius/internal/config"
 	"github.com/708u/gracilius/internal/server"
 	"github.com/708u/gracilius/internal/tui"
 	"github.com/alecthomas/kong"
@@ -48,11 +49,11 @@ func main() {
 
 func (c *ViewCmd) Run() error {
 	// Log file setup
-	homeDir, err := os.UserHomeDir()
+	dataDir, err := config.DataDir()
 	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
+		return fmt.Errorf("failed to get data directory: %w", err)
 	}
-	logDir := filepath.Join(homeDir, ".gracilius", "logs")
+	logDir := filepath.Join(dataDir, "logs")
 	if err := os.MkdirAll(logDir, 0700); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}

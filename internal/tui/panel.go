@@ -2,16 +2,34 @@ package tui
 
 import (
 	"charm.land/lipgloss/v2"
+	"github.com/708u/gracilius/internal/git"
+)
+
+// fileCategory classifies a changed file entry.
+type fileCategory int
+
+const (
+	categoryStaged fileCategory = iota
+	categoryUnstaged
+	categoryUntracked
 )
 
 // changedFileEntry represents a file with changes.
 type changedFileEntry struct {
 	name       string
-	status     string // A, M, D, R
+	status     git.FileStatus
 	absPath    string
 	oldContent []string
 	newContent []string
 	binary     bool
+	category   fileCategory
+}
+
+// gitVisualRow represents a visual row in the git panel.
+type gitVisualRow struct {
+	isHeader bool
+	label    string // header text (header rows only)
+	entryIdx int    // index into gitChangedFiles (file rows only)
 }
 
 // stylePanelHeader is the style for panel header labels.
@@ -35,7 +53,7 @@ func renderChangedFiles(entries []changedFileEntry, width, height int) []string 
 			if len(lines) >= height {
 				break
 			}
-			lines = append(lines, padRight("  "+e.status+" "+e.name, width))
+			lines = append(lines, padRight("  "+e.status.String()+" "+e.name, width))
 		}
 	}
 

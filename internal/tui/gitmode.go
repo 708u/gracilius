@@ -47,11 +47,13 @@ func (m gitDiffMode) tabPrefix() string {
 
 // gitPanelState holds per-mode state for the git changes panel.
 type gitPanelState struct {
-	entries      []changedFileEntry
-	cursor       int
-	scrollOffset int
-	loaded       bool
-	stale        bool // needs reload on next access
+	entries          []changedFileEntry
+	visualRows       []gitVisualRow
+	entryToVisualIdx map[int]int // entryIdx -> visual row index
+	cursor           int
+	scrollOffset     int
+	loaded           bool
+	stale            bool // needs reload on next access
 }
 
 // switchGitMode changes the active git diff mode by delta (-1 or +1).
