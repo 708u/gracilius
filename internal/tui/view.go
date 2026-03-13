@@ -431,9 +431,36 @@ func (m *Model) renderTree(width, height int) []string {
 	return lines
 }
 
+// renderDiffEditor generates the editor pane lines for a diff tab.
+// The viewport owns scrolling; we slice cached rendered lines directly.
+func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
+	width := lo.editorWidth
+	height := lo.contentHeight
+
+	t.ensureDiffContent(m.theme, width)
+	m.lastMapping = nil
+
+	off := t.vp.YOffset()
+	end := min(off+height, len(t.diffCachedLines))
+	diffLines := make([]string, 0, height)
+	if off < len(t.diffCachedLines) {
+		diffLines = append(diffLines, t.diffCachedLines[off:end]...)
+	}
+	for len(diffLines) < height {
+		diffLines = append(diffLines, padRight("", width))
+	}
+	return diffLines
+}
+
 // renderEditor generates the editor pane lines.
 func (m *Model) renderEditor(lo layout) []string {
 	t, hasTab := m.activeTabState()
+
+	// Diff view dispatch: separate renderer owns the diff path.
+	if hasTab && t.diffViewData != nil {
+		return m.renderDiffEditor(t, lo)
+	}
+
 	width := lo.editorWidth
 	height := lo.contentHeight
 	lnw := lo.lineNumWidth
@@ -441,22 +468,6 @@ func (m *Model) renderEditor(lo layout) []string {
 
 	lines := make([]string, 0, height)
 	var mapping []visualEntry
-
-	// Diff view dispatch: viewport owns scroll, we slice cached lines directly.
-	if hasTab && t.diffViewData != nil {
-		t.ensureDiffContent(m.theme, width)
-		m.lastMapping = nil
-		off := t.vp.YOffset()
-		end := min(off+height, len(t.diffCachedLines))
-		diffLines := make([]string, 0, height)
-		if off < len(t.diffCachedLines) {
-			diffLines = append(diffLines, t.diffCachedLines[off:end]...)
-		}
-		for len(diffLines) < height {
-			diffLines = append(diffLines, padRight("", width))
-		}
-		return diffLines
-	}
 
 	if !hasTab || len(t.lines) == 0 {
 		emptyMsg := emptyStateMsg
