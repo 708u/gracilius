@@ -1,41 +1,137 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+)
+
+// FileStatus represents a git file status.
+type FileStatus string
+
+// String implements fmt.Stringer.
+func (s FileStatus) String() string { return string(s) }
+
+// Git file status constants.
+const (
+	StatusAdded     FileStatus = "A"
+	StatusModified  FileStatus = "M"
+	StatusDeleted   FileStatus = "D"
+	StatusRenamed   FileStatus = "R"
+	StatusUntracked FileStatus = "?"
 )
 
 // ChangedFile represents a file changed in the working tree.
 type ChangedFile struct {
 	Path       string
-	Status     string   // A, M, D, R
+	Status     FileStatus
 	OldContent []string // nil for new files
 	NewContent []string // nil for deleted files
 	Binary     bool
 }
 
-// ChangedFiles returns unstaged changed files.
-// Runs: git diff --name-status
-// Content retrieval per status:
-//
-//	A: old=nil,              new=os.ReadFile(path)
-//	M: old=git show :{path}, new=os.ReadFile(path)
-//	D: old=git show :{path}, new=nil
-//	R: old=git show :{old},  new=os.ReadFile(new)
-func ChangedFiles(dir string) ([]ChangedFile, error) {
+// blobReader reads file content from a specific source.
+type blobReader func(dir, path string) ([]string, bool, error)
+
+// diffReader holds the old/new content readers for a diff.
+type diffReader struct {
+	readOld blobReader
+	readNew blobReader
+}
+
+// StatusReader reads git status information from a repository.
+type StatusReader struct {
+	dir      string
+	root     string
+	staged   diffReader
+	unstaged diffReader
+}
+
+// NewStatusReader creates a StatusReader for the given directory.
+func NewStatusReader(dir string) (*StatusReader, error) {
 	root, err := repoRoot(dir)
 	if err != nil {
 		return nil, err
 	}
+	return &StatusReader{
+		dir:  dir,
+		root: root,
+		staged: diffReader{
+			readOld: readHEADBlob,
+			readNew: readGitBlob,
+		},
+		unstaged: diffReader{
+			readOld: readGitBlob,
+			readNew: func(_, path string) ([]string, bool, error) {
+				return readWorkFile(root, path)
+			},
+		},
+	}, nil
+}
 
-	out, err := gitCmd(dir, "diff", "--name-status")
+// ChangedFiles returns unstaged changed files.
+func (s *StatusReader) ChangedFiles() ([]ChangedFile, error) {
+	out, err := gitCmd(s.dir, "diff", "--name-status")
 	if err != nil {
 		return nil, fmt.Errorf("git diff: %w", err)
 	}
+	return s.parseChangedFiles(out, s.unstaged)
+}
+
+// StagedFiles returns staged (cached) changed files.
+func (s *StatusReader) StagedFiles() ([]ChangedFile, error) {
+	out, err := gitCmd(s.dir, "diff", "--cached", "--name-status")
+	if err != nil {
+		return nil, fmt.Errorf("git diff --cached: %w", err)
+	}
+	return s.parseChangedFiles(out, s.staged)
+}
+
+// UntrackedFiles returns untracked files.
+func (s *StatusReader) UntrackedFiles() ([]ChangedFile, error) {
+	out, err := gitCmd(s.dir, "ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, fmt.Errorf("git ls-files: %w", err)
+	}
 
 	output := strings.TrimSpace(string(out))
+	if output == "" {
+		return nil, nil
+	}
+
+	var files []ChangedFile
+	for path := range strings.SplitSeq(output, "\n") {
+		if path == "" {
+			continue
+		}
+		cf := ChangedFile{
+			Path:   path,
+			Status: StatusUntracked,
+		}
+		content, bin, readErr := readWorkFile(s.root, path)
+		if readErr != nil {
+			return nil, readErr
+		}
+		cf.Binary = bin
+		if !bin {
+			cf.NewContent = content
+		}
+		files = append(files, cf)
+	}
+
+	return files, nil
+}
+
+// parseChangedFiles parses git diff --name-status output
+// using the provided diffReader for old and new content.
+func (s *StatusReader) parseChangedFiles(
+	nameStatusOutput []byte,
+	readers diffReader,
+) ([]ChangedFile, error) {
+	output := strings.TrimSpace(string(nameStatusOutput))
 	if output == "" {
 		return nil, nil
 	}
@@ -47,14 +143,14 @@ func ChangedFiles(dir string) ([]ChangedFile, error) {
 			continue
 		}
 
-		status := fields[0]
+		status := FileStatus(fields[0])
 		cf := ChangedFile{}
 
 		switch {
-		case status == "A":
-			cf.Status = "A"
+		case status == StatusAdded:
+			cf.Status = StatusAdded
 			cf.Path = fields[1]
-			content, bin, readErr := readWorkFile(root, cf.Path)
+			content, bin, readErr := readers.readNew(s.dir, cf.Path)
 			if readErr != nil {
 				return nil, readErr
 			}
@@ -63,14 +159,14 @@ func ChangedFiles(dir string) ([]ChangedFile, error) {
 				cf.NewContent = content
 			}
 
-		case status == "M":
-			cf.Status = "M"
+		case status == StatusModified:
+			cf.Status = StatusModified
 			cf.Path = fields[1]
-			old, oldBin, oldErr := readGitBlob(dir, cf.Path)
+			old, oldBin, oldErr := readers.readOld(s.dir, cf.Path)
 			if oldErr != nil {
 				return nil, oldErr
 			}
-			new_, newBin, newErr := readWorkFile(root, cf.Path)
+			new_, newBin, newErr := readers.readNew(s.dir, cf.Path)
 			if newErr != nil {
 				return nil, newErr
 			}
@@ -80,10 +176,10 @@ func ChangedFiles(dir string) ([]ChangedFile, error) {
 				cf.NewContent = new_
 			}
 
-		case status == "D":
-			cf.Status = "D"
+		case status == StatusDeleted:
+			cf.Status = StatusDeleted
 			cf.Path = fields[1]
-			old, bin, oldErr := readGitBlob(dir, cf.Path)
+			old, bin, oldErr := readers.readOld(s.dir, cf.Path)
 			if oldErr != nil {
 				return nil, oldErr
 			}
@@ -92,19 +188,19 @@ func ChangedFiles(dir string) ([]ChangedFile, error) {
 				cf.OldContent = old
 			}
 
-		case strings.HasPrefix(status, "R"):
-			cf.Status = "R"
+		case strings.HasPrefix(status.String(), StatusRenamed.String()):
+			cf.Status = StatusRenamed
 			if len(fields) < 3 {
 				continue
 			}
 			oldPath := fields[1]
 			newPath := fields[2]
 			cf.Path = newPath
-			old, oldBin, oldErr := readGitBlob(dir, oldPath)
+			old, oldBin, oldErr := readers.readOld(s.dir, oldPath)
 			if oldErr != nil {
 				return nil, oldErr
 			}
-			new_, newBin, newErr := readWorkFile(root, newPath)
+			new_, newBin, newErr := readers.readNew(s.dir, newPath)
 			if newErr != nil {
 				return nil, newErr
 			}
@@ -140,6 +236,23 @@ func readGitBlob(dir, path string) ([]string, bool, error) {
 	data, err := gitCmd(dir, "show", ":"+path)
 	if err != nil {
 		return nil, false, fmt.Errorf("git show :%s: %w", path, err)
+	}
+	if isBinaryContent(data) {
+		return nil, true, nil
+	}
+	return splitLines(data), false, nil
+}
+
+// readHEADBlob reads a file from HEAD.
+// Returns (nil, false, nil) if HEAD does not exist (no commits yet).
+func readHEADBlob(dir, path string) ([]string, bool, error) {
+	data, err := gitCmd(dir, "show", "HEAD:"+path)
+	if err != nil {
+		// HEAD doesn't exist (no commits) or file not in HEAD.
+		if _, ok := errors.AsType[*exec.ExitError](err); ok {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("git show HEAD:%s: %w", path, err)
 	}
 	if isBinaryContent(data) {
 		return nil, true, nil

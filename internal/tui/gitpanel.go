@@ -10,25 +10,52 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// toEntries converts git.ChangedFile slice to changedFileEntry slice.
+func toEntries(dir string, files []git.ChangedFile, cat fileCategory) []changedFileEntry {
+	entries := make([]changedFileEntry, len(files))
+	for i, f := range files {
+		entries[i] = changedFileEntry{
+			name:       f.Path,
+			status:     f.Status,
+			absPath:    filepath.Join(dir, f.Path),
+			oldContent: f.OldContent,
+			newContent: f.NewContent,
+			binary:     f.Binary,
+			category:   cat,
+		}
+	}
+	return entries
+}
+
 // loadGitChanges returns a tea.Cmd that fetches git changed files.
 func (m *Model) loadGitChanges() tea.Cmd {
 	dir := m.rootDir
 	return func() tea.Msg {
-		files, err := git.ChangedFiles(dir)
+		reader, err := git.NewStatusReader(dir)
 		if err != nil {
 			return gitChangedFilesMsg{err: err}
 		}
-		entries := make([]changedFileEntry, len(files))
-		for i, f := range files {
-			entries[i] = changedFileEntry{
-				name:       f.Path,
-				status:     f.Status,
-				absPath:    filepath.Join(dir, f.Path),
-				oldContent: f.OldContent,
-				newContent: f.NewContent,
-				binary:     f.Binary,
-			}
+
+		var entries []changedFileEntry
+
+		staged, err := reader.StagedFiles()
+		if err != nil {
+			return gitChangedFilesMsg{err: err}
 		}
+		entries = append(entries, toEntries(dir, staged, categoryStaged)...)
+
+		unstaged, err := reader.ChangedFiles()
+		if err != nil {
+			return gitChangedFilesMsg{err: err}
+		}
+		entries = append(entries, toEntries(dir, unstaged, categoryUnstaged)...)
+
+		untracked, err := reader.UntrackedFiles()
+		if err != nil {
+			return gitChangedFilesMsg{err: err}
+		}
+		entries = append(entries, toEntries(dir, untracked, categoryUntracked)...)
+
 		return gitChangedFilesMsg{entries: entries}
 	}
 }
@@ -41,11 +68,55 @@ func (m *Model) handleGitChangedFiles(msg gitChangedFilesMsg) (tea.Model, tea.Cm
 		return m, statusTickCmd()
 	}
 	m.gitChangedFiles = msg.entries
+	m.gitVisualRows, m.gitEntryToVisualIdx = buildGitVisualRows(msg.entries)
 	m.gitLoaded = true
 	if m.gitCursor >= len(m.gitChangedFiles) {
 		m.gitCursor = max(0, len(m.gitChangedFiles)-1)
 	}
 	return m, nil
+}
+
+// buildGitVisualRows builds a flat list of visual rows
+// with category headers inserted between sections.
+// Also returns a reverse map from entryIdx to visual row index.
+func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int) {
+	type section struct {
+		cat     fileCategory
+		label   string
+		indices []int
+	}
+	sections := []section{
+		{cat: categoryStaged, label: "Staged Changes"},
+		{cat: categoryUnstaged, label: "Changes"},
+		{cat: categoryUntracked, label: "Untracked Files"},
+	}
+
+	// Single pass: collect entry indices per category.
+	for i, e := range entries {
+		for j := range sections {
+			if sections[j].cat == e.category {
+				sections[j].indices = append(sections[j].indices, i)
+				break
+			}
+		}
+	}
+
+	var rows []gitVisualRow
+	reverseMap := make(map[int]int)
+	for _, sec := range sections {
+		if len(sec.indices) == 0 {
+			continue
+		}
+		rows = append(rows, gitVisualRow{
+			isHeader: true,
+			label:    fmt.Sprintf("  %s (%d)", sec.label, len(sec.indices)),
+		})
+		for _, idx := range sec.indices {
+			reverseMap[idx] = len(rows)
+			rows = append(rows, gitVisualRow{entryIdx: idx})
+		}
+	}
+	return rows, reverseMap
 }
 
 // openGitDiffEntry opens a diff tab for the selected git changed file.
@@ -93,12 +164,16 @@ func (m *Model) openGitDiffEntry() {
 	m.focusPane = paneEditor
 }
 
-var gitStatusStyles = map[string]lipgloss.Style{
-	"A": lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // green
-	"D": lipgloss.NewStyle().Foreground(lipgloss.Color("1")), // red
-	"M": lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // yellow
-	"R": lipgloss.NewStyle().Foreground(lipgloss.Color("6")), // cyan
+var gitStatusStyles = map[git.FileStatus]lipgloss.Style{
+	git.StatusAdded:     lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // green
+	git.StatusDeleted:   lipgloss.NewStyle().Foreground(lipgloss.Color("1")), // red
+	git.StatusModified:  lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // yellow
+	git.StatusRenamed:   lipgloss.NewStyle().Foreground(lipgloss.Color("6")), // cyan
+	git.StatusUntracked: lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // green
 }
+
+// styleCategoryHeader is the style for category header lines.
+var styleCategoryHeader = lipgloss.NewStyle().Bold(true)
 
 // renderGitPanel renders the git changed files list.
 func (m *Model) renderGitPanel(width, height int) []string {
@@ -120,13 +195,22 @@ func (m *Model) renderGitPanel(width, height int) []string {
 		return lines
 	}
 
-	for i := m.gitScrollOffset; i < len(m.gitChangedFiles) && len(lines) < height; i++ {
-		e := m.gitChangedFiles[i]
-		isCursor := i == m.gitCursor && m.focusPane == paneTree
+	for i := m.gitScrollOffset; i < len(m.gitVisualRows) && len(lines) < height; i++ {
+		row := m.gitVisualRows[i]
+
+		if row.isHeader {
+			headerLine := styleCategoryHeader.Render(row.label)
+			headerLine = padRight(headerLine, width)
+			lines = append(lines, headerLine)
+			continue
+		}
+
+		e := m.gitChangedFiles[row.entryIdx]
+		isCursor := row.entryIdx == m.gitCursor && m.focusPane == paneTree
 
 		style := gitStatusStyles[e.status]
-		statusIcon := style.Render(e.status)
-		line := "  " + statusIcon + " " + e.name
+		statusIcon := style.Render(e.status.String())
+		line := "    " + statusIcon + " " + e.name
 		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)
 
@@ -142,4 +226,48 @@ func (m *Model) renderGitPanel(width, height int) []string {
 	}
 
 	return lines
+}
+
+// gitCursorUp moves the git cursor up one entry.
+func (m *Model) gitCursorUp() {
+	if m.gitCursor <= 0 {
+		return
+	}
+	m.gitCursor--
+}
+
+// gitCursorDown moves the git cursor down one entry.
+func (m *Model) gitCursorDown() {
+	if m.gitCursor >= len(m.gitChangedFiles)-1 {
+		return
+	}
+	m.gitCursor++
+}
+
+// gitCursorVisualIdx returns the visual row index for the current gitCursor.
+func (m *Model) gitCursorVisualIdx() int {
+	if idx, ok := m.gitEntryToVisualIdx[m.gitCursor]; ok {
+		return idx
+	}
+	return 0
+}
+
+// firstGitEntryIdx returns the entryIdx of the first non-header row.
+func firstGitEntryIdx(rows []gitVisualRow) int {
+	for _, row := range rows {
+		if !row.isHeader {
+			return row.entryIdx
+		}
+	}
+	return 0
+}
+
+// lastGitEntryIdx returns the entryIdx of the last non-header row.
+func lastGitEntryIdx(rows []gitVisualRow) int {
+	for i := len(rows) - 1; i >= 0; i-- {
+		if !rows[i].isHeader {
+			return rows[i].entryIdx
+		}
+	}
+	return 0
 }

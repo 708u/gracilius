@@ -48,7 +48,7 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.GoTop) {
 			switch {
 			case m.focusPane == paneTree && m.activePanel == panelGitDiff:
-				m.gitCursor = 0
+				m.gitCursor = firstGitEntryIdx(m.gitVisualRows)
 			case m.focusPane == paneTree:
 				m.treeCursor = 0
 			case hasTab && t.diffViewData != nil:
@@ -283,9 +283,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Up):
 		switch {
 		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
-			if m.gitCursor > 0 {
-				m.gitCursor--
-			}
+			m.gitCursorUp()
 		case m.focusPane == paneTree:
 			if m.treeCursor > 0 {
 				m.treeCursor--
@@ -305,9 +303,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Down):
 		switch {
 		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
-			if m.gitCursor < len(m.gitChangedFiles)-1 {
-				m.gitCursor++
-			}
+			m.gitCursorDown()
 		case m.focusPane == paneTree:
 			if m.treeCursor < len(m.fileTree)-1 {
 				m.treeCursor++
@@ -407,7 +403,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		switch {
 		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
 			if len(m.gitChangedFiles) > 0 {
-				m.gitCursor = len(m.gitChangedFiles) - 1
+				m.gitCursor = lastGitEntryIdx(m.gitVisualRows)
 			}
 		case m.focusPane == paneTree:
 			if len(m.fileTree) > 0 {

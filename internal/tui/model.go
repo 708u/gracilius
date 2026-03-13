@@ -172,11 +172,13 @@ type Model struct {
 	gitIndexWatcher *fsnotify.Watcher
 
 	// git panel state
-	gitChangedFiles []changedFileEntry
-	gitCursor       int
-	gitScrollOffset int
-	gitLoaded       bool
-	gitSyncGen      int // generation counter for debounced git sync
+	gitChangedFiles     []changedFileEntry
+	gitVisualRows       []gitVisualRow
+	gitEntryToVisualIdx map[int]int // entryIdx → visual row index
+	gitCursor           int
+	gitScrollOffset     int
+	gitLoaded           bool
+	gitSyncGen          int // generation counter for debounced git sync
 }
 
 // gitChangedFilesMsg carries the result of loading git changed files.
