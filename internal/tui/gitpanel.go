@@ -10,13 +10,22 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// loadGitChanges returns a tea.Cmd that fetches git changed files.
-func (m *Model) loadGitChanges() tea.Cmd {
+// gitBranchInfoMsg carries the result of async branch info resolution.
+type gitBranchInfoMsg struct {
+	mergeBase     string
+	defaultBranch string
+	err           string
+}
+
+// loadGitChangesForMode returns a tea.Cmd that fetches git changed files
+// for the given diff mode.
+func (m *Model) loadGitChangesForMode(mode gitDiffMode) tea.Cmd {
 	dir := m.rootDir
+	opts := m.diffOptionsForMode(mode)
 	return func() tea.Msg {
-		files, err := git.ChangedFiles(dir)
+		files, err := git.ChangedFilesWithOptions(dir, opts)
 		if err != nil {
-			return gitChangedFilesMsg{err: err}
+			return gitChangedFilesMsg{mode: mode, err: err}
 		}
 		entries := make([]changedFileEntry, len(files))
 		for i, f := range files {
@@ -29,31 +38,84 @@ func (m *Model) loadGitChanges() tea.Cmd {
 				binary:     f.Binary,
 			}
 		}
-		return gitChangedFilesMsg{entries: entries}
+		return gitChangedFilesMsg{mode: mode, entries: entries}
 	}
+}
+
+// diffOptionsForMode builds DiffOptions for the given mode.
+func (m *Model) diffOptionsForMode(mode gitDiffMode) git.DiffOptions {
+	opts := git.DiffOptions{Mode: git.DiffMode(mode)}
+	if mode == gitModeBranch {
+		opts.BaseRef = m.gitMergeBase
+	}
+	return opts
+}
+
+// initGitBranchInfoAsync returns a tea.Cmd that resolves the default branch
+// and merge-base in the background.
+func (m *Model) initGitBranchInfoAsync() tea.Cmd {
+	dir := m.rootDir
+	cached := m.gitDefaultBranch
+	return func() tea.Msg {
+		branch := cached
+		if branch == "" {
+			var err error
+			branch, err = git.DefaultBranch(dir)
+			if err != nil {
+				return gitBranchInfoMsg{err: "No base branch found"}
+			}
+		}
+		base, err := git.MergeBase(dir, branch)
+		if err != nil {
+			return gitBranchInfoMsg{
+				defaultBranch: branch,
+				err:           fmt.Sprintf("No merge-base with %s", branch),
+			}
+		}
+		return gitBranchInfoMsg{mergeBase: base, defaultBranch: branch}
+	}
+}
+
+// handleGitBranchInfo processes the async branch info result.
+func (m *Model) handleGitBranchInfo(msg gitBranchInfoMsg) (tea.Model, tea.Cmd) {
+	if msg.defaultBranch != "" {
+		m.gitDefaultBranch = msg.defaultBranch
+	}
+	if msg.err != "" {
+		m.statusMsg = msg.err
+		return m, statusTickCmd()
+	}
+	m.gitMergeBase = msg.mergeBase
+	cmd := m.loadGitChangesForMode(gitModeBranch)
+	return m, cmd
 }
 
 // handleGitChangedFiles processes the result of loading git changed files.
 func (m *Model) handleGitChangedFiles(msg gitChangedFilesMsg) (tea.Model, tea.Cmd) {
+	gs := &m.gitModeState[msg.mode]
 	if msg.err != nil {
 		m.statusMsg = fmt.Sprintf("git diff: %v", msg.err)
-		m.gitLoaded = true
+		gs.loaded = true
+		m.gitAnyLoaded = true
 		return m, statusTickCmd()
 	}
-	m.gitChangedFiles = msg.entries
-	m.gitLoaded = true
-	if m.gitCursor >= len(m.gitChangedFiles) {
-		m.gitCursor = max(0, len(m.gitChangedFiles)-1)
+	gs.entries = msg.entries
+	gs.loaded = true
+	gs.stale = false
+	m.gitAnyLoaded = true
+	if gs.cursor >= len(gs.entries) {
+		gs.cursor = max(0, len(gs.entries)-1)
 	}
 	return m, nil
 }
 
 // openGitDiffEntry opens a diff tab for the selected git changed file.
 func (m *Model) openGitDiffEntry() {
-	if m.gitCursor < 0 || m.gitCursor >= len(m.gitChangedFiles) {
+	gs := m.gitState()
+	if gs.cursor < 0 || gs.cursor >= len(gs.entries) {
 		return
 	}
-	entry := m.gitChangedFiles[m.gitCursor]
+	entry := gs.entries[gs.cursor]
 
 	if entry.binary {
 		m.statusMsg = fmt.Sprintf("Binary file: %s", entry.name)
@@ -77,11 +139,13 @@ func (m *Model) openGitDiffEntry() {
 
 	lo := m.computeLayout()
 	dt := &tab{
-		kind:         diffTab,
-		filePath:     entry.absPath,
-		lines:        newContent,
-		commentInput: newTextarea(),
-		vp:           newViewport(),
+		kind:              diffTab,
+		filePath:          entry.absPath,
+		lines:             newContent,
+		commentInput:      newTextarea(),
+		vp:                newViewport(),
+		gitDiffModeTag:    m.gitDiffMode,
+		hasGitDiffModeTag: true,
 	}
 	dt.vp.SetWidth(lo.editorWidth)
 	dt.vp.SetHeight(lo.contentHeight)
@@ -98,13 +162,15 @@ var gitStatusStyles = map[string]lipgloss.Style{
 	"D": lipgloss.NewStyle().Foreground(lipgloss.Color("1")), // red
 	"M": lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // yellow
 	"R": lipgloss.NewStyle().Foreground(lipgloss.Color("6")), // cyan
+	"?": lipgloss.NewStyle().Foreground(lipgloss.Color("5")), // magenta
 }
 
 // renderGitPanel renders the git changed files list.
 func (m *Model) renderGitPanel(width, height int) []string {
+	gs := m.gitState()
 	lines := make([]string, 0, height)
 
-	if !m.gitLoaded {
+	if !gs.loaded {
 		lines = append(lines, padRight("  Loading...", width))
 		for len(lines) < height {
 			lines = append(lines, padRight("", width))
@@ -112,7 +178,7 @@ func (m *Model) renderGitPanel(width, height int) []string {
 		return lines
 	}
 
-	if len(m.gitChangedFiles) == 0 {
+	if len(gs.entries) == 0 {
 		lines = append(lines, padRight("  No changed files", width))
 		for len(lines) < height {
 			lines = append(lines, padRight("", width))
@@ -120,9 +186,9 @@ func (m *Model) renderGitPanel(width, height int) []string {
 		return lines
 	}
 
-	for i := m.gitScrollOffset; i < len(m.gitChangedFiles) && len(lines) < height; i++ {
-		e := m.gitChangedFiles[i]
-		isCursor := i == m.gitCursor && m.focusPane == paneTree
+	for i := gs.scrollOffset; i < len(gs.entries) && len(lines) < height; i++ {
+		e := gs.entries[i]
+		isCursor := i == gs.cursor && m.focusPane == paneTree
 
 		style := gitStatusStyles[e.status]
 		statusIcon := style.Render(e.status)

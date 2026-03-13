@@ -17,26 +17,28 @@ func TestGitChangedFilesMsg_Populates(t *testing.T) {
 			newContent: []string{"added"}},
 	}
 
-	m.Update(gitChangedFilesMsg{entries: entries})
+	m.Update(gitChangedFilesMsg{mode: gitModeUncommitted, entries: entries})
 
-	if !m.gitLoaded {
-		t.Fatal("expected gitLoaded=true")
+	gs := m.gitState()
+	if !gs.loaded {
+		t.Fatal("expected loaded=true")
 	}
-	if len(m.gitChangedFiles) != 2 {
-		t.Fatalf("expected 2 entries, got %d", len(m.gitChangedFiles))
+	if len(gs.entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(gs.entries))
 	}
-	if m.gitChangedFiles[0].name != "file1.go" {
-		t.Errorf("expected file1.go, got %s", m.gitChangedFiles[0].name)
+	if gs.entries[0].name != "file1.go" {
+		t.Errorf("expected file1.go, got %s", gs.entries[0].name)
 	}
 }
 
 func TestGitChangedFilesMsg_Error(t *testing.T) {
 	m := newTestModel(t)
 
-	m.Update(gitChangedFilesMsg{err: errTest})
+	m.Update(gitChangedFilesMsg{mode: gitModeUncommitted, err: errTest})
 
-	if !m.gitLoaded {
-		t.Fatal("expected gitLoaded=true even on error")
+	gs := m.gitState()
+	if !gs.loaded {
+		t.Fatal("expected loaded=true even on error")
 	}
 	if m.statusMsg == "" {
 		t.Fatal("expected statusMsg to be set on error")
@@ -49,12 +51,19 @@ type testError struct{}
 
 func (e *testError) Error() string { return "test error" }
 
+func setGitEntries(m *Model, entries []changedFileEntry) {
+	gs := m.gitState()
+	gs.entries = entries
+	gs.cursor = 0
+	gs.loaded = true
+}
+
 func TestOpenGitDiffEntry_CreatesDiffTab(t *testing.T) {
 	m := newTestModel(t)
 	m.focusPane = paneTree
 	m.activePanel = panelGitDiff
 
-	m.gitChangedFiles = []changedFileEntry{
+	setGitEntries(m, []changedFileEntry{
 		{
 			name:       "main.go",
 			status:     "M",
@@ -62,8 +71,7 @@ func TestOpenGitDiffEntry_CreatesDiffTab(t *testing.T) {
 			oldContent: []string{"old line"},
 			newContent: []string{"new line"},
 		},
-	}
-	m.gitCursor = 0
+	})
 
 	m.openGitDiffEntry()
 
@@ -80,6 +88,9 @@ func TestOpenGitDiffEntry_CreatesDiffTab(t *testing.T) {
 	if tab.diffViewData == nil {
 		t.Error("expected diffViewData!=nil")
 	}
+	if !tab.hasGitDiffModeTag || tab.gitDiffModeTag != gitModeUncommitted {
+		t.Errorf("expected gitDiffModeTag=gitModeUncommitted, got %d", tab.gitDiffModeTag)
+	}
 	if m.focusPane != paneEditor {
 		t.Errorf("expected focusPane=paneEditor, got %d", m.focusPane)
 	}
@@ -89,10 +100,9 @@ func TestOpenGitDiffEntry_Binary(t *testing.T) {
 	m := newTestModel(t)
 	m.activePanel = panelGitDiff
 
-	m.gitChangedFiles = []changedFileEntry{
+	setGitEntries(m, []changedFileEntry{
 		{name: "image.png", status: "M", absPath: "/tmp/image.png", binary: true},
-	}
-	m.gitCursor = 0
+	})
 
 	m.openGitDiffEntry()
 
@@ -108,7 +118,7 @@ func TestOpenGitDiffEntry_DeletedFile(t *testing.T) {
 	m := newTestModel(t)
 	m.activePanel = panelGitDiff
 
-	m.gitChangedFiles = []changedFileEntry{
+	setGitEntries(m, []changedFileEntry{
 		{
 			name:       "removed.go",
 			status:     "D",
@@ -116,8 +126,7 @@ func TestOpenGitDiffEntry_DeletedFile(t *testing.T) {
 			oldContent: []string{"old line1", "old line2"},
 			newContent: nil,
 		},
-	}
-	m.gitCursor = 0
+	})
 
 	m.openGitDiffEntry()
 
@@ -133,7 +142,7 @@ func TestOpenGitDiffEntry_NewFile(t *testing.T) {
 	m := newTestModel(t)
 	m.activePanel = panelGitDiff
 
-	m.gitChangedFiles = []changedFileEntry{
+	setGitEntries(m, []changedFileEntry{
 		{
 			name:       "new.go",
 			status:     "A",
@@ -141,8 +150,7 @@ func TestOpenGitDiffEntry_NewFile(t *testing.T) {
 			oldContent: nil,
 			newContent: []string{"new line1"},
 		},
-	}
-	m.gitCursor = 0
+	})
 
 	m.openGitDiffEntry()
 
@@ -158,35 +166,36 @@ func TestGitPanelNavigation(t *testing.T) {
 	m := newTestModel(t)
 	m.focusPane = paneTree
 	m.activePanel = panelGitDiff
-	m.gitLoaded = true
-	m.gitChangedFiles = []changedFileEntry{
+
+	setGitEntries(m, []changedFileEntry{
 		{name: "a.go", status: "M"},
 		{name: "b.go", status: "A"},
 		{name: "c.go", status: "D"},
-	}
-	m.gitCursor = 0
+	})
+
+	gs := m.gitState()
 
 	// Down
 	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	if m.gitCursor != 1 {
-		t.Errorf("expected gitCursor=1 after down, got %d", m.gitCursor)
+	if gs.cursor != 1 {
+		t.Errorf("expected cursor=1 after down, got %d", gs.cursor)
 	}
 
 	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	if m.gitCursor != 2 {
-		t.Errorf("expected gitCursor=2 after second down, got %d", m.gitCursor)
+	if gs.cursor != 2 {
+		t.Errorf("expected cursor=2 after second down, got %d", gs.cursor)
 	}
 
 	// Don't go past the end
 	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	if m.gitCursor != 2 {
-		t.Errorf("expected gitCursor=2 (clamped), got %d", m.gitCursor)
+	if gs.cursor != 2 {
+		t.Errorf("expected cursor=2 (clamped), got %d", gs.cursor)
 	}
 
 	// Up
 	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-	if m.gitCursor != 1 {
-		t.Errorf("expected gitCursor=1 after up, got %d", m.gitCursor)
+	if gs.cursor != 1 {
+		t.Errorf("expected cursor=1 after up, got %d", gs.cursor)
 	}
 }
 
@@ -224,7 +233,7 @@ func TestGitDiffView_ScrollWithKeys(t *testing.T) {
 		new_[i] = fmt.Sprintf("new line %d", i)
 	}
 
-	m.gitChangedFiles = []changedFileEntry{
+	setGitEntries(m, []changedFileEntry{
 		{
 			name:       "big.go",
 			status:     "M",
@@ -232,8 +241,7 @@ func TestGitDiffView_ScrollWithKeys(t *testing.T) {
 			oldContent: old,
 			newContent: new_,
 		},
-	}
-	m.gitCursor = 0
+	})
 	m.openGitDiffEntry()
 
 	if len(m.tabs) != 1 {
@@ -277,15 +285,15 @@ func TestOpenGitDiffEntry_DuplicateTab(t *testing.T) {
 	m := newTestModel(t)
 	m.activePanel = panelGitDiff
 
-	entry := changedFileEntry{
-		name:       "main.go",
-		status:     "M",
-		absPath:    "/tmp/main.go",
-		oldContent: []string{"old"},
-		newContent: []string{"new"},
-	}
-	m.gitChangedFiles = []changedFileEntry{entry}
-	m.gitCursor = 0
+	setGitEntries(m, []changedFileEntry{
+		{
+			name:       "main.go",
+			status:     "M",
+			absPath:    "/tmp/main.go",
+			oldContent: []string{"old"},
+			newContent: []string{"new"},
+		},
+	})
 
 	// Open once
 	m.openGitDiffEntry()
@@ -297,5 +305,100 @@ func TestOpenGitDiffEntry_DuplicateTab(t *testing.T) {
 	m.openGitDiffEntry()
 	if len(m.tabs) != 1 {
 		t.Fatalf("expected 1 tab (reused), got %d", len(m.tabs))
+	}
+}
+
+func TestGitDiffModeSwitching(t *testing.T) {
+	m := newTestModel(t)
+	m.focusPane = paneTree
+	m.activePanel = panelGitDiff
+	m.gitState().loaded = true
+
+	if m.gitDiffMode != gitModeUncommitted {
+		t.Fatalf("expected initial mode=gitModeUncommitted, got %d", m.gitDiffMode)
+	}
+
+	// Right: Uncommitted -> Unstaged
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if m.gitDiffMode != gitModeUnstaged {
+		t.Errorf("expected gitModeUnstaged, got %d", m.gitDiffMode)
+	}
+
+	// Left: Unstaged -> Uncommitted
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if m.gitDiffMode != gitModeUncommitted {
+		t.Errorf("expected gitModeUncommitted, got %d", m.gitDiffMode)
+	}
+
+	// Left wraps: Uncommitted -> Branch
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	// Branch mode may fail to init merge-base (no git repo), so it stays on Branch
+	// but may show an error. The mode should still have changed.
+	if m.gitDiffMode != gitModeBranch {
+		t.Errorf("expected gitModeBranch (wrap), got %d", m.gitDiffMode)
+	}
+}
+
+func TestGitDiffModePerModeState(t *testing.T) {
+	m := newTestModel(t)
+	m.focusPane = paneTree
+	m.activePanel = panelGitDiff
+
+	// Set up state for uncommitted mode
+	setGitEntries(m, []changedFileEntry{
+		{name: "a.go", status: "M"},
+		{name: "b.go", status: "A"},
+	})
+	gs := m.gitState()
+	gs.cursor = 1
+
+	// Switch to unstaged
+	m.gitDiffMode = gitModeUnstaged
+	setGitEntries(m, []changedFileEntry{
+		{name: "c.go", status: "M"},
+	})
+
+	// Switch back to uncommitted
+	m.gitDiffMode = gitModeUncommitted
+	gs = m.gitState()
+	if gs.cursor != 1 {
+		t.Errorf("expected cursor=1 preserved, got %d", gs.cursor)
+	}
+	if len(gs.entries) != 2 {
+		t.Errorf("expected 2 entries preserved, got %d", len(gs.entries))
+	}
+}
+
+func TestGitDiffModeLabel(t *testing.T) {
+	tests := []struct {
+		mode gitDiffMode
+		want string
+	}{
+		{gitModeUncommitted, "Uncommitted"},
+		{gitModeUnstaged, "Unstaged"},
+		{gitModeStaged, "Staged"},
+		{gitModeBranch, "Branch"},
+	}
+	for _, tt := range tests {
+		if got := tt.mode.label(); got != tt.want {
+			t.Errorf("gitDiffMode(%d).label() = %q, want %q", tt.mode, got, tt.want)
+		}
+	}
+}
+
+func TestGitDiffModeTabPrefix(t *testing.T) {
+	tests := []struct {
+		mode gitDiffMode
+		want string
+	}{
+		{gitModeUncommitted, "[uncommit]"},
+		{gitModeUnstaged, "[unstaged]"},
+		{gitModeStaged, "[staged]"},
+		{gitModeBranch, "[branch]"},
+	}
+	for _, tt := range tests {
+		if got := tt.mode.tabPrefix(); got != tt.want {
+			t.Errorf("gitDiffMode(%d).tabPrefix() = %q, want %q", tt.mode, got, tt.want)
+		}
 	}
 }

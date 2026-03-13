@@ -38,8 +38,10 @@ type tab struct {
 	inputStart   int
 	inputEnd     int
 
-	diff         *diffState // non-nil for diff review tabs
-	diffViewData *diffData  // side-by-side diff data (nil for file tabs)
+	diff              *diffState  // non-nil for diff review tabs
+	diffViewData      *diffData   // side-by-side diff data (nil for file tabs)
+	gitDiffModeTag    gitDiffMode // diff mode for git diff tabs
+	hasGitDiffModeTag bool        // true if opened from git panel
 
 	// diff render cache (invalidated on width/theme change)
 	diffCachedLines []string // pre-rendered visual lines (same as viewport content)

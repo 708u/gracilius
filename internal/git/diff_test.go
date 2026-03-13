@@ -224,3 +224,206 @@ func TestChangedFiles_EmptyRepo(t *testing.T) {
 		t.Fatalf("expected 0 files, got %d", len(files))
 	}
 }
+
+func TestDiffUncommitted_StagedAndUnstaged(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, dir, "a.txt", "line1\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "init")
+
+	// Staged change
+	writeFile(t, dir, "a.txt", "line1\nline2\n")
+	run(t, dir, "git", "add", "a.txt")
+
+	// Unstaged change on top
+	writeFile(t, dir, "a.txt", "line1\nline2\nline3\n")
+
+	files, err := ChangedFilesWithOptions(dir, DiffOptions{Mode: DiffUncommitted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	f := files[0]
+	if f.Status != "M" {
+		t.Fatalf("expected status M, got %s", f.Status)
+	}
+	// Old should be HEAD content ("line1"), new should be working tree ("line1\nline2\nline3")
+	if len(f.OldContent) != 1 || f.OldContent[0] != "line1" {
+		t.Fatalf("unexpected old content: %v", f.OldContent)
+	}
+	if len(f.NewContent) != 3 {
+		t.Fatalf("expected 3 lines in new, got %d", len(f.NewContent))
+	}
+}
+
+func TestDiffStaged(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, dir, "a.txt", "original\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "init")
+
+	writeFile(t, dir, "a.txt", "modified\n")
+	run(t, dir, "git", "add", "a.txt")
+
+	files, err := ChangedFilesWithOptions(dir, DiffOptions{Mode: DiffStaged})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	f := files[0]
+	if f.Status != "M" {
+		t.Fatalf("expected status M, got %s", f.Status)
+	}
+	if len(f.OldContent) != 1 || f.OldContent[0] != "original" {
+		t.Fatalf("unexpected old (HEAD) content: %v", f.OldContent)
+	}
+	if len(f.NewContent) != 1 || f.NewContent[0] != "modified" {
+		t.Fatalf("unexpected new (index) content: %v", f.NewContent)
+	}
+}
+
+func TestDiffBranch(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, dir, "a.txt", "base\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "init")
+	run(t, dir, "git", "branch", "main")
+
+	run(t, dir, "git", "checkout", "-b", "feature")
+	writeFile(t, dir, "a.txt", "feature\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "feature change")
+
+	base, err := MergeBase(dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := ChangedFilesWithOptions(dir, DiffOptions{
+		Mode:    DiffBranch,
+		BaseRef: base,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	f := files[0]
+	if f.OldContent[0] != "base" {
+		t.Fatalf("expected old=base, got %v", f.OldContent)
+	}
+	if f.NewContent[0] != "feature" {
+		t.Fatalf("expected new=feature, got %v", f.NewContent)
+	}
+}
+
+func TestUntrackedFiles(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, dir, "tracked.txt", "tracked\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "init")
+
+	writeFile(t, dir, "untracked.txt", "new\n")
+
+	paths, err := UntrackedFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 {
+		t.Fatalf("expected 1 untracked, got %d", len(paths))
+	}
+	if paths[0] != "untracked.txt" {
+		t.Fatalf("expected untracked.txt, got %s", paths[0])
+	}
+}
+
+func TestUntrackedFiles_IncludedInUncommitted(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, dir, "tracked.txt", "tracked\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "init")
+
+	writeFile(t, dir, "newfile.txt", "new content\n")
+
+	files, err := ChangedFilesWithOptions(dir, DiffOptions{Mode: DiffUncommitted})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found := false
+	for _, f := range files {
+		if f.Path == "newfile.txt" && f.Status == "?" {
+			found = true
+			if f.NewContent == nil || f.NewContent[0] != "new content" {
+				t.Fatalf("unexpected content for untracked: %v", f.NewContent)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected untracked file in uncommitted diff")
+	}
+}
+
+func TestDefaultBranch(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, dir, "a.txt", "a\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "init")
+	run(t, dir, "git", "branch", "-m", "main")
+
+	branch, err := DefaultBranch(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if branch != "main" {
+		t.Fatalf("expected main, got %s", branch)
+	}
+}
+
+func TestMergeBase(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, dir, "a.txt", "a\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "init")
+	run(t, dir, "git", "branch", "main")
+
+	run(t, dir, "git", "checkout", "-b", "feature")
+	writeFile(t, dir, "b.txt", "b\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "feature")
+
+	base, err := MergeBase(dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base == "" {
+		t.Fatal("expected non-empty merge-base")
+	}
+}
+
+func TestDiffUncommitted_EmptyRepo(t *testing.T) {
+	dir := initRepo(t)
+
+	// No commits, DiffUncommitted should return nil (not error)
+	files, err := ChangedFilesWithOptions(dir, DiffOptions{Mode: DiffUncommitted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("expected nil or empty files, got %d", len(files))
+	}
+}
+
+func TestDiffBranch_MissingBaseRef(t *testing.T) {
+	dir := initRepo(t)
+
+	_, err := ChangedFilesWithOptions(dir, DiffOptions{Mode: DiffBranch})
+	if err == nil {
+		t.Fatal("expected error for missing BaseRef")
+	}
+}
