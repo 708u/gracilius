@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/708u/gracilius/internal/config"
 	"github.com/708u/gracilius/internal/protocol"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -94,16 +95,15 @@ type selectionChange struct {
 	endChar   int
 }
 
-// loadOrCreateToken loads an existing token from ~/.gracilius/token or creates a new one.
+// loadOrCreateToken loads an existing token from ~/.config/gracilius/token or creates a new one.
 func loadOrCreateToken() string {
-	homeDir, err := os.UserHomeDir()
+	dataDir, err := config.DataDir()
 	if err != nil {
-		log.Printf("Failed to get home directory, using new token: %v", err)
+		log.Printf("Failed to get data directory, using new token: %v", err)
 		return uuid.New().String()
 	}
 
-	graciliusDir := filepath.Join(homeDir, ".gracilius")
-	tokenPath := filepath.Join(graciliusDir, "token")
+	tokenPath := filepath.Join(dataDir, "token")
 
 	// Try to read existing token
 	data, err := os.ReadFile(tokenPath)
@@ -119,8 +119,8 @@ func loadOrCreateToken() string {
 	token := uuid.New().String()
 
 	// Ensure directory exists
-	if err := os.MkdirAll(graciliusDir, 0700); err != nil {
-		log.Printf("Failed to create directory %s: %v", graciliusDir, err)
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		log.Printf("Failed to create directory %s: %v", dataDir, err)
 		return token
 	}
 
