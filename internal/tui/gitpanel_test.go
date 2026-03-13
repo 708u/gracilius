@@ -2,22 +2,32 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/708u/gracilius/internal/git"
 )
 
+// fillPathFields populates baseName/dirName for test entries.
+func fillPathFields(entries []changedFileEntry) []changedFileEntry {
+	for i := range entries {
+		entries[i].baseName = filepath.Base(entries[i].name)
+		entries[i].dirName = filepath.Dir(entries[i].name)
+	}
+	return entries
+}
+
 func TestGitChangedFilesMsg_Populates(t *testing.T) {
 	m := newTestModel(t)
 
-	entries := []changedFileEntry{
+	entries := fillPathFields([]changedFileEntry{
 		{name: "file1.go", status: git.StatusModified, absPath: "/tmp/file1.go",
 			oldContent: []string{"old"}, newContent: []string{"new"},
 			category: categoryUnstaged},
 		{name: "file2.go", status: git.StatusAdded, absPath: "/tmp/file2.go",
 			newContent: []string{"added"}, category: categoryUnstaged},
-	}
+	})
 
 	m.Update(gitChangedFilesMsg{mode: gitModeWorking, entries: entries})
 
@@ -58,6 +68,7 @@ type testError struct{}
 func (e *testError) Error() string { return "test error" }
 
 func setGitEntries(m *Model, entries []changedFileEntry) {
+	fillPathFields(entries)
 	gs := m.gitState()
 	gs.entries = entries
 	gs.visualRows, gs.entryToVisualIdx = buildGitVisualRows(entries)
@@ -289,11 +300,11 @@ func TestGitDiffView_ScrollWithKeys(t *testing.T) {
 }
 
 func TestBuildGitVisualRows(t *testing.T) {
-	entries := []changedFileEntry{
+	entries := fillPathFields([]changedFileEntry{
 		{name: "staged.go", status: git.StatusModified, category: categoryStaged},
 		{name: "unstaged.go", status: git.StatusModified, category: categoryUnstaged},
 		{name: "untracked.go", status: git.StatusUntracked, category: categoryUntracked},
-	}
+	})
 	rows, reverseMap := buildGitVisualRows(entries)
 
 	// 3 headers + 3 files = 6 rows
@@ -326,9 +337,9 @@ func TestBuildGitVisualRows(t *testing.T) {
 }
 
 func TestBuildGitVisualRows_EmptySection(t *testing.T) {
-	entries := []changedFileEntry{
+	entries := fillPathFields([]changedFileEntry{
 		{name: "a.go", status: git.StatusModified, category: categoryUnstaged},
-	}
+	})
 	rows, _ := buildGitVisualRows(entries)
 	// Only unstaged: 1 header + 1 file
 	if len(rows) != 2 {
@@ -362,11 +373,11 @@ func TestGitCursorHelpers(t *testing.T) {
 func TestGitChangedFilesMsg_Categories(t *testing.T) {
 	m := newTestModel(t)
 
-	entries := []changedFileEntry{
+	entries := fillPathFields([]changedFileEntry{
 		{name: "staged.go", status: git.StatusModified, category: categoryStaged},
 		{name: "unstaged.go", status: git.StatusModified, category: categoryUnstaged},
 		{name: "new.txt", status: git.StatusUntracked, category: categoryUntracked},
-	}
+	})
 
 	m.Update(gitChangedFilesMsg{mode: gitModeWorking, entries: entries})
 
@@ -477,6 +488,137 @@ func TestGitDiffModeLabel(t *testing.T) {
 	for _, tt := range tests {
 		if got := tt.mode.label(tt.defaultBranch); got != tt.want {
 			t.Errorf("gitDiffMode(%d).label(%q) = %q, want %q", tt.mode, tt.defaultBranch, got, tt.want)
+		}
+	}
+}
+
+func TestBuildGitVisualRows_DirGrouping(t *testing.T) {
+	entries := fillPathFields([]changedFileEntry{
+		{name: "internal/git/diff.go", status: git.StatusModified, category: categoryUnstaged},
+		{name: "internal/git/status.go", status: git.StatusModified, category: categoryUnstaged},
+		{name: "internal/tui/model.go", status: git.StatusModified, category: categoryUnstaged},
+	})
+	rows, reverseMap := buildGitVisualRows(entries)
+
+	// 1 category header + 2 dir headers + 3 files = 6 rows
+	if len(rows) != 6 {
+		t.Fatalf("expected 6 rows, got %d", len(rows))
+	}
+	if !rows[0].isHeader {
+		t.Error("row 0: expected category header")
+	}
+	if !rows[1].isDirHeader || rows[1].label != "    internal/git/" {
+		t.Errorf("row 1: expected dir header 'internal/git/', got %q (isDirHeader=%v)",
+			rows[1].label, rows[1].isDirHeader)
+	}
+	if !rows[2].isFileRow() || rows[2].entryIdx != 0 {
+		t.Errorf("row 2: expected file entry 0, got entryIdx=%d", rows[2].entryIdx)
+	}
+	if !rows[3].isFileRow() || rows[3].entryIdx != 1 {
+		t.Errorf("row 3: expected file entry 1, got entryIdx=%d", rows[3].entryIdx)
+	}
+	if !rows[4].isDirHeader || rows[4].label != "    internal/tui/" {
+		t.Errorf("row 4: expected dir header 'internal/tui/', got %q", rows[4].label)
+	}
+	if !rows[5].isFileRow() || rows[5].entryIdx != 2 {
+		t.Errorf("row 5: expected file entry 2, got entryIdx=%d", rows[5].entryIdx)
+	}
+
+	// Verify reverse map points to file rows
+	if reverseMap[0] != 2 {
+		t.Errorf("expected reverseMap[0]=2, got %d", reverseMap[0])
+	}
+	if reverseMap[1] != 3 {
+		t.Errorf("expected reverseMap[1]=3, got %d", reverseMap[1])
+	}
+	if reverseMap[2] != 5 {
+		t.Errorf("expected reverseMap[2]=5, got %d", reverseMap[2])
+	}
+}
+
+func TestBuildGitVisualRows_MixedRootAndDir(t *testing.T) {
+	entries := fillPathFields([]changedFileEntry{
+		{name: "go.mod", status: git.StatusModified, category: categoryUnstaged},
+		{name: "internal/tui/model.go", status: git.StatusModified, category: categoryUnstaged},
+	})
+	rows, _ := buildGitVisualRows(entries)
+
+	// 1 category header + 0 dir header (root) + 1 file + 1 dir header + 1 file = 4 rows
+	if len(rows) != 4 {
+		t.Fatalf("expected 4 rows, got %d", len(rows))
+	}
+	// Row 0: category header
+	if !rows[0].isHeader {
+		t.Error("row 0: expected category header")
+	}
+	// Row 1: root file (no dir header)
+	if !rows[1].isFileRow() || rows[1].entryIdx != 0 {
+		t.Errorf("row 1: expected root file entry 0, got entryIdx=%d", rows[1].entryIdx)
+	}
+	// Row 2: dir header for internal/tui
+	if !rows[2].isDirHeader {
+		t.Errorf("row 2: expected dir header, got isHeader=%v isDirHeader=%v",
+			rows[2].isHeader, rows[2].isDirHeader)
+	}
+	// Row 3: file under internal/tui
+	if !rows[3].isFileRow() || rows[3].entryIdx != 1 {
+		t.Errorf("row 3: expected file entry 1, got entryIdx=%d", rows[3].entryIdx)
+	}
+}
+
+func TestBuildGitVisualRows_DirGroupingMultiCategory(t *testing.T) {
+	entries := fillPathFields([]changedFileEntry{
+		{name: "internal/git/diff.go", status: git.StatusModified, category: categoryStaged},
+		{name: "internal/git/status.go", status: git.StatusModified, category: categoryUnstaged},
+	})
+	rows, _ := buildGitVisualRows(entries)
+
+	// Staged: 1 cat header + 1 dir header + 1 file = 3
+	// Unstaged: 1 cat header + 1 dir header + 1 file = 3
+	// Total: 6
+	if len(rows) != 6 {
+		t.Fatalf("expected 6 rows, got %d", len(rows))
+	}
+	// Same directory appears in both categories
+	if !rows[1].isDirHeader || rows[1].label != "    internal/git/" {
+		t.Errorf("row 1: expected staged dir header, got %q", rows[1].label)
+	}
+	if !rows[4].isDirHeader || rows[4].label != "    internal/git/" {
+		t.Errorf("row 4: expected unstaged dir header, got %q", rows[4].label)
+	}
+}
+
+func TestGitCursorHelpers_WithDirHeaders(t *testing.T) {
+	rows := []gitVisualRow{
+		{isHeader: true, label: "Changes"},
+		{isDirHeader: true, label: "internal/git/"},
+		{entryIdx: 0},
+		{isDirHeader: true, label: "internal/tui/"},
+		{entryIdx: 1},
+		{entryIdx: 2},
+	}
+
+	if got := firstGitEntryIdx(rows); got != 0 {
+		t.Errorf("expected firstGitEntryIdx=0, got %d", got)
+	}
+	if got := lastGitEntryIdx(rows); got != 2 {
+		t.Errorf("expected lastGitEntryIdx=2, got %d", got)
+	}
+}
+
+func TestGitVisualRow_IsFileRow(t *testing.T) {
+	tests := []struct {
+		name string
+		row  gitVisualRow
+		want bool
+	}{
+		{"file row", gitVisualRow{entryIdx: 0}, true},
+		{"category header", gitVisualRow{isHeader: true}, false},
+		{"dir header", gitVisualRow{isDirHeader: true}, false},
+	}
+	for _, tt := range tests {
+		if got := tt.row.isFileRow(); got != tt.want {
+			t.Errorf("%s: isFileRow() = %v, want %v", tt.name, got, tt.want)
 		}
 	}
 }

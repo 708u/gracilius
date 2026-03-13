@@ -66,7 +66,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 			rowIdx := msg.Y - contentStartY + gs.scrollOffset
 			if rowIdx >= 0 && rowIdx < len(gs.visualRows) {
 				row := gs.visualRows[rowIdx]
-				if !row.isHeader {
+				if row.isFileRow() {
 					gs.cursor = row.entryIdx
 					m.openGitDiffEntry()
 				}

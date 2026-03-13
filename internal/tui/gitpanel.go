@@ -18,6 +18,8 @@ func toEntries(dir string, files []git.ChangedFile, cat fileCategory) []changedF
 	for i, f := range files {
 		entries[i] = changedFileEntry{
 			name:       f.Path,
+			baseName:   filepath.Base(f.Path),
+			dirName:    filepath.Dir(f.Path),
 			status:     f.Status,
 			absPath:    filepath.Join(dir, f.Path),
 			oldContent: f.OldContent,
@@ -154,7 +156,8 @@ func (m *Model) handleGitChangedFiles(msg gitChangedFilesMsg) (tea.Model, tea.Cm
 }
 
 // buildGitVisualRows builds a flat list of visual rows
-// with category headers inserted between sections.
+// with category headers and directory grouping.
+// Hierarchy: Category > Directory > File.
 // Also returns a reverse map from entryIdx to visual row index.
 func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int) {
 	type section struct {
@@ -178,8 +181,16 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 		}
 	}
 
+	type dirGroup struct {
+		dir     string
+		indices []int
+	}
+
 	var rows []gitVisualRow
 	reverseMap := make(map[int]int)
+	var dirs []dirGroup
+	dirIdx := map[string]int{} // dir -> index in dirs slice
+
 	for _, sec := range sections {
 		if len(sec.indices) == 0 {
 			continue
@@ -188,9 +199,32 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 			isHeader: true,
 			label:    fmt.Sprintf("  %s (%d)", sec.label, len(sec.indices)),
 		})
+
+		// Group entries by directory, preserving order of first appearance.
+		dirs = dirs[:0]
+		clear(dirIdx)
 		for _, idx := range sec.indices {
-			reverseMap[idx] = len(rows)
-			rows = append(rows, gitVisualRow{entryIdx: idx})
+			d := entries[idx].dirName
+			if i, ok := dirIdx[d]; ok {
+				dirs[i].indices = append(dirs[i].indices, idx)
+			} else {
+				dirIdx[d] = len(dirs)
+				dirs = append(dirs, dirGroup{dir: d, indices: []int{idx}})
+			}
+		}
+
+		for _, dg := range dirs {
+			// Skip directory header for root-level files.
+			if dg.dir != "." {
+				rows = append(rows, gitVisualRow{
+					isDirHeader: true,
+					label:       "    " + dg.dir + "/",
+				})
+			}
+			for _, idx := range dg.indices {
+				reverseMap[idx] = len(rows)
+				rows = append(rows, gitVisualRow{entryIdx: idx})
+			}
 		}
 	}
 	return rows, reverseMap
@@ -266,6 +300,9 @@ var gitStatusStyles = map[git.FileStatus]lipgloss.Style{
 // styleCategoryHeader is the style for category header lines.
 var styleCategoryHeader = lipgloss.NewStyle().Bold(true)
 
+// styleDirHeader is the style for directory header lines.
+var styleDirHeader = lipgloss.NewStyle().Faint(true)
+
 // renderGitPanel renders the git changed files list.
 func (m *Model) renderGitPanel(width, height int) []string {
 	gs := m.gitState()
@@ -297,12 +334,25 @@ func (m *Model) renderGitPanel(width, height int) []string {
 			continue
 		}
 
+		if row.isDirHeader {
+			dirLine := styleDirHeader.Render(row.label)
+			dirLine = padRight(dirLine, width)
+			lines = append(lines, dirLine)
+			continue
+		}
+
 		e := gs.entries[row.entryIdx]
 		isCursor := row.entryIdx == gs.cursor && m.focusPane == paneTree
 
 		style := gitStatusStyles[e.status]
 		statusIcon := style.Render(e.status.String())
-		line := "    " + statusIcon + " " + e.name
+		// Show only the filename; directory is shown in the dir header above.
+		indent := "      "
+		// Root-level files (no dir header) use less indentation.
+		if e.dirName == "." {
+			indent = "    "
+		}
+		line := indent + statusIcon + " " + e.baseName
 		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)
 
@@ -347,20 +397,20 @@ func (m *Model) gitCursorVisualIdx() int {
 	return 0
 }
 
-// firstGitEntryIdx returns the entryIdx of the first non-header row.
+// firstGitEntryIdx returns the entryIdx of the first file row.
 func firstGitEntryIdx(rows []gitVisualRow) int {
 	for _, row := range rows {
-		if !row.isHeader {
+		if row.isFileRow() {
 			return row.entryIdx
 		}
 	}
 	return 0
 }
 
-// lastGitEntryIdx returns the entryIdx of the last non-header row.
+// lastGitEntryIdx returns the entryIdx of the last file row.
 func lastGitEntryIdx(rows []gitVisualRow) int {
 	for i := len(rows) - 1; i >= 0; i-- {
-		if !rows[i].isHeader {
+		if rows[i].isFileRow() {
 			return rows[i].entryIdx
 		}
 	}
