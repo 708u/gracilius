@@ -26,7 +26,7 @@ func TestScanDir_SymlinkToDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entries := scanDir(tmp, 0, nil)
+	entries := scanDir(tmp, 0, nil, nil)
 
 	// Both realdir and linkdir should appear as directories.
 	dirCount := 0
@@ -81,7 +81,7 @@ func TestScanDir_SymlinkToFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entries := scanDir(tmp, 0, nil)
+	entries := scanDir(tmp, 0, nil, nil)
 
 	// Both should appear as files.
 	fileCount := 0
@@ -112,7 +112,7 @@ func TestScanDir_BrokenSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entries := scanDir(tmp, 0, nil)
+	entries := scanDir(tmp, 0, nil, nil)
 
 	// Broken symlink should be skipped; only valid.txt remains.
 	if len(entries) != 1 {

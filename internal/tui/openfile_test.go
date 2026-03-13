@@ -20,7 +20,7 @@ func TestScanAllFiles(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "a.go"), []byte("package a"), 0o644)
 	os.WriteFile(filepath.Join(dir, "sub", "b.txt"), []byte("hello"), 0o644)
 
-	items := scanAllFiles(dir)
+	items := scanAllFiles(dir, nil)
 
 	paths := make(map[string]bool)
 	for _, fi := range items {
@@ -57,7 +57,7 @@ func TestScanAllFiles_ExcludesHidden(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "node_modules", "pkg.js"), []byte("module.exports"), 0o644)
 	os.WriteFile(filepath.Join(dir, ".hidden_file"), []byte("secret"), 0o644)
 
-	items := scanAllFiles(dir)
+	items := scanAllFiles(dir, nil)
 
 	paths := make(map[string]bool)
 	for _, fi := range items {

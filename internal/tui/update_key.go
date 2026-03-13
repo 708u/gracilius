@@ -428,7 +428,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.GoTop):
 		m.gPending = true
 	case key.Matches(msg, m.keys.OpenFile):
-		return m, m.openFile.open(m.rootDir)
+		return m, m.openFile.open(m.rootDir, m.excludeFunc)
 	}
 
 	m.adjustScroll()

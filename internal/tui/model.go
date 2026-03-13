@@ -179,6 +179,9 @@ type Model struct {
 	gitScrollOffset     int
 	gitLoaded           bool
 	gitSyncGen          int // generation counter for debounced git sync
+
+	// file exclusion (gitignore-based when available)
+	excludeFunc ExcludeFunc
 }
 
 // gitChangedFilesMsg carries the result of loading git changed files.
@@ -271,7 +274,7 @@ func (m *Model) toggleTreeEntry(idx int) {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher, gitIndexWatcher *fsnotify.Watcher) (*Model, error) {
+func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher, gitIndexWatcher *fsnotify.Watcher, exclude ExcludeFunc) (*Model, error) {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root directory: %w", err)
@@ -301,5 +304,6 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 		commentRepo:     store,
 		commentWatcher:  commentWatcher,
 		gitIndexWatcher: gitIndexWatcher,
+		excludeFunc:     exclude,
 	}, nil
 }
