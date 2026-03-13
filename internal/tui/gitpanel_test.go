@@ -19,7 +19,7 @@ func TestGitChangedFilesMsg_Populates(t *testing.T) {
 			newContent: []string{"added"}, category: categoryUnstaged},
 	}
 
-	m.Update(gitChangedFilesMsg{mode: gitModeUncommitted, entries: entries})
+	m.Update(gitChangedFilesMsg{mode: gitModeWorking, entries: entries})
 
 	gs := m.gitState()
 	if !gs.loaded {
@@ -40,7 +40,7 @@ func TestGitChangedFilesMsg_Populates(t *testing.T) {
 func TestGitChangedFilesMsg_Error(t *testing.T) {
 	m := newTestModel(t)
 
-	m.Update(gitChangedFilesMsg{mode: gitModeUncommitted, err: errTest})
+	m.Update(gitChangedFilesMsg{mode: gitModeWorking, err: errTest})
 
 	gs := m.gitState()
 	if !gs.loaded {
@@ -95,8 +95,8 @@ func TestOpenGitDiffEntry_CreatesDiffTab(t *testing.T) {
 	if tab.diffViewData == nil {
 		t.Error("expected diffViewData!=nil")
 	}
-	if !tab.hasGitDiffModeTag || tab.gitDiffModeTag != gitModeUncommitted {
-		t.Errorf("expected gitDiffModeTag=gitModeUncommitted, got %d", tab.gitDiffModeTag)
+	if !tab.hasGitDiffModeTag || tab.gitDiffModeTag != gitModeWorking {
+		t.Errorf("expected gitDiffModeTag=gitModeWorking, got %d", tab.gitDiffModeTag)
 	}
 	if m.focusPane != paneEditor {
 		t.Errorf("expected focusPane=paneEditor, got %d", m.focusPane)
@@ -368,7 +368,7 @@ func TestGitChangedFilesMsg_Categories(t *testing.T) {
 		{name: "new.txt", status: git.StatusUntracked, category: categoryUntracked},
 	}
 
-	m.Update(gitChangedFilesMsg{mode: gitModeUncommitted, entries: entries})
+	m.Update(gitChangedFilesMsg{mode: gitModeWorking, entries: entries})
 
 	gs := m.gitState()
 	if len(gs.visualRows) != 6 {
@@ -410,28 +410,26 @@ func TestGitDiffModeSwitching(t *testing.T) {
 	m.activePanel = panelGitDiff
 	m.gitState().loaded = true
 
-	if m.gitDiffMode != gitModeUncommitted {
-		t.Fatalf("expected initial mode=gitModeUncommitted, got %d", m.gitDiffMode)
+	if m.gitDiffMode != gitModeWorking {
+		t.Fatalf("expected initial mode=gitModeWorking, got %d", m.gitDiffMode)
 	}
 
-	// Right: Uncommitted -> Unstaged
+	// Right: Working -> Branch
 	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
-	if m.gitDiffMode != gitModeUnstaged {
-		t.Errorf("expected gitModeUnstaged, got %d", m.gitDiffMode)
-	}
-
-	// Left: Unstaged -> Uncommitted
-	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
-	if m.gitDiffMode != gitModeUncommitted {
-		t.Errorf("expected gitModeUncommitted, got %d", m.gitDiffMode)
-	}
-
-	// Left wraps: Uncommitted -> Branch
-	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
-	// Branch mode may fail to init merge-base (no git repo), so it stays on Branch
-	// but may show an error. The mode should still have changed.
 	if m.gitDiffMode != gitModeBranch {
-		t.Errorf("expected gitModeBranch (wrap), got %d", m.gitDiffMode)
+		t.Errorf("expected gitModeBranch, got %d", m.gitDiffMode)
+	}
+
+	// Right wraps: Branch -> Working
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if m.gitDiffMode != gitModeWorking {
+		t.Errorf("expected gitModeWorking (wrap), got %d", m.gitDiffMode)
+	}
+
+	// Left wraps: Working -> Branch
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if m.gitDiffMode != gitModeBranch {
+		t.Errorf("expected gitModeBranch (wrap left), got %d", m.gitDiffMode)
 	}
 }
 
@@ -440,7 +438,7 @@ func TestGitDiffModePerModeState(t *testing.T) {
 	m.focusPane = paneTree
 	m.activePanel = panelGitDiff
 
-	// Set up state for uncommitted mode
+	// Set up state for Working mode
 	setGitEntries(m, []changedFileEntry{
 		{name: "a.go", status: git.StatusModified, category: categoryUnstaged},
 		{name: "b.go", status: git.StatusAdded, category: categoryUnstaged},
@@ -448,14 +446,14 @@ func TestGitDiffModePerModeState(t *testing.T) {
 	gs := m.gitState()
 	gs.cursor = 1
 
-	// Switch to unstaged
-	m.gitDiffMode = gitModeUnstaged
+	// Switch to Branch
+	m.gitDiffMode = gitModeBranch
 	setGitEntries(m, []changedFileEntry{
 		{name: "c.go", status: git.StatusModified, category: categoryUnstaged},
 	})
 
-	// Switch back to uncommitted
-	m.gitDiffMode = gitModeUncommitted
+	// Switch back to Working
+	m.gitDiffMode = gitModeWorking
 	gs = m.gitState()
 	if gs.cursor != 1 {
 		t.Errorf("expected cursor=1 preserved, got %d", gs.cursor)
@@ -470,9 +468,7 @@ func TestGitDiffModeLabel(t *testing.T) {
 		mode gitDiffMode
 		want string
 	}{
-		{gitModeUncommitted, "Uncommitted"},
-		{gitModeUnstaged, "Unstaged"},
-		{gitModeStaged, "Staged"},
+		{gitModeWorking, "Working"},
 		{gitModeBranch, "Branch"},
 	}
 	for _, tt := range tests {
@@ -487,9 +483,7 @@ func TestGitDiffModeTabPrefix(t *testing.T) {
 		mode gitDiffMode
 		want string
 	}{
-		{gitModeUncommitted, "[uncommit]"},
-		{gitModeUnstaged, "[unstaged]"},
-		{gitModeStaged, "[staged]"},
+		{gitModeWorking, "[working]"},
 		{gitModeBranch, "[branch]"},
 	}
 	for _, tt := range tests {

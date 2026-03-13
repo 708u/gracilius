@@ -316,6 +316,6 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 		commentRepo:    store,
 		commentWatcher: commentWatcher,
 		gitDirWatcher:  gitDirWatcher,
-		gitDiffMode:    gitModeUncommitted,
+		gitDiffMode:    gitModeWorking,
 	}, nil
 }

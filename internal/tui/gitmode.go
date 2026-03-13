@@ -6,42 +6,32 @@ import tea "charm.land/bubbletea/v2"
 type gitDiffMode int
 
 const (
-	gitModeUncommitted gitDiffMode = iota
-	gitModeUnstaged
-	gitModeStaged
-	gitModeBranch
+	gitModeWorking gitDiffMode = iota // staged/unstaged/untracked with categories
+	gitModeBranch                     // merge-base(default-branch)..HEAD
 	gitDiffModeCount
 )
 
 // label returns the display name for the diff mode.
 func (m gitDiffMode) label() string {
 	switch m {
-	case gitModeUncommitted:
-		return "Uncommitted"
-	case gitModeUnstaged:
-		return "Unstaged"
-	case gitModeStaged:
-		return "Staged"
+	case gitModeWorking:
+		return "Working"
 	case gitModeBranch:
 		return "Branch"
 	default:
-		return "Uncommitted"
+		return "Working"
 	}
 }
 
 // tabPrefix returns the bracketed prefix for diff tab labels.
 func (m gitDiffMode) tabPrefix() string {
 	switch m {
-	case gitModeUncommitted:
-		return "[uncommit]"
-	case gitModeUnstaged:
-		return "[unstaged]"
-	case gitModeStaged:
-		return "[staged]"
+	case gitModeWorking:
+		return "[working]"
 	case gitModeBranch:
 		return "[branch]"
 	default:
-		return "[diff]"
+		return "[working]"
 	}
 }
 

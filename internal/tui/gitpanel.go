@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -31,66 +32,63 @@ func toEntries(dir string, files []git.ChangedFile, cat fileCategory) []changedF
 // for the given diff mode.
 func (m *Model) loadGitChangesForMode(mode gitDiffMode) tea.Cmd {
 	dir := m.rootDir
-	opts := m.diffOptionsForMode(mode)
-	return func() tea.Msg {
-		if mode == gitModeUncommitted {
-			// For Uncommitted mode, use StatusReader to get
-			// staged + unstaged + untracked with categories.
+	switch mode {
+	case gitModeBranch:
+		baseRef := m.gitMergeBase
+		return func() tea.Msg {
+			files, err := git.ChangedFilesWithOptions(dir, git.DiffOptions{
+				Mode:    git.DiffBranch,
+				BaseRef: baseRef,
+			})
+			if err != nil {
+				return gitChangedFilesMsg{mode: mode, err: err}
+			}
+			entries := toEntries(dir, files, categoryUnstaged)
+			return gitChangedFilesMsg{mode: mode, entries: entries}
+		}
+	default: // gitModeWorking
+		return func() tea.Msg {
 			reader, err := git.NewStatusReader(dir)
 			if err != nil {
 				return gitChangedFilesMsg{mode: mode, err: err}
 			}
 
+			type catResult struct {
+				files []git.ChangedFile
+				cat   fileCategory
+				err   error
+			}
+
+			results := make([]catResult, 3)
+			var wg sync.WaitGroup
+			wg.Add(3)
+			go func() {
+				defer wg.Done()
+				f, e := reader.StagedFiles()
+				results[0] = catResult{f, categoryStaged, e}
+			}()
+			go func() {
+				defer wg.Done()
+				f, e := reader.ChangedFiles()
+				results[1] = catResult{f, categoryUnstaged, e}
+			}()
+			go func() {
+				defer wg.Done()
+				f, e := reader.UntrackedFiles()
+				results[2] = catResult{f, categoryUntracked, e}
+			}()
+			wg.Wait()
+
 			var entries []changedFileEntry
-
-			staged, err := reader.StagedFiles()
-			if err != nil {
-				return gitChangedFilesMsg{mode: mode, err: err}
+			for _, r := range results {
+				if r.err != nil {
+					return gitChangedFilesMsg{mode: mode, err: r.err}
+				}
+				entries = append(entries, toEntries(dir, r.files, r.cat)...)
 			}
-			entries = append(entries, toEntries(dir, staged, categoryStaged)...)
-
-			unstaged, err := reader.ChangedFiles()
-			if err != nil {
-				return gitChangedFilesMsg{mode: mode, err: err}
-			}
-			entries = append(entries, toEntries(dir, unstaged, categoryUnstaged)...)
-
-			untracked, err := reader.UntrackedFiles()
-			if err != nil {
-				return gitChangedFilesMsg{mode: mode, err: err}
-			}
-			entries = append(entries, toEntries(dir, untracked, categoryUntracked)...)
-
 			return gitChangedFilesMsg{mode: mode, entries: entries}
 		}
-
-		// For other modes, use ChangedFilesWithOptions.
-		files, err := git.ChangedFilesWithOptions(dir, opts)
-		if err != nil {
-			return gitChangedFilesMsg{mode: mode, err: err}
-		}
-
-		cat := categoryUnstaged
-		switch mode {
-		case gitModeStaged:
-			cat = categoryStaged
-		case gitModeUnstaged:
-			cat = categoryUnstaged
-		case gitModeBranch:
-			cat = categoryUnstaged
-		}
-		entries := toEntries(dir, files, cat)
-		return gitChangedFilesMsg{mode: mode, entries: entries}
 	}
-}
-
-// diffOptionsForMode builds DiffOptions for the given mode.
-func (m *Model) diffOptionsForMode(mode gitDiffMode) git.DiffOptions {
-	opts := git.DiffOptions{Mode: git.DiffMode(mode)}
-	if mode == gitModeBranch {
-		opts.BaseRef = m.gitMergeBase
-	}
-	return opts
 }
 
 // initGitBranchInfoAsync returns a tea.Cmd that resolves the default branch
