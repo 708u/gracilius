@@ -256,15 +256,24 @@ func MergeBase(dir, ref string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// DefaultBranch detects the default branch (main or master).
+// DefaultBranch detects the default branch from the remote HEAD.
+// Falls back to checking main/master if remote HEAD is unavailable.
 func DefaultBranch(dir string) (string, error) {
+	out, err := gitCmd(dir, "symbolic-ref", "refs/remotes/origin/HEAD")
+	if err == nil {
+		ref := strings.TrimSpace(string(out))
+		// refs/remotes/origin/main -> main
+		if name, ok := strings.CutPrefix(ref, "refs/remotes/origin/"); ok {
+			return name, nil
+		}
+	}
 	for _, name := range []string{"main", "master"} {
 		_, err := gitCmd(dir, "rev-parse", "--verify", name)
 		if err == nil {
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("no default branch found (tried main, master)")
+	return "", fmt.Errorf("no default branch found")
 }
 
 func readWorkFile(root, relPath string) ([]string, bool, error) {
