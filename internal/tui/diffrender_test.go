@@ -10,7 +10,12 @@ import (
 
 // renderDiff is a test helper that pre-renders diff lines via viewport.
 func renderDiff(data *diffData, theme themeConfig, width, height, offset int) []string {
-	result := renderAllDiffLines(data, theme, width)
+	return renderDiffHL(data, theme, width, height, offset, nil, nil)
+}
+
+// renderDiffHL is a test helper that pre-renders diff lines with optional syntax highlights.
+func renderDiffHL(data *diffData, theme themeConfig, width, height, offset int, oldHL, newHL []highlightedLine) []string {
+	result := renderAllDiffLines(data, theme, width, oldHL, newHL)
 	// Simulate viewport slicing.
 	start := min(offset, len(result.lines))
 	end := min(start+height, len(result.lines))
@@ -162,6 +167,107 @@ func TestDiffColorsFor(t *testing.T) {
 			if f == "" {
 				t.Errorf("color field %d is empty", i)
 			}
+		}
+	}
+}
+
+func TestRenderSideBySide_WithSyntaxHighlight(t *testing.T) {
+	old := []string{"func foo() {", "  return 1", "}"}
+	new := []string{"func foo() {", "  return 2", "}"}
+	data := buildDiffData(old, new)
+
+	oldHL := highlightFile("test.go", strings.Join(old, "\n"), darkTheme)
+	newHL := highlightFile("test.go", strings.Join(new, "\n"), darkTheme)
+
+	width := 80
+	lines := renderDiffHL(data, darkTheme, width, 5, 0, oldHL, newHL)
+
+	// All lines should have correct width.
+	for i, line := range lines {
+		w := ansi.StringWidth(line)
+		if w != width {
+			t.Errorf("line %d: expected width %d, got %d", i, width, w)
+		}
+	}
+
+	// Syntax-highlighted lines should contain ANSI escape sequences beyond
+	// what diff background coloring alone would produce.
+	// The unchanged line "func foo() {" should have syntax coloring.
+	stripped := ansi.Strip(lines[0])
+	if !strings.Contains(stripped, "func") {
+		t.Errorf("expected 'func' in first line, got %q", stripped)
+	}
+}
+
+func TestRenderSideBySide_WordDiffWithSyntax(t *testing.T) {
+	old := []string{"x := 10"}
+	new := []string{"x := 20"}
+	data := buildDiffData(old, new)
+
+	oldHL := highlightFile("test.go", strings.Join(old, "\n"), darkTheme)
+	newHL := highlightFile("test.go", strings.Join(new, "\n"), darkTheme)
+
+	width := 80
+	lines := renderDiffHL(data, darkTheme, width, 3, 0, oldHL, newHL)
+
+	// Modified row should render at correct width.
+	for i, line := range lines {
+		w := ansi.StringWidth(line)
+		if w != width {
+			t.Errorf("line %d: expected width %d, got %d", i, width, w)
+		}
+	}
+
+	// The row should contain the separator.
+	stripped := ansi.Strip(lines[0])
+	if !strings.Contains(stripped, "\u2502") {
+		t.Error("modified row missing separator")
+	}
+}
+
+func TestRenderSideBySide_SoftWrapWithSyntax(t *testing.T) {
+	longLine := "func veryLongFunctionName(parameterOne int, parameterTwo string, parameterThree bool) error {"
+	old := []string{longLine}
+	new := []string{longLine}
+	data := buildDiffData(old, new)
+
+	oldHL := highlightFile("test.go", longLine, darkTheme)
+	newHL := highlightFile("test.go", longLine, darkTheme)
+
+	// Use a narrow width to force soft-wrapping.
+	width := 60
+	result := renderAllDiffLines(data, darkTheme, width, oldHL, newHL)
+
+	// Should produce more visual lines than data rows due to wrapping.
+	if len(result.lines) <= len(data.rows) {
+		t.Errorf("expected soft-wrap to produce extra lines, got %d lines for %d rows",
+			len(result.lines), len(data.rows))
+	}
+
+	// All lines should have correct width.
+	for i, line := range result.lines {
+		w := ansi.StringWidth(line)
+		if w != width {
+			t.Errorf("line %d: expected width %d, got %d", i, width, w)
+		}
+	}
+}
+
+func TestRenderSideBySide_NilSyntaxFallback(t *testing.T) {
+	old := []string{"aaa", "bbb"}
+	new := []string{"aaa", "BBB"}
+	data := buildDiffData(old, new)
+
+	// Render with and without syntax highlights; both should produce same width.
+	width := 80
+	withoutHL := renderDiff(data, darkTheme, width, 5, 0)
+	withHL := renderDiffHL(data, darkTheme, width, 5, 0, nil, nil)
+
+	for i := range withoutHL {
+		w1 := ansi.StringWidth(withoutHL[i])
+		w2 := ansi.StringWidth(withHL[i])
+		if w1 != w2 {
+			t.Errorf("line %d: width mismatch without HL (%d) vs with nil HL (%d)", i, w1, w2)
 		}
 	}
 }
