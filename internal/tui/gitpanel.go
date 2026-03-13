@@ -31,21 +31,26 @@ func toEntries(dir string, files []git.ChangedFile, cat fileCategory) []changedF
 func (m *Model) loadGitChanges() tea.Cmd {
 	dir := m.rootDir
 	return func() tea.Msg {
+		reader, err := git.NewStatusReader(dir)
+		if err != nil {
+			return gitChangedFilesMsg{err: err}
+		}
+
 		var entries []changedFileEntry
 
-		staged, err := git.StagedFiles(dir)
+		staged, err := reader.StagedFiles()
 		if err != nil {
 			return gitChangedFilesMsg{err: err}
 		}
 		entries = append(entries, toEntries(dir, staged, categoryStaged)...)
 
-		unstaged, err := git.ChangedFiles(dir)
+		unstaged, err := reader.ChangedFiles()
 		if err != nil {
 			return gitChangedFilesMsg{err: err}
 		}
 		entries = append(entries, toEntries(dir, unstaged, categoryUnstaged)...)
 
-		untracked, err := git.UntrackedFiles(dir)
+		untracked, err := reader.UntrackedFiles()
 		if err != nil {
 			return gitChangedFilesMsg{err: err}
 		}

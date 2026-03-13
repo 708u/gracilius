@@ -37,9 +37,18 @@ func writeFile(t *testing.T, dir, name, content string) {
 	}
 }
 
-func TestChangedFiles_NotGitRepo(t *testing.T) {
+func newReader(t *testing.T, dir string) *StatusReader {
+	t.Helper()
+	r, err := NewStatusReader(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+func TestNewStatusReader_NotGitRepo(t *testing.T) {
 	dir := t.TempDir()
-	_, err := ChangedFiles(dir)
+	_, err := NewStatusReader(dir)
 	if err == nil {
 		t.Fatal("expected error for non-git repo")
 	}
@@ -51,7 +60,7 @@ func TestChangedFiles_NoChanges(t *testing.T) {
 	run(t, dir, "git", "add", ".")
 	run(t, dir, "git", "commit", "-m", "init")
 
-	files, err := ChangedFiles(dir)
+	files, err := newReader(t, dir).ChangedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +77,7 @@ func TestChangedFiles_Modified(t *testing.T) {
 
 	writeFile(t, dir, "hello.txt", "hello world\n")
 
-	files, err := ChangedFiles(dir)
+	files, err := newReader(t, dir).ChangedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +114,7 @@ func TestChangedFiles_NewFile(t *testing.T) {
 
 	// git diff --name-status compares index vs working tree.
 	// Staged-only changes don't appear in unstaged diff.
-	files, err := ChangedFiles(dir)
+	files, err := newReader(t, dir).ChangedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +131,7 @@ func TestChangedFiles_DeletedFile(t *testing.T) {
 
 	os.Remove(filepath.Join(dir, "hello.txt"))
 
-	files, err := ChangedFiles(dir)
+	files, err := newReader(t, dir).ChangedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +164,7 @@ func TestChangedFiles_BinaryFile(t *testing.T) {
 	// Modify the binary file
 	writeFile(t, dir, "image.bin", "header\x00modified\x00end\n")
 
-	files, err := ChangedFiles(dir)
+	files, err := newReader(t, dir).ChangedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +202,7 @@ func TestChangedFiles_RenamedFile(t *testing.T) {
 	// Modify the renamed file so it shows in unstaged diff too.
 	writeFile(t, dir, "new.txt", "modified content\n")
 
-	files, err := ChangedFiles(dir)
+	files, err := newReader(t, dir).ChangedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +225,7 @@ func TestChangedFiles_RenamedFile(t *testing.T) {
 func TestChangedFiles_EmptyRepo(t *testing.T) {
 	dir := initRepo(t)
 
-	files, err := ChangedFiles(dir)
+	files, err := newReader(t, dir).ChangedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +240,7 @@ func TestStagedFiles_NoChanges(t *testing.T) {
 	run(t, dir, "git", "add", ".")
 	run(t, dir, "git", "commit", "-m", "init")
 
-	files, err := StagedFiles(dir)
+	files, err := newReader(t, dir).StagedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +258,7 @@ func TestStagedFiles_StagedModified(t *testing.T) {
 	writeFile(t, dir, "hello.txt", "hello world\n")
 	run(t, dir, "git", "add", "hello.txt")
 
-	files, err := StagedFiles(dir)
+	files, err := newReader(t, dir).StagedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +291,7 @@ func TestStagedFiles_StagedNewFile(t *testing.T) {
 	writeFile(t, dir, "second.txt", "second\n")
 	run(t, dir, "git", "add", "second.txt")
 
-	files, err := StagedFiles(dir)
+	files, err := newReader(t, dir).StagedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +315,7 @@ func TestStagedFiles_StagedDeleted(t *testing.T) {
 	os.Remove(filepath.Join(dir, "hello.txt"))
 	run(t, dir, "git", "add", "hello.txt")
 
-	files, err := StagedFiles(dir)
+	files, err := newReader(t, dir).StagedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +338,7 @@ func TestStagedFiles_StagedRenamed(t *testing.T) {
 
 	run(t, dir, "git", "mv", "old.txt", "new.txt")
 
-	files, err := StagedFiles(dir)
+	files, err := newReader(t, dir).StagedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +360,7 @@ func TestStagedFiles_EmptyRepo(t *testing.T) {
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", "hello.txt")
 
-	files, err := StagedFiles(dir)
+	files, err := newReader(t, dir).StagedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +379,7 @@ func TestUntrackedFiles_None(t *testing.T) {
 	run(t, dir, "git", "add", ".")
 	run(t, dir, "git", "commit", "-m", "init")
 
-	files, err := UntrackedFiles(dir)
+	files, err := newReader(t, dir).UntrackedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +396,7 @@ func TestUntrackedFiles_NewFile(t *testing.T) {
 
 	writeFile(t, dir, "untracked.txt", "untracked\n")
 
-	files, err := UntrackedFiles(dir)
+	files, err := newReader(t, dir).UntrackedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,7 +426,7 @@ func TestUntrackedFiles_RespectsGitignore(t *testing.T) {
 	writeFile(t, dir, "debug.log", "log output\n")
 	writeFile(t, dir, "readme.txt", "readme\n")
 
-	files, err := UntrackedFiles(dir)
+	files, err := newReader(t, dir).UntrackedFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,21 +435,5 @@ func TestUntrackedFiles_RespectsGitignore(t *testing.T) {
 	}
 	if files[0].Path != "readme.txt" {
 		t.Fatalf("expected readme.txt, got %s", files[0].Path)
-	}
-}
-
-func TestUntrackedFiles_NotGitRepo(t *testing.T) {
-	dir := t.TempDir()
-	_, err := UntrackedFiles(dir)
-	if err == nil {
-		t.Fatal("expected error for non-git repo")
-	}
-}
-
-func TestStagedFiles_NotGitRepo(t *testing.T) {
-	dir := t.TempDir()
-	_, err := StagedFiles(dir)
-	if err == nil {
-		t.Fatal("expected error for non-git repo")
 	}
 }
