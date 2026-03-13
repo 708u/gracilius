@@ -36,10 +36,7 @@ func (m *Model) loadGitChangesForMode(mode gitDiffMode) tea.Cmd {
 	case gitModeBranch:
 		baseRef := m.gitMergeBase
 		return func() tea.Msg {
-			files, err := git.ChangedFilesWithOptions(dir, git.DiffOptions{
-				Mode:    git.DiffBranch,
-				BaseRef: baseRef,
-			})
+			files, err := git.BranchDiff(dir, baseRef)
 			if err != nil {
 				return gitChangedFilesMsg{mode: mode, err: err}
 			}
@@ -230,6 +227,7 @@ func (m *Model) openGitDiffEntry() {
 		vp:                newViewport(),
 		gitDiffModeTag:    m.gitDiffMode,
 		hasGitDiffModeTag: true,
+		gitDiffLabel:      m.gitDiffMode.tabPrefix(m.gitDefaultBranch),
 	}
 	dt.vp.SetWidth(lo.editorWidth)
 	dt.vp.SetHeight(lo.contentHeight)

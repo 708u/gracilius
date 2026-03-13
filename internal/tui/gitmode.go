@@ -12,24 +12,31 @@ const (
 )
 
 // label returns the display name for the diff mode.
-func (m gitDiffMode) label() string {
+// For gitModeBranch, pass the default branch name to show "vs <branch>".
+func (m gitDiffMode) label(defaultBranch string) string {
 	switch m {
 	case gitModeWorking:
-		return "Working"
+		return "working"
 	case gitModeBranch:
-		return "Branch"
+		if defaultBranch != "" {
+			return "vs " + defaultBranch
+		}
+		return "vs main"
 	default:
-		return "Working"
+		return "working"
 	}
 }
 
 // tabPrefix returns the bracketed prefix for diff tab labels.
-func (m gitDiffMode) tabPrefix() string {
+func (m gitDiffMode) tabPrefix(defaultBranch string) string {
 	switch m {
 	case gitModeWorking:
 		return "[working]"
 	case gitModeBranch:
-		return "[branch]"
+		if defaultBranch != "" {
+			return "[vs " + defaultBranch + "]"
+		}
+		return "[vs main]"
 	default:
 		return "[working]"
 	}

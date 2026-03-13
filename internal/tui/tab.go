@@ -42,6 +42,7 @@ type tab struct {
 	diffViewData      *diffData   // side-by-side diff data (nil for file tabs)
 	gitDiffModeTag    gitDiffMode // diff mode for git diff tabs
 	hasGitDiffModeTag bool        // true if opened from git panel
+	gitDiffLabel      string      // tab label prefix (e.g. "[working]", "[vs main]")
 
 	// diff render cache (invalidated on width/theme change)
 	diffCachedLines []string // pre-rendered visual lines (same as viewport content)

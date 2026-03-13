@@ -465,30 +465,36 @@ func TestGitDiffModePerModeState(t *testing.T) {
 
 func TestGitDiffModeLabel(t *testing.T) {
 	tests := []struct {
-		mode gitDiffMode
-		want string
+		mode          gitDiffMode
+		defaultBranch string
+		want          string
 	}{
-		{gitModeWorking, "Working"},
-		{gitModeBranch, "Branch"},
+		{gitModeWorking, "", "working"},
+		{gitModeBranch, "main", "vs main"},
+		{gitModeBranch, "master", "vs master"},
+		{gitModeBranch, "", "vs main"},
 	}
 	for _, tt := range tests {
-		if got := tt.mode.label(); got != tt.want {
-			t.Errorf("gitDiffMode(%d).label() = %q, want %q", tt.mode, got, tt.want)
+		if got := tt.mode.label(tt.defaultBranch); got != tt.want {
+			t.Errorf("gitDiffMode(%d).label(%q) = %q, want %q", tt.mode, tt.defaultBranch, got, tt.want)
 		}
 	}
 }
 
 func TestGitDiffModeTabPrefix(t *testing.T) {
 	tests := []struct {
-		mode gitDiffMode
-		want string
+		mode          gitDiffMode
+		defaultBranch string
+		want          string
 	}{
-		{gitModeWorking, "[working]"},
-		{gitModeBranch, "[branch]"},
+		{gitModeWorking, "", "[working]"},
+		{gitModeBranch, "main", "[vs main]"},
+		{gitModeBranch, "master", "[vs master]"},
+		{gitModeBranch, "", "[vs main]"},
 	}
 	for _, tt := range tests {
-		if got := tt.mode.tabPrefix(); got != tt.want {
-			t.Errorf("gitDiffMode(%d).tabPrefix() = %q, want %q", tt.mode, got, tt.want)
+		if got := tt.mode.tabPrefix(tt.defaultBranch); got != tt.want {
+			t.Errorf("gitDiffMode(%d).tabPrefix(%q) = %q, want %q", tt.mode, tt.defaultBranch, got, tt.want)
 		}
 	}
 }

@@ -438,68 +438,7 @@ func TestUntrackedFiles_RespectsGitignore(t *testing.T) {
 	}
 }
 
-func TestDiffUncommitted_StagedAndUnstaged(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, dir, "a.txt", "line1\n")
-	run(t, dir, "git", "add", ".")
-	run(t, dir, "git", "commit", "-m", "init")
-
-	// Staged change
-	writeFile(t, dir, "a.txt", "line1\nline2\n")
-	run(t, dir, "git", "add", "a.txt")
-
-	// Unstaged change on top
-	writeFile(t, dir, "a.txt", "line1\nline2\nline3\n")
-
-	files, err := ChangedFilesWithOptions(dir, DiffOptions{Mode: DiffUncommitted})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(files) != 1 {
-		t.Fatalf("expected 1 file, got %d", len(files))
-	}
-	f := files[0]
-	if f.Status != StatusModified {
-		t.Fatalf("expected status M, got %s", f.Status)
-	}
-	// Old should be HEAD content ("line1"), new should be working tree ("line1\nline2\nline3")
-	if len(f.OldContent) != 1 || f.OldContent[0] != "line1" {
-		t.Fatalf("unexpected old content: %v", f.OldContent)
-	}
-	if len(f.NewContent) != 3 {
-		t.Fatalf("expected 3 lines in new, got %d", len(f.NewContent))
-	}
-}
-
-func TestDiffStaged(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, dir, "a.txt", "original\n")
-	run(t, dir, "git", "add", ".")
-	run(t, dir, "git", "commit", "-m", "init")
-
-	writeFile(t, dir, "a.txt", "modified\n")
-	run(t, dir, "git", "add", "a.txt")
-
-	files, err := ChangedFilesWithOptions(dir, DiffOptions{Mode: DiffStaged})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(files) != 1 {
-		t.Fatalf("expected 1 file, got %d", len(files))
-	}
-	f := files[0]
-	if f.Status != StatusModified {
-		t.Fatalf("expected status M, got %s", f.Status)
-	}
-	if len(f.OldContent) != 1 || f.OldContent[0] != "original" {
-		t.Fatalf("unexpected old (HEAD) content: %v", f.OldContent)
-	}
-	if len(f.NewContent) != 1 || f.NewContent[0] != "modified" {
-		t.Fatalf("unexpected new (index) content: %v", f.NewContent)
-	}
-}
-
-func TestDiffBranch(t *testing.T) {
+func TestBranchDiff(t *testing.T) {
 	dir := initRepo(t)
 	writeFile(t, dir, "a.txt", "base\n")
 	run(t, dir, "git", "add", ".")
@@ -516,10 +455,7 @@ func TestDiffBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	files, err := ChangedFilesWithOptions(dir, DiffOptions{
-		Mode:    DiffBranch,
-		BaseRef: base,
-	})
+	files, err := BranchDiff(dir, base)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -535,30 +471,12 @@ func TestDiffBranch(t *testing.T) {
 	}
 }
 
-func TestUntrackedFiles_IncludedInUncommitted(t *testing.T) {
+func TestBranchDiff_MissingBaseRef(t *testing.T) {
 	dir := initRepo(t)
-	writeFile(t, dir, "tracked.txt", "tracked\n")
-	run(t, dir, "git", "add", ".")
-	run(t, dir, "git", "commit", "-m", "init")
 
-	writeFile(t, dir, "newfile.txt", "new content\n")
-
-	files, err := ChangedFilesWithOptions(dir, DiffOptions{Mode: DiffUncommitted})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	found := false
-	for _, f := range files {
-		if f.Path == "newfile.txt" && f.Status == StatusUntracked {
-			found = true
-			if f.NewContent == nil || f.NewContent[0] != "new content" {
-				t.Fatalf("unexpected content for untracked: %v", f.NewContent)
-			}
-		}
-	}
-	if !found {
-		t.Fatal("expected untracked file in uncommitted diff")
+	_, err := BranchDiff(dir, "")
+	if err == nil {
+		t.Fatal("expected error for missing baseRef")
 	}
 }
 
@@ -596,27 +514,5 @@ func TestMergeBase(t *testing.T) {
 	}
 	if base == "" {
 		t.Fatal("expected non-empty merge-base")
-	}
-}
-
-func TestDiffUncommitted_EmptyRepo(t *testing.T) {
-	dir := initRepo(t)
-
-	// No commits, DiffUncommitted should return nil (not error)
-	files, err := ChangedFilesWithOptions(dir, DiffOptions{Mode: DiffUncommitted})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(files) != 0 {
-		t.Fatalf("expected nil or empty files, got %d", len(files))
-	}
-}
-
-func TestDiffBranch_MissingBaseRef(t *testing.T) {
-	dir := initRepo(t)
-
-	_, err := ChangedFilesWithOptions(dir, DiffOptions{Mode: DiffBranch})
-	if err == nil {
-		t.Fatal("expected error for missing BaseRef")
 	}
 }

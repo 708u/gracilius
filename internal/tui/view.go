@@ -23,7 +23,7 @@ func tabLabel(t *tab) string {
 		case t.diff != nil:
 			name = "[review] " + name
 		case t.hasGitDiffModeTag:
-			name = t.gitDiffModeTag.tabPrefix() + " " + name
+			name = t.gitDiffLabel + " " + name
 		default:
 			name = "[diff] " + name
 		}
@@ -367,7 +367,7 @@ func (m *Model) renderFooter() string {
 func (m *Model) renderLeftPane(width, height int) []string {
 	var header string
 	if m.activePanel == panelGitDiff {
-		label := "\u25c0 " + m.gitDiffMode.label() + " \u25b6"
+		label := m.activePanel.label() + " \u276e" + m.gitDiffMode.label(m.gitDefaultBranch) + "\u276f"
 		header = renderPanelHeader(label, width, m.theme)
 	} else {
 		header = renderPanelHeader(m.activePanel.label(), width, m.theme)

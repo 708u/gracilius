@@ -24,22 +24,6 @@ const (
 	StatusUntracked FileStatus = "?"
 )
 
-// DiffMode selects which pair of trees to compare.
-type DiffMode int
-
-const (
-	DiffUncommitted DiffMode = iota // HEAD vs working tree
-	DiffUnstaged                    // index vs working tree
-	DiffStaged                      // HEAD vs index
-	DiffBranch                      // merge-base vs HEAD
-)
-
-// DiffOptions controls how ChangedFilesWithOptions retrieves diffs.
-type DiffOptions struct {
-	Mode    DiffMode
-	BaseRef string // merge-base hash (DiffBranch only)
-}
-
 // ChangedFile represents a file changed in the working tree.
 type ChangedFile struct {
 	Path       string
@@ -236,125 +220,31 @@ func (s *StatusReader) parseChangedFiles(
 	return files, nil
 }
 
-// ChangedFilesWithOptions returns changed files for the given diff mode.
-func ChangedFilesWithOptions(dir string, opts DiffOptions) ([]ChangedFile, error) {
+// BranchDiff returns changed files between merge-base and HEAD.
+func BranchDiff(dir, baseRef string) ([]ChangedFile, error) {
+	if baseRef == "" {
+		return nil, fmt.Errorf("baseRef required for BranchDiff")
+	}
+
 	root, err := repoRoot(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	var diffArgs []string
-	switch opts.Mode {
-	case DiffUncommitted:
-		diffArgs = []string{"diff", "HEAD", "--name-status"}
-	case DiffUnstaged:
-		diffArgs = []string{"diff", "--name-status"}
-	case DiffStaged:
-		diffArgs = []string{"diff", "--cached", "--name-status"}
-	case DiffBranch:
-		if opts.BaseRef == "" {
-			return nil, fmt.Errorf("BaseRef required for DiffBranch")
-		}
-		diffArgs = []string{"diff", opts.BaseRef + "..HEAD", "--name-status"}
-	default:
-		return nil, fmt.Errorf("unknown diff mode: %d", opts.Mode)
-	}
-
-	out, err := gitCmd(dir, diffArgs...)
+	out, err := gitCmd(dir, "diff", baseRef+"..HEAD", "--name-status")
 	if err != nil {
-		// HEAD may not exist yet (empty repo).
-		if opts.Mode == DiffUncommitted || opts.Mode == DiffStaged {
-			return nil, nil
-		}
 		return nil, fmt.Errorf("git diff: %w", err)
 	}
 
-	oldRef, newRef := refsForMode(opts)
 	dr := diffReader{
 		readOld: func(d, path string) ([]string, bool, error) {
-			return readRef(d, root, path, oldRef)
+			return readCommitBlob(d, baseRef, path)
 		},
-		readNew: func(d, path string) ([]string, bool, error) {
-			return readRef(d, root, path, newRef)
-		},
+		readNew: readHEADBlob,
 	}
 
 	sr := &StatusReader{dir: dir, root: root}
-	files, err := sr.parseChangedFiles(out, dr)
-	if err != nil {
-		return nil, err
-	}
-
-	if includesUntracked(opts.Mode) {
-		reader, err := NewStatusReader(dir)
-		if err != nil {
-			return nil, err
-		}
-		untracked, err := reader.UntrackedFiles()
-		if err != nil {
-			return nil, err
-		}
-		files = append(files, untracked...)
-	}
-
-	return files, nil
-}
-
-// includesUntracked returns true if the mode should list untracked files.
-func includesUntracked(mode DiffMode) bool {
-	return mode == DiffUncommitted || mode == DiffUnstaged
-}
-
-// refKind identifies how to read a file version.
-type refKind int
-
-const (
-	refIndex   refKind = iota // git show :<path>
-	refHEAD                   // git show HEAD:<path>
-	refCommit                 // git show <hash>:<path>
-	refWorkDir                // os.ReadFile
-)
-
-type refSpec struct {
-	kind refKind
-	ref  string // commit hash for refCommit
-}
-
-// refsForMode returns (oldRef, newRef) specs for the given diff mode.
-func refsForMode(opts DiffOptions) (old, new_ refSpec) {
-	switch opts.Mode {
-	case DiffUncommitted:
-		return refSpec{kind: refHEAD}, refSpec{kind: refWorkDir}
-	case DiffUnstaged:
-		return refSpec{kind: refIndex}, refSpec{kind: refWorkDir}
-	case DiffStaged:
-		return refSpec{kind: refHEAD}, refSpec{kind: refIndex}
-	case DiffBranch:
-		return refSpec{kind: refCommit, ref: opts.BaseRef}, refSpec{kind: refHEAD}
-	}
-	return refSpec{kind: refIndex}, refSpec{kind: refWorkDir}
-}
-
-// readRef reads file content for the given refSpec.
-func readRef(dir, root, path string, spec refSpec) ([]string, bool, error) {
-	switch spec.kind {
-	case refWorkDir:
-		return readWorkFile(root, path)
-	case refIndex:
-		return readGitBlob(dir, path)
-	case refHEAD:
-		return readHEADBlob(dir, path)
-	case refCommit:
-		data, err := gitCmd(dir, "show", spec.ref+":"+path)
-		if err != nil {
-			return nil, false, fmt.Errorf("git show %s:%s: %w", spec.ref, path, err)
-		}
-		if isBinaryContent(data) {
-			return nil, true, nil
-		}
-		return splitLines(data), false, nil
-	}
-	return nil, false, fmt.Errorf("unknown ref kind: %d", spec.kind)
+	return sr.parseChangedFiles(out, dr)
 }
 
 // MergeBase returns the merge-base between HEAD and the given ref.
@@ -411,6 +301,18 @@ func readHEADBlob(dir, path string) ([]string, bool, error) {
 			return nil, false, nil
 		}
 		return nil, false, fmt.Errorf("git show HEAD:%s: %w", path, err)
+	}
+	if isBinaryContent(data) {
+		return nil, true, nil
+	}
+	return splitLines(data), false, nil
+}
+
+// readCommitBlob reads a file from a specific commit.
+func readCommitBlob(dir, ref, path string) ([]string, bool, error) {
+	data, err := gitCmd(dir, "show", ref+":"+path)
+	if err != nil {
+		return nil, false, fmt.Errorf("git show %s:%s: %w", ref, path, err)
 	}
 	if isBinaryContent(data) {
 		return nil, true, nil
