@@ -26,7 +26,7 @@ func TestScanDir_SymlinkToDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entries := scanDir(tmp, 0, nil)
+	entries := scanDir(tmp, 0, nil, nil)
 
 	// Both realdir and linkdir should appear as directories.
 	dirCount := 0
@@ -49,7 +49,7 @@ func TestScanDir_SymlinkToDirectory(t *testing.T) {
 		}
 	}
 
-	expanded := expandDir(entries, symlinkIdx)
+	expanded := expandDir(entries, symlinkIdx, nil)
 	found := false
 	for _, e := range expanded {
 		if e.name == "hello.txt" {
@@ -81,7 +81,7 @@ func TestScanDir_SymlinkToFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entries := scanDir(tmp, 0, nil)
+	entries := scanDir(tmp, 0, nil, nil)
 
 	// Both should appear as files.
 	fileCount := 0
@@ -112,7 +112,7 @@ func TestScanDir_BrokenSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entries := scanDir(tmp, 0, nil)
+	entries := scanDir(tmp, 0, nil, nil)
 
 	// Broken symlink should be skipped; only valid.txt remains.
 	if len(entries) != 1 {
@@ -139,7 +139,7 @@ func TestBuildFileTree_SymlinkLoop(t *testing.T) {
 	}
 
 	// This should not hang or crash.
-	entries := buildFileTree(tmp)
+	entries := buildFileTree(tmp, nil)
 
 	// Both symlinks should be skipped (broken: loop).
 	if len(entries) != 0 {

@@ -179,6 +179,9 @@ type Model struct {
 	gitScrollOffset     int
 	gitLoaded           bool
 	gitSyncGen          int // generation counter for debounced git sync
+
+	// file exclusion (gitignore-based when available)
+	excludeFunc ExcludeFunc
 }
 
 // gitChangedFilesMsg carries the result of loading git changed files.
@@ -258,7 +261,7 @@ func (m *Model) toggleTreeEntry(idx int) {
 		if entry.expanded {
 			m.fileTree = collapseDir(m.fileTree, idx)
 		} else {
-			m.fileTree = expandDir(m.fileTree, idx)
+			m.fileTree = expandDir(m.fileTree, idx, m.excludeFunc)
 		}
 	} else {
 		absPath, err := filepath.Abs(entry.path)
@@ -271,13 +274,13 @@ func (m *Model) toggleTreeEntry(idx int) {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher, gitIndexWatcher *fsnotify.Watcher) (*Model, error) {
+func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher, gitIndexWatcher *fsnotify.Watcher, exclude ExcludeFunc) (*Model, error) {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root directory: %w", err)
 	}
 
-	ft := buildFileTree(absRootDir)
+	ft := buildFileTree(absRootDir, exclude)
 
 	im := detectIconMode()
 	return &Model{
@@ -301,5 +304,6 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 		commentRepo:     store,
 		commentWatcher:  commentWatcher,
 		gitIndexWatcher: gitIndexWatcher,
+		excludeFunc:     exclude,
 	}, nil
 }

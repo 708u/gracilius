@@ -10,6 +10,11 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+// ExcludeFunc determines which paths should be excluded from the file tree.
+// It receives a list of absolute paths (directories end with "/")
+// and returns the set of paths that should be excluded.
+type ExcludeFunc func(paths []string) map[string]bool
+
 // fileEntry represents a single entry in the file tree.
 type fileEntry struct {
 	path         string
@@ -42,33 +47,90 @@ func isHiddenEntry(name string) bool {
 }
 
 // WatchDirRecursive recursively adds directories to the watcher.
-func WatchDirRecursive(watcher *fsnotify.Watcher, dir string) error {
-	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() {
-			return nil
-		}
-		if isHiddenEntry(info.Name()) && path != dir {
-			return filepath.SkipDir
-		}
-		if err := watcher.Add(path); err != nil {
-			log.Printf("Failed to watch dir %s: %v", path, err)
-		}
+// When exclude is non-nil it is used instead of isHiddenEntry.
+// Subdirectory exclusion is batched per level to minimize subprocess calls.
+func WatchDirRecursive(watcher *fsnotify.Watcher, dir string, exclude ExcludeFunc) error {
+	if err := watcher.Add(dir); err != nil {
+		log.Printf("Failed to watch dir %s: %v", dir, err)
+	}
+	return watchDirLevel(watcher, dir, exclude)
+}
+
+// watchDirLevel reads one directory level, batch-checks exclusions,
+// adds non-excluded subdirectories to the watcher, and recurses.
+func watchDirLevel(watcher *fsnotify.Watcher, dir string, exclude ExcludeFunc) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
 		return nil
-	})
+	}
+
+	// Collect subdirectory paths (skip .git unconditionally).
+	var subdirs []string
+	for _, e := range entries {
+		if e.Name() == ".git" {
+			continue
+		}
+		isDir := e.IsDir()
+		if e.Type()&os.ModeSymlink != 0 {
+			fullPath := filepath.Join(dir, e.Name())
+			resolved, err := filepath.EvalSymlinks(fullPath)
+			if err != nil {
+				continue
+			}
+			target, err := os.Stat(resolved)
+			if err != nil || !target.IsDir() {
+				continue
+			}
+			isDir = true
+		}
+		if isDir {
+			subdirs = append(subdirs, filepath.Join(dir, e.Name()))
+		}
+	}
+
+	// Batch-filter excluded directories.
+	if exclude != nil && len(subdirs) > 0 {
+		paths := make([]string, len(subdirs))
+		for i, s := range subdirs {
+			paths[i] = s + "/"
+		}
+		ignored := exclude(paths)
+		filtered := subdirs[:0]
+		for _, s := range subdirs {
+			if !ignored[s+"/"] {
+				filtered = append(filtered, s)
+			}
+		}
+		subdirs = filtered
+	} else if exclude == nil {
+		filtered := subdirs[:0]
+		for _, s := range subdirs {
+			if !isHiddenEntry(filepath.Base(s)) {
+				filtered = append(filtered, s)
+			}
+		}
+		subdirs = filtered
+	}
+
+	// Add to watcher and recurse.
+	for _, s := range subdirs {
+		if err := watcher.Add(s); err != nil {
+			log.Printf("Failed to watch dir %s: %v", s, err)
+		}
+		_ = watchDirLevel(watcher, s, exclude)
+	}
+	return nil
 }
 
 // buildFileTree scans rootDir recursively and returns a flat list of entries.
-func buildFileTree(rootDir string) []fileEntry {
+func buildFileTree(rootDir string, exclude ExcludeFunc) []fileEntry {
 	var entries []fileEntry
-	entries = scanDir(rootDir, 0, entries)
+	entries = scanDir(rootDir, 0, entries, exclude)
 	return entries
 }
 
 // scanDir recursively scans a directory.
-func scanDir(dir string, depth int, entries []fileEntry) []fileEntry {
+func scanDir(dir string, depth int, entries []fileEntry, exclude ExcludeFunc) []fileEntry {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return entries
@@ -76,23 +138,24 @@ func scanDir(dir string, depth int, entries []fileEntry) []fileEntry {
 
 	type dirEntryInfo struct {
 		entry        os.DirEntry
+		fullPath     string
 		resolvedPath string // non-empty for symlinks
+		isDir        bool
 	}
-	var dirs, regularFiles []dirEntryInfo
+
+	// First pass: collect all entries, resolve symlinks, compute fullPath.
+	var allEntries []dirEntryInfo
 	for _, f := range files {
-		if isHiddenEntry(f.Name()) {
+		// .git is always excluded
+		if f.Name() == ".git" {
 			continue
 		}
+		fullPath := filepath.Join(dir, f.Name())
 		isDir := f.IsDir()
 		var resolvedPath string
-		// Resolve symlinks: DirEntry.IsDir() returns false for
-		// symlinks, so we need to follow the link to determine
-		// if the target is a directory.
 		if f.Type()&os.ModeSymlink != 0 {
-			fullPath := filepath.Join(dir, f.Name())
 			resolved, err := filepath.EvalSymlinks(fullPath)
 			if err != nil {
-				// Broken symlink (target does not exist): skip
 				continue
 			}
 			target, err := os.Stat(resolved)
@@ -102,11 +165,45 @@ func scanDir(dir string, depth int, entries []fileEntry) []fileEntry {
 			isDir = target.IsDir()
 			resolvedPath = resolved
 		}
-		info := dirEntryInfo{entry: f, resolvedPath: resolvedPath}
-		if isDir {
-			dirs = append(dirs, info)
+		allEntries = append(allEntries, dirEntryInfo{
+			entry: f, fullPath: fullPath, resolvedPath: resolvedPath, isDir: isDir,
+		})
+	}
+
+	// Determine which entries to exclude.
+	var ignored map[string]bool
+	if exclude != nil {
+		paths := make([]string, len(allEntries))
+		for i, e := range allEntries {
+			if e.isDir {
+				paths[i] = e.fullPath + "/"
+			} else {
+				paths[i] = e.fullPath
+			}
+		}
+		ignored = exclude(paths)
+	}
+
+	// Second pass: partition into dirs and files, skipping excluded.
+	var dirs, regularFiles []dirEntryInfo
+	for i := range allEntries {
+		e := &allEntries[i]
+		if exclude != nil {
+			key := e.fullPath
+			if e.isDir {
+				key += "/"
+			}
+			if ignored[key] {
+				continue
+			}
+		} else if isHiddenEntry(e.entry.Name()) {
+			continue
+		}
+
+		if e.isDir {
+			dirs = append(dirs, *e)
 		} else {
-			regularFiles = append(regularFiles, info)
+			regularFiles = append(regularFiles, *e)
 		}
 	}
 
@@ -118,9 +215,8 @@ func scanDir(dir string, depth int, entries []fileEntry) []fileEntry {
 	})
 
 	for _, d := range dirs {
-		fullPath := filepath.Join(dir, d.entry.Name())
 		entries = append(entries, fileEntry{
-			path:         fullPath,
+			path:         d.fullPath,
 			name:         d.entry.Name(),
 			isDir:        true,
 			depth:        depth,
@@ -130,12 +226,11 @@ func scanDir(dir string, depth int, entries []fileEntry) []fileEntry {
 	}
 
 	for _, f := range regularFiles {
-		fullPath := filepath.Join(dir, f.entry.Name())
 		entries = append(entries, fileEntry{
-			path:         fullPath,
+			path:         f.fullPath,
 			name:         f.entry.Name(),
 			isDir:        false,
-			isBinary:     sniffBinary(fullPath),
+			isBinary:     sniffBinary(f.fullPath),
 			depth:        depth,
 			resolvedPath: f.resolvedPath,
 		})
@@ -157,18 +252,18 @@ func expandedPaths(entries []fileEntry) map[string]bool {
 
 // restoreExpanded expands directories whose paths are in the given set.
 func restoreExpanded(
-	entries []fileEntry, paths map[string]bool,
+	entries []fileEntry, paths map[string]bool, exclude ExcludeFunc,
 ) []fileEntry {
 	for i := 0; i < len(entries); i++ {
 		if entries[i].isDir && paths[entries[i].path] {
-			entries = expandDir(entries, i)
+			entries = expandDir(entries, i, exclude)
 		}
 	}
 	return entries
 }
 
 // expandDir expands a directory entry and inserts its children.
-func expandDir(entries []fileEntry, index int) []fileEntry {
+func expandDir(entries []fileEntry, index int, exclude ExcludeFunc) []fileEntry {
 	if index < 0 || index >= len(entries) || !entries[index].isDir {
 		return entries
 	}
@@ -177,7 +272,7 @@ func expandDir(entries []fileEntry, index int) []fileEntry {
 	entry.expanded = true
 
 	var children []fileEntry
-	children = scanDir(entry.path, entry.depth+1, children)
+	children = scanDir(entry.path, entry.depth+1, children, exclude)
 
 	result := make([]fileEntry, 0, len(entries)+len(children))
 	result = append(result, entries[:index+1]...)
