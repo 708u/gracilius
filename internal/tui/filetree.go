@@ -123,13 +123,16 @@ func watchDirLevel(watcher *fsnotify.Watcher, dir string, exclude ExcludeFunc) e
 }
 
 // buildFileTree scans rootDir recursively and returns a flat list of entries.
-func buildFileTree(rootDir string, exclude ExcludeFunc) []fileEntry {
+// Uses isHiddenEntry filtering (no gitignore).
+func buildFileTree(rootDir string) []fileEntry {
 	var entries []fileEntry
-	entries = scanDir(rootDir, 0, entries, exclude)
+	entries = scanDir(rootDir, 0, entries, nil)
 	return entries
 }
 
-// scanDir recursively scans a directory.
+// scanDir scans a single directory level and returns entries.
+// When exclude is non-nil, it is used for batch gitignore filtering.
+// When exclude is nil, isHiddenEntry is used as fallback.
 func scanDir(dir string, depth int, entries []fileEntry, exclude ExcludeFunc) []fileEntry {
 	files, err := os.ReadDir(dir)
 	if err != nil {
@@ -143,10 +146,10 @@ func scanDir(dir string, depth int, entries []fileEntry, exclude ExcludeFunc) []
 		isDir        bool
 	}
 
-	// First pass: collect all entries, resolve symlinks, compute fullPath.
+	// Collect all entries, resolve symlinks, compute fullPath.
 	var allEntries []dirEntryInfo
 	for _, f := range files {
-		// .git is always excluded
+		// .git is always excluded regardless of filtering mode.
 		if f.Name() == ".git" {
 			continue
 		}
@@ -184,7 +187,7 @@ func scanDir(dir string, depth int, entries []fileEntry, exclude ExcludeFunc) []
 		ignored = exclude(paths)
 	}
 
-	// Second pass: partition into dirs and files, skipping excluded.
+	// Partition into dirs and files, skipping excluded.
 	var dirs, regularFiles []dirEntryInfo
 	for i := range allEntries {
 		e := &allEntries[i]
@@ -199,7 +202,6 @@ func scanDir(dir string, depth int, entries []fileEntry, exclude ExcludeFunc) []
 		} else if isHiddenEntry(e.entry.Name()) {
 			continue
 		}
-
 		if e.isDir {
 			dirs = append(dirs, *e)
 		} else {
@@ -252,18 +254,18 @@ func expandedPaths(entries []fileEntry) map[string]bool {
 
 // restoreExpanded expands directories whose paths are in the given set.
 func restoreExpanded(
-	entries []fileEntry, paths map[string]bool, exclude ExcludeFunc,
+	entries []fileEntry, paths map[string]bool,
 ) []fileEntry {
 	for i := 0; i < len(entries); i++ {
 		if entries[i].isDir && paths[entries[i].path] {
-			entries = expandDir(entries, i, exclude)
+			entries = expandDir(entries, i)
 		}
 	}
 	return entries
 }
 
 // expandDir expands a directory entry and inserts its children.
-func expandDir(entries []fileEntry, index int, exclude ExcludeFunc) []fileEntry {
+func expandDir(entries []fileEntry, index int) []fileEntry {
 	if index < 0 || index >= len(entries) || !entries[index].isDir {
 		return entries
 	}
@@ -272,7 +274,7 @@ func expandDir(entries []fileEntry, index int, exclude ExcludeFunc) []fileEntry 
 	entry.expanded = true
 
 	var children []fileEntry
-	children = scanDir(entry.path, entry.depth+1, children, exclude)
+	children = scanDir(entry.path, entry.depth+1, children, nil)
 
 	result := make([]fileEntry, 0, len(entries)+len(children))
 	result = append(result, entries[:index+1]...)

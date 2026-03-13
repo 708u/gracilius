@@ -135,8 +135,10 @@ func (s *openFileOverlay) updateTheme(theme themeConfig) {
 	s.list.SetDelegate(d)
 }
 
-// scanAllFiles recursively scans rootDir using scanDir (from filetree.go)
-// and returns all non-hidden files as fileItem values with rootDir-relative paths.
+// scanAllFiles recursively scans rootDir and returns all non-ignored files
+// as fileItem values with rootDir-relative paths.
+// When exclude is non-nil, gitignore-based filtering is applied;
+// otherwise isHiddenEntry is used.
 func scanAllFiles(rootDir string, exclude ExcludeFunc) []fileItem {
 	var entries []fileEntry
 	entries = scanDir(rootDir, 0, entries, exclude)

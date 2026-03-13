@@ -261,7 +261,7 @@ func (m *Model) toggleTreeEntry(idx int) {
 		if entry.expanded {
 			m.fileTree = collapseDir(m.fileTree, idx)
 		} else {
-			m.fileTree = expandDir(m.fileTree, idx, m.excludeFunc)
+			m.fileTree = expandDir(m.fileTree, idx)
 		}
 	} else {
 		absPath, err := filepath.Abs(entry.path)
@@ -280,7 +280,7 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 		return nil, fmt.Errorf("resolve root directory: %w", err)
 	}
 
-	ft := buildFileTree(absRootDir, exclude)
+	ft := buildFileTree(absRootDir)
 
 	im := detectIconMode()
 	return &Model{
