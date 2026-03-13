@@ -8,8 +8,13 @@ type gitDiffMode int
 const (
 	gitModeWorking gitDiffMode = iota // staged/unstaged/untracked with categories
 	gitModeBranch                     // merge-base(default-branch)..HEAD
-	gitDiffModeCount
 )
+
+// gitDiffModes lists all valid diff modes.
+var gitDiffModes = []gitDiffMode{
+	gitModeWorking,
+	gitModeBranch,
+}
 
 // label returns the display name for the diff mode.
 // For gitModeBranch, pass the default branch name to show "vs <branch>".
@@ -56,7 +61,7 @@ type gitPanelState struct {
 // switchGitMode changes the active git diff mode by delta (-1 or +1).
 // Returns a tea.Cmd if the new mode needs loading or is stale.
 func (m *Model) switchGitMode(delta int) tea.Cmd {
-	count := int(gitDiffModeCount)
+	count := len(gitDiffModes)
 	m.gitDiffMode = gitDiffMode((int(m.gitDiffMode) + delta + count) % count)
 
 	gs := m.gitState()

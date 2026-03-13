@@ -190,7 +190,7 @@ type Model struct {
 
 	// git panel state (per-mode)
 	gitDiffMode      gitDiffMode
-	gitModeState     [gitDiffModeCount]gitPanelState
+	gitModeState     []gitPanelState
 	gitAnyLoaded     bool // true once any mode has been loaded
 	gitSyncGen       int  // generation counter for debounced git sync
 	gitMergeBase     string
@@ -320,6 +320,7 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 		commentWatcher: commentWatcher,
 		gitDirWatcher:  gitDirWatcher,
 		gitDiffMode:    gitModeWorking,
+		gitModeState:   make([]gitPanelState, len(gitDiffModes)),
 		excludeFunc:    exclude,
 	}, nil
 }

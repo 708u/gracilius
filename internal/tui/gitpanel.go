@@ -172,9 +172,9 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 	}
 
 	// Single pass: collect entry indices per category.
-	for i, e := range entries {
+	for i := range entries {
 		for j := range sections {
-			if sections[j].cat == e.category {
+			if sections[j].cat == entries[i].category {
 				sections[j].indices = append(sections[j].indices, i)
 				break
 			}

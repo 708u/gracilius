@@ -57,11 +57,11 @@ func renderChangedFiles(entries []changedFileEntry, width, height int) []string 
 	if len(entries) == 0 {
 		lines = append(lines, padRight("  No changed files", width))
 	} else {
-		for _, e := range entries {
+		for i := range entries {
 			if len(lines) >= height {
 				break
 			}
-			lines = append(lines, padRight("  "+e.status.String()+" "+e.name, width))
+			lines = append(lines, padRight("  "+entries[i].status.String()+" "+entries[i].name, width))
 		}
 	}
 
