@@ -214,13 +214,10 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 		}
 
 		for _, dg := range dirs {
-			// Skip directory header for root-level files.
-			if dg.dir != "." {
-				rows = append(rows, gitVisualRow{
-					isDirHeader: true,
-					label:       "    " + dg.dir + "/",
-				})
-			}
+			rows = append(rows, gitVisualRow{
+				isDirHeader: true,
+				label:       "    " + dg.dir + "/",
+			})
 			for _, idx := range dg.indices {
 				reverseMap[idx] = len(rows)
 				rows = append(rows, gitVisualRow{entryIdx: idx})
@@ -346,13 +343,7 @@ func (m *Model) renderGitPanel(width, height int) []string {
 
 		style := gitStatusStyles[e.status]
 		statusIcon := style.Render(e.status.String())
-		// Show only the filename; directory is shown in the dir header above.
-		indent := "      "
-		// Root-level files (no dir header) use less indentation.
-		if e.dirName == "." {
-			indent = "    "
-		}
-		line := indent + statusIcon + " " + e.baseName
+		line := "      " + statusIcon + " " + e.baseName
 		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)
 

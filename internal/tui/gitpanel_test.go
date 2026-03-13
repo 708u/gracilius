@@ -41,9 +41,9 @@ func TestGitChangedFilesMsg_Populates(t *testing.T) {
 	if gs.entries[0].name != "file1.go" {
 		t.Errorf("expected file1.go, got %s", gs.entries[0].name)
 	}
-	// Visual rows: 1 header + 2 files
-	if len(gs.visualRows) != 3 {
-		t.Errorf("expected 3 visual rows, got %d", len(gs.visualRows))
+	// Visual rows: 1 category header + 1 dir header (./) + 2 files
+	if len(gs.visualRows) != 4 {
+		t.Errorf("expected 4 visual rows, got %d", len(gs.visualRows))
 	}
 }
 
@@ -307,32 +307,35 @@ func TestBuildGitVisualRows(t *testing.T) {
 	})
 	rows, reverseMap := buildGitVisualRows(entries)
 
-	// 3 headers + 3 files = 6 rows
-	if len(rows) != 6 {
-		t.Fatalf("expected 6 rows, got %d", len(rows))
+	// 3 category headers + 3 dir headers (./) + 3 files = 9 rows
+	if len(rows) != 9 {
+		t.Fatalf("expected 9 rows, got %d", len(rows))
 	}
 	if !rows[0].isHeader {
-		t.Error("expected first row to be header")
+		t.Error("expected row 0 to be category header")
 	}
-	if rows[1].isHeader || rows[1].entryIdx != 0 {
-		t.Error("expected second row to be staged entry")
+	if !rows[1].isDirHeader {
+		t.Error("expected row 1 to be dir header")
 	}
-	if !rows[2].isHeader {
-		t.Error("expected third row to be header")
+	if !rows[2].isFileRow() || rows[2].entryIdx != 0 {
+		t.Error("expected row 2 to be staged entry")
 	}
-	if rows[3].isHeader || rows[3].entryIdx != 1 {
-		t.Error("expected fourth row to be unstaged entry")
+	if !rows[3].isHeader {
+		t.Error("expected row 3 to be category header")
+	}
+	if !rows[5].isFileRow() || rows[5].entryIdx != 1 {
+		t.Error("expected row 5 to be unstaged entry")
 	}
 
 	// Verify reverse map
-	if reverseMap[0] != 1 {
-		t.Errorf("expected reverseMap[0]=1, got %d", reverseMap[0])
+	if reverseMap[0] != 2 {
+		t.Errorf("expected reverseMap[0]=2, got %d", reverseMap[0])
 	}
-	if reverseMap[1] != 3 {
-		t.Errorf("expected reverseMap[1]=3, got %d", reverseMap[1])
+	if reverseMap[1] != 5 {
+		t.Errorf("expected reverseMap[1]=5, got %d", reverseMap[1])
 	}
-	if reverseMap[2] != 5 {
-		t.Errorf("expected reverseMap[2]=5, got %d", reverseMap[2])
+	if reverseMap[2] != 8 {
+		t.Errorf("expected reverseMap[2]=8, got %d", reverseMap[2])
 	}
 }
 
@@ -341,14 +344,17 @@ func TestBuildGitVisualRows_EmptySection(t *testing.T) {
 		{name: "a.go", status: git.StatusModified, category: categoryUnstaged},
 	})
 	rows, _ := buildGitVisualRows(entries)
-	// Only unstaged: 1 header + 1 file
-	if len(rows) != 2 {
-		t.Fatalf("expected 2 rows, got %d", len(rows))
+	// Only unstaged: 1 category header + 1 dir header (./) + 1 file
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(rows))
 	}
 	if !rows[0].isHeader {
-		t.Error("expected header")
+		t.Error("expected category header")
 	}
-	if rows[1].entryIdx != 0 {
+	if !rows[1].isDirHeader {
+		t.Error("expected dir header")
+	}
+	if rows[2].entryIdx != 0 {
 		t.Error("expected entry index 0")
 	}
 }
@@ -382,8 +388,8 @@ func TestGitChangedFilesMsg_Categories(t *testing.T) {
 	m.Update(gitChangedFilesMsg{mode: gitModeWorking, entries: entries})
 
 	gs := m.gitState()
-	if len(gs.visualRows) != 6 {
-		t.Fatalf("expected 6 visual rows (3 headers + 3 files), got %d",
+	if len(gs.visualRows) != 9 {
+		t.Fatalf("expected 9 visual rows (3 cat + 3 dir + 3 files), got %d",
 			len(gs.visualRows))
 	}
 }
@@ -543,26 +549,30 @@ func TestBuildGitVisualRows_MixedRootAndDir(t *testing.T) {
 	})
 	rows, _ := buildGitVisualRows(entries)
 
-	// 1 category header + 0 dir header (root) + 1 file + 1 dir header + 1 file = 4 rows
-	if len(rows) != 4 {
-		t.Fatalf("expected 4 rows, got %d", len(rows))
+	// 1 category header + 1 dir header (./) + 1 file + 1 dir header + 1 file = 5 rows
+	if len(rows) != 5 {
+		t.Fatalf("expected 5 rows, got %d", len(rows))
 	}
 	// Row 0: category header
 	if !rows[0].isHeader {
 		t.Error("row 0: expected category header")
 	}
-	// Row 1: root file (no dir header)
-	if !rows[1].isFileRow() || rows[1].entryIdx != 0 {
-		t.Errorf("row 1: expected root file entry 0, got entryIdx=%d", rows[1].entryIdx)
+	// Row 1: root dir header
+	if !rows[1].isDirHeader || rows[1].label != "    ./" {
+		t.Errorf("row 1: expected dir header './', got %q", rows[1].label)
 	}
-	// Row 2: dir header for internal/tui
-	if !rows[2].isDirHeader {
-		t.Errorf("row 2: expected dir header, got isHeader=%v isDirHeader=%v",
-			rows[2].isHeader, rows[2].isDirHeader)
+	// Row 2: root file
+	if !rows[2].isFileRow() || rows[2].entryIdx != 0 {
+		t.Errorf("row 2: expected root file entry 0, got entryIdx=%d", rows[2].entryIdx)
 	}
-	// Row 3: file under internal/tui
-	if !rows[3].isFileRow() || rows[3].entryIdx != 1 {
-		t.Errorf("row 3: expected file entry 1, got entryIdx=%d", rows[3].entryIdx)
+	// Row 3: dir header for internal/tui
+	if !rows[3].isDirHeader {
+		t.Errorf("row 3: expected dir header, got isHeader=%v isDirHeader=%v",
+			rows[3].isHeader, rows[3].isDirHeader)
+	}
+	// Row 4: file under internal/tui
+	if !rows[4].isFileRow() || rows[4].entryIdx != 1 {
+		t.Errorf("row 4: expected file entry 1, got entryIdx=%d", rows[4].entryIdx)
 	}
 }
 
