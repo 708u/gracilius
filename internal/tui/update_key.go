@@ -176,24 +176,62 @@ func (m *Model) handleKeyOpenFile(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// handleKeyNormal handles key events in normal (non-input, non-overlay) mode.
-func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	t, hasTab := m.activeTabState()
-
-	// Accept/reject use enter/esc, so they must be checked
-	// before the general Cancel/Enter handlers below.
-	if hasTab && t.diff != nil && m.focusPane == paneEditor {
-		switch {
-		case key.Matches(msg, m.keys.AcceptDiff):
+// handleDiffKeyNormal handles key events when a diff tab has editor focus.
+// It returns (model, cmd, handled). When handled is true the caller should
+// return immediately; when false the event falls through to handleKeyNormal.
+func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	switch {
+	// Accept/reject diff (only when a blocking diff responder exists).
+	case key.Matches(msg, m.keys.AcceptDiff):
+		if t.diff != nil {
 			contents := strings.Join(t.lines, "\n")
 			t.diff.onAccept(contents)
 			t.diff = nil
 			m.closeTab(m.activeTab)
-			return m, nil
-		case key.Matches(msg, m.keys.RejectDiff):
+			return m, nil, true
+		}
+	case key.Matches(msg, m.keys.RejectDiff):
+		if t.diff != nil {
 			t.rejectAndClear()
 			m.closeTab(m.activeTab)
-			return m, nil
+			return m, nil, true
+		}
+
+	// Viewport scrolling.
+	case key.Matches(msg, m.keys.Up):
+		if t.vp.YOffset() > 0 {
+			t.vp.SetYOffset(t.vp.YOffset() - 1)
+		}
+		return m, nil, true
+	case key.Matches(msg, m.keys.Down):
+		t.vp.SetYOffset(t.vp.YOffset() + 1)
+		return m, nil, true
+	case key.Matches(msg, m.keys.GoBottom):
+		t.vp.GotoBottom()
+		return m, nil, true
+
+	// No-op: suppress file-tab actions that should not fire on diff tabs.
+	case key.Matches(msg, m.keys.Left),
+		key.Matches(msg, m.keys.Right),
+		key.Matches(msg, m.keys.CharSelect),
+		key.Matches(msg, m.keys.LineSelect),
+		key.Matches(msg, m.keys.Comment),
+		key.Matches(msg, m.keys.BlockUp),
+		key.Matches(msg, m.keys.BlockDown):
+		return m, nil, true
+	}
+
+	return m, nil, false
+}
+
+// handleKeyNormal handles key events in normal (non-input, non-overlay) mode.
+func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	t, hasTab := m.activeTabState()
+
+	if hasTab && (t.diffViewData != nil || t.diff != nil) && m.focusPane == paneEditor {
+		if model, cmd, ok := m.handleDiffKeyNormal(t, msg); ok {
+			m.adjustScroll()
+			return model, cmd
 		}
 	}
 
@@ -288,10 +326,6 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if m.treeCursor > 0 {
 				m.treeCursor--
 			}
-		case hasTab && t.diffViewData != nil:
-			if t.vp.YOffset() > 0 {
-				t.vp.SetYOffset(t.vp.YOffset() - 1)
-			}
 		case hasTab:
 			if t.cursorLine > 0 {
 				t.cursorLine--
@@ -308,8 +342,6 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if m.treeCursor < len(m.fileTree)-1 {
 				m.treeCursor++
 			}
-		case hasTab && t.diffViewData != nil:
-			t.vp.SetYOffset(t.vp.YOffset() + 1)
 		case hasTab:
 			if t.cursorLine < len(t.lines)-1 {
 				t.cursorLine++
@@ -409,8 +441,6 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if len(m.fileTree) > 0 {
 				m.treeCursor = len(m.fileTree) - 1
 			}
-		case hasTab && t.diffViewData != nil:
-			t.vp.GotoBottom()
 		case hasTab && len(t.lines) > 0:
 			t.cursorLine = len(t.lines) - 1
 			t.cursorChar = 0
