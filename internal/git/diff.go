@@ -226,11 +226,6 @@ func BranchDiff(dir, baseRef string) ([]ChangedFile, error) {
 		return nil, fmt.Errorf("baseRef required for BranchDiff")
 	}
 
-	root, err := repoRoot(dir)
-	if err != nil {
-		return nil, err
-	}
-
 	out, err := gitCmd(dir, "diff", baseRef+"..HEAD", "--name-status")
 	if err != nil {
 		return nil, fmt.Errorf("git diff: %w", err)
@@ -243,7 +238,10 @@ func BranchDiff(dir, baseRef string) ([]ChangedFile, error) {
 		readNew: readHEADBlob,
 	}
 
-	sr := &StatusReader{dir: dir, root: root}
+	sr, err := NewStatusReader(dir)
+	if err != nil {
+		return nil, err
+	}
 	return sr.parseChangedFiles(out, dr)
 }
 
