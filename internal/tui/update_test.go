@@ -67,10 +67,54 @@ func TestHandleFileChanged(t *testing.T) {
 	tab.cursorChar = 5
 
 	// Simulate file change with fewer lines.
-	m.Update(fileChangedMsg{lines: []string{"only one line"}})
+	m.Update(fileChangedMsg{path: tab.filePath, lines: []string{"only one line"}})
 
 	if tab.cursorLine != 0 {
 		t.Errorf("expected cursorLine clipped to 0, got %d", tab.cursorLine)
+	}
+}
+
+func TestHandleFileChanged_UpdatesDiffTab(t *testing.T) {
+	m := newTestModel(t)
+
+	// Create a diff tab with known old/new content.
+	oldLines := []string{"old1", "old2"}
+	newLines := []string{"new1", "new2", "new3"}
+	dt := newDiffTab("/workspace/file.go", newLines, func(string) {}, func() {})
+	dt.diffViewData = buildDiffData(oldLines, newLines)
+	dt.diffOldSource = "old1\nold2"
+	m.tabs = append(m.tabs, dt)
+	m.activeTab = 0
+
+	// Simulate the on-disk file changing.
+	updatedOldLines := []string{"updated1", "updated2", "updated3"}
+	m.Update(fileChangedMsg{
+		path:  "/workspace/file.go",
+		lines: updatedOldLines,
+	})
+
+	if dt.diffOldSource != "updated1\nupdated2\nupdated3" {
+		t.Errorf("expected diffOldSource updated, got %q", dt.diffOldSource)
+	}
+	if dt.diffViewData == nil {
+		t.Fatal("expected diffViewData to be rebuilt")
+	}
+}
+
+func TestHandleFileChanged_IgnoresUnrelatedPath(t *testing.T) {
+	content := "line1\nline2\nline3"
+	m := newTestModelWithFile(t, content)
+	tab := m.tabs[0]
+
+	// Send a change for a different file.
+	m.Update(fileChangedMsg{
+		path:  "/some/other/file.go",
+		lines: []string{"changed"},
+	})
+
+	// The active tab should be untouched.
+	if len(tab.lines) != 3 {
+		t.Errorf("expected 3 lines unchanged, got %d", len(tab.lines))
 	}
 }
 

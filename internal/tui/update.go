@@ -214,10 +214,13 @@ func (m *Model) closeTab(idx int) {
 	if t.kind == diffTab {
 		t.rejectAndClear()
 	}
-	if t.filePath != "" && t.kind == fileTab && m.watcher != nil {
-		_ = m.watcher.Remove(t.filePath)
-	}
+	filePath := t.filePath
 	m.tabs = slices.Delete(m.tabs, idx, idx+1)
+
+	if filePath != "" {
+		m.unwatchIfOrphaned(filePath)
+	}
+
 	if len(m.tabs) == 0 {
 		m.activeTab = 0
 		m.focusPane = paneTree
@@ -229,18 +232,39 @@ func (m *Model) closeTab(idx int) {
 // closeDiffTabs removes all diff tabs.
 func (m *Model) closeDiffTabs() {
 	tabs := make([]*tab, 0, len(m.tabs))
+	var removedPaths []string
 	for _, t := range m.tabs {
 		if t.kind == diffTab {
 			t.rejectAndClear()
+			if t.filePath != "" {
+				removedPaths = append(removedPaths, t.filePath)
+			}
 		} else {
 			tabs = append(tabs, t)
 		}
 	}
 	m.tabs = tabs
+	for _, p := range removedPaths {
+		m.unwatchIfOrphaned(p)
+	}
 	if len(m.tabs) == 0 {
 		m.activeTab = 0
 		m.focusPane = paneTree
 	} else if m.activeTab >= len(m.tabs) {
 		m.activeTab = len(m.tabs) - 1
 	}
+}
+
+// unwatchIfOrphaned removes the file from the watcher
+// if no remaining tab references it.
+func (m *Model) unwatchIfOrphaned(path string) {
+	if m.watcher == nil {
+		return
+	}
+	for _, t := range m.tabs {
+		if t.filePath == path {
+			return
+		}
+	}
+	_ = m.watcher.Remove(path)
 }

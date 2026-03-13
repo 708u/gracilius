@@ -78,6 +78,7 @@ type IdeConnectedMsg struct{}
 
 // fileChangedMsg notifies the TUI that the watched file has changed.
 type fileChangedMsg struct {
+	path  string
 	lines []string
 }
 
