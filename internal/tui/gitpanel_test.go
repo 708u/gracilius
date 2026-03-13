@@ -5,16 +5,17 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/git"
 )
 
 func TestGitChangedFilesMsg_Populates(t *testing.T) {
 	m := newTestModel(t)
 
 	entries := []changedFileEntry{
-		{name: "file1.go", status: "M", absPath: "/tmp/file1.go",
+		{name: "file1.go", status: git.StatusModified, absPath: "/tmp/file1.go",
 			oldContent: []string{"old"}, newContent: []string{"new"},
 			category: categoryUnstaged},
-		{name: "file2.go", status: "A", absPath: "/tmp/file2.go",
+		{name: "file2.go", status: git.StatusAdded, absPath: "/tmp/file2.go",
 			newContent: []string{"added"}, category: categoryUnstaged},
 	}
 
@@ -62,7 +63,7 @@ func TestOpenGitDiffEntry_CreatesDiffTab(t *testing.T) {
 	m.gitChangedFiles = []changedFileEntry{
 		{
 			name:       "main.go",
-			status:     "M",
+			status:     git.StatusModified,
 			absPath:    "/tmp/main.go",
 			oldContent: []string{"old line"},
 			newContent: []string{"new line"},
@@ -95,7 +96,7 @@ func TestOpenGitDiffEntry_Binary(t *testing.T) {
 	m.activePanel = panelGitDiff
 
 	m.gitChangedFiles = []changedFileEntry{
-		{name: "image.png", status: "M", absPath: "/tmp/image.png", binary: true},
+		{name: "image.png", status: git.StatusModified, absPath: "/tmp/image.png", binary: true},
 	}
 	m.gitCursor = 0
 
@@ -116,7 +117,7 @@ func TestOpenGitDiffEntry_DeletedFile(t *testing.T) {
 	m.gitChangedFiles = []changedFileEntry{
 		{
 			name:       "removed.go",
-			status:     "D",
+			status:     git.StatusDeleted,
 			absPath:    "/tmp/removed.go",
 			oldContent: []string{"old line1", "old line2"},
 			newContent: nil,
@@ -141,7 +142,7 @@ func TestOpenGitDiffEntry_NewFile(t *testing.T) {
 	m.gitChangedFiles = []changedFileEntry{
 		{
 			name:       "new.go",
-			status:     "A",
+			status:     git.StatusAdded,
 			absPath:    "/tmp/new.go",
 			oldContent: nil,
 			newContent: []string{"new line1"},
@@ -165,9 +166,9 @@ func TestGitPanelNavigation(t *testing.T) {
 	m.activePanel = panelGitDiff
 	m.gitLoaded = true
 	m.gitChangedFiles = []changedFileEntry{
-		{name: "a.go", status: "M", category: categoryUnstaged},
-		{name: "b.go", status: "A", category: categoryUnstaged},
-		{name: "c.go", status: "D", category: categoryUnstaged},
+		{name: "a.go", status: git.StatusModified, category: categoryUnstaged},
+		{name: "b.go", status: git.StatusAdded, category: categoryUnstaged},
+		{name: "c.go", status: git.StatusDeleted, category: categoryUnstaged},
 	}
 	m.gitVisualRows, m.gitEntryToVisualIdx = buildGitVisualRows(m.gitChangedFiles)
 	m.gitCursor = 0
@@ -233,7 +234,7 @@ func TestGitDiffView_ScrollWithKeys(t *testing.T) {
 	m.gitChangedFiles = []changedFileEntry{
 		{
 			name:       "big.go",
-			status:     "M",
+			status:     git.StatusModified,
 			absPath:    "/tmp/big.go",
 			oldContent: old,
 			newContent: new_,
@@ -281,9 +282,9 @@ func TestGitDiffView_ScrollWithKeys(t *testing.T) {
 
 func TestBuildGitVisualRows(t *testing.T) {
 	entries := []changedFileEntry{
-		{name: "staged.go", status: "M", category: categoryStaged},
-		{name: "unstaged.go", status: "M", category: categoryUnstaged},
-		{name: "untracked.go", status: "?", category: categoryUntracked},
+		{name: "staged.go", status: git.StatusModified, category: categoryStaged},
+		{name: "unstaged.go", status: git.StatusModified, category: categoryUnstaged},
+		{name: "untracked.go", status: git.StatusUntracked, category: categoryUntracked},
 	}
 	rows, reverseMap := buildGitVisualRows(entries)
 
@@ -318,7 +319,7 @@ func TestBuildGitVisualRows(t *testing.T) {
 
 func TestBuildGitVisualRows_EmptySection(t *testing.T) {
 	entries := []changedFileEntry{
-		{name: "a.go", status: "M", category: categoryUnstaged},
+		{name: "a.go", status: git.StatusModified, category: categoryUnstaged},
 	}
 	rows, _ := buildGitVisualRows(entries)
 	// Only unstaged: 1 header + 1 file
@@ -354,9 +355,9 @@ func TestGitChangedFilesMsg_Categories(t *testing.T) {
 	m := newTestModel(t)
 
 	entries := []changedFileEntry{
-		{name: "staged.go", status: "M", category: categoryStaged},
-		{name: "unstaged.go", status: "M", category: categoryUnstaged},
-		{name: "new.txt", status: "?", category: categoryUntracked},
+		{name: "staged.go", status: git.StatusModified, category: categoryStaged},
+		{name: "unstaged.go", status: git.StatusModified, category: categoryUnstaged},
+		{name: "new.txt", status: git.StatusUntracked, category: categoryUntracked},
 	}
 
 	m.Update(gitChangedFilesMsg{entries: entries})
@@ -373,7 +374,7 @@ func TestOpenGitDiffEntry_DuplicateTab(t *testing.T) {
 
 	entry := changedFileEntry{
 		name:       "main.go",
-		status:     "M",
+		status:     git.StatusModified,
 		absPath:    "/tmp/main.go",
 		oldContent: []string{"old"},
 		newContent: []string{"new"},

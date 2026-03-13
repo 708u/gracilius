@@ -9,19 +9,25 @@ import (
 	"strings"
 )
 
+// FileStatus represents a git file status.
+type FileStatus string
+
+// String implements fmt.Stringer.
+func (s FileStatus) String() string { return string(s) }
+
 // Git file status constants.
 const (
-	StatusAdded     = "A"
-	StatusModified  = "M"
-	StatusDeleted   = "D"
-	StatusRenamed   = "R"
-	StatusUntracked = "?"
+	StatusAdded     FileStatus = "A"
+	StatusModified  FileStatus = "M"
+	StatusDeleted   FileStatus = "D"
+	StatusRenamed   FileStatus = "R"
+	StatusUntracked FileStatus = "?"
 )
 
 // ChangedFile represents a file changed in the working tree.
 type ChangedFile struct {
 	Path       string
-	Status     string
+	Status     FileStatus
 	OldContent []string // nil for new files
 	NewContent []string // nil for deleted files
 	Binary     bool
@@ -30,8 +36,8 @@ type ChangedFile struct {
 // blobReader reads file content from a specific source.
 type blobReader func(dir, path string) ([]string, bool, error)
 
-// readerPair holds the old/new content readers for a diff source.
-type readerPair struct {
+// diffReader holds the old/new content readers for a diff.
+type diffReader struct {
 	readOld blobReader
 	readNew blobReader
 }
@@ -40,8 +46,8 @@ type readerPair struct {
 type StatusReader struct {
 	dir      string
 	root     string
-	staged   readerPair
-	unstaged readerPair
+	staged   diffReader
+	unstaged diffReader
 }
 
 // NewStatusReader creates a StatusReader for the given directory.
@@ -53,11 +59,11 @@ func NewStatusReader(dir string) (*StatusReader, error) {
 	return &StatusReader{
 		dir:  dir,
 		root: root,
-		staged: readerPair{
+		staged: diffReader{
 			readOld: readHEADBlob,
 			readNew: readGitBlob,
 		},
-		unstaged: readerPair{
+		unstaged: diffReader{
 			readOld: readGitBlob,
 			readNew: func(_, path string) ([]string, bool, error) {
 				return readWorkFile(root, path)
@@ -72,7 +78,7 @@ func (s *StatusReader) ChangedFiles() ([]ChangedFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("git diff: %w", err)
 	}
-	return parseChangedFiles(s.dir, out, s.unstaged)
+	return s.parseChangedFiles(out, s.unstaged)
 }
 
 // StagedFiles returns staged (cached) changed files.
@@ -81,7 +87,7 @@ func (s *StatusReader) StagedFiles() ([]ChangedFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("git diff --cached: %w", err)
 	}
-	return parseChangedFiles(s.dir, out, s.staged)
+	return s.parseChangedFiles(out, s.staged)
 }
 
 // UntrackedFiles returns untracked files.
@@ -120,11 +126,10 @@ func (s *StatusReader) UntrackedFiles() ([]ChangedFile, error) {
 }
 
 // parseChangedFiles parses git diff --name-status output
-// using the provided reader pair for old and new content.
-func parseChangedFiles(
-	dir string,
+// using the provided diffReader for old and new content.
+func (s *StatusReader) parseChangedFiles(
 	nameStatusOutput []byte,
-	readers readerPair,
+	readers diffReader,
 ) ([]ChangedFile, error) {
 	output := strings.TrimSpace(string(nameStatusOutput))
 	if output == "" {
@@ -138,14 +143,14 @@ func parseChangedFiles(
 			continue
 		}
 
-		status := fields[0]
+		status := FileStatus(fields[0])
 		cf := ChangedFile{}
 
 		switch {
 		case status == StatusAdded:
 			cf.Status = StatusAdded
 			cf.Path = fields[1]
-			content, bin, readErr := readers.readNew(dir, cf.Path)
+			content, bin, readErr := readers.readNew(s.dir, cf.Path)
 			if readErr != nil {
 				return nil, readErr
 			}
@@ -157,11 +162,11 @@ func parseChangedFiles(
 		case status == StatusModified:
 			cf.Status = StatusModified
 			cf.Path = fields[1]
-			old, oldBin, oldErr := readers.readOld(dir, cf.Path)
+			old, oldBin, oldErr := readers.readOld(s.dir, cf.Path)
 			if oldErr != nil {
 				return nil, oldErr
 			}
-			new_, newBin, newErr := readers.readNew(dir, cf.Path)
+			new_, newBin, newErr := readers.readNew(s.dir, cf.Path)
 			if newErr != nil {
 				return nil, newErr
 			}
@@ -174,7 +179,7 @@ func parseChangedFiles(
 		case status == StatusDeleted:
 			cf.Status = StatusDeleted
 			cf.Path = fields[1]
-			old, bin, oldErr := readers.readOld(dir, cf.Path)
+			old, bin, oldErr := readers.readOld(s.dir, cf.Path)
 			if oldErr != nil {
 				return nil, oldErr
 			}
@@ -183,7 +188,7 @@ func parseChangedFiles(
 				cf.OldContent = old
 			}
 
-		case strings.HasPrefix(status, StatusRenamed):
+		case strings.HasPrefix(status.String(), StatusRenamed.String()):
 			cf.Status = StatusRenamed
 			if len(fields) < 3 {
 				continue
@@ -191,11 +196,11 @@ func parseChangedFiles(
 			oldPath := fields[1]
 			newPath := fields[2]
 			cf.Path = newPath
-			old, oldBin, oldErr := readers.readOld(dir, oldPath)
+			old, oldBin, oldErr := readers.readOld(s.dir, oldPath)
 			if oldErr != nil {
 				return nil, oldErr
 			}
-			new_, newBin, newErr := readers.readNew(dir, newPath)
+			new_, newBin, newErr := readers.readNew(s.dir, newPath)
 			if newErr != nil {
 				return nil, newErr
 			}

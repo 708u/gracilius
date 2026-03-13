@@ -164,7 +164,7 @@ func (m *Model) openGitDiffEntry() {
 	m.focusPane = paneEditor
 }
 
-var gitStatusStyles = map[string]lipgloss.Style{
+var gitStatusStyles = map[git.FileStatus]lipgloss.Style{
 	git.StatusAdded:     lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // green
 	git.StatusDeleted:   lipgloss.NewStyle().Foreground(lipgloss.Color("1")), // red
 	git.StatusModified:  lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // yellow
@@ -209,7 +209,7 @@ func (m *Model) renderGitPanel(width, height int) []string {
 		isCursor := row.entryIdx == m.gitCursor && m.focusPane == paneTree
 
 		style := gitStatusStyles[e.status]
-		statusIcon := style.Render(e.status)
+		statusIcon := style.Render(e.status.String())
 		line := "    " + statusIcon + " " + e.name
 		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)

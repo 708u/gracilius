@@ -2,6 +2,7 @@ package tui
 
 import (
 	"charm.land/lipgloss/v2"
+	"github.com/708u/gracilius/internal/git"
 )
 
 // fileCategory classifies a changed file entry.
@@ -16,7 +17,7 @@ const (
 // changedFileEntry represents a file with changes.
 type changedFileEntry struct {
 	name       string
-	status     string // A, M, D, R, ?
+	status     git.FileStatus
 	absPath    string
 	oldContent []string
 	newContent []string
@@ -52,7 +53,7 @@ func renderChangedFiles(entries []changedFileEntry, width, height int) []string 
 			if len(lines) >= height {
 				break
 			}
-			lines = append(lines, padRight("  "+e.status+" "+e.name, width))
+			lines = append(lines, padRight("  "+e.status.String()+" "+e.name, width))
 		}
 	}
 
