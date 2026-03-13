@@ -15,9 +15,9 @@ func gitCmd(dir string, args ...string) ([]byte, error) {
 	return cmd.Output()
 }
 
-// repoRoot returns the repo root for dir,
+// RepoRoot returns the repo root for dir,
 // or error if not a git repo.
-func repoRoot(dir string) (string, error) {
+func RepoRoot(dir string) (string, error) {
 	out, err := gitCmd(dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return "", fmt.Errorf("not a git repository: %s", dir)

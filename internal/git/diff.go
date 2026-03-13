@@ -52,7 +52,7 @@ type StatusReader struct {
 
 // NewStatusReader creates a StatusReader for the given directory.
 func NewStatusReader(dir string) (*StatusReader, error) {
-	root, err := repoRoot(dir)
+	root, err := RepoRoot(dir)
 	if err != nil {
 		return nil, err
 	}

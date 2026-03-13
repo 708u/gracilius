@@ -135,24 +135,26 @@ func (s *openFileOverlay) updateTheme(theme themeConfig) {
 	s.list.SetDelegate(d)
 }
 
-// scanAllFiles recursively scans rootDir using scanDir (from filetree.go)
-// and returns all non-hidden files as fileItem values with rootDir-relative paths.
-func scanAllFiles(rootDir string) []fileItem {
+// scanAllFiles recursively scans rootDir and returns all non-ignored files
+// as fileItem values with rootDir-relative paths.
+// When exclude is non-nil, gitignore-based filtering is applied;
+// otherwise isHiddenEntry is used.
+func scanAllFiles(rootDir string, exclude ExcludeFunc) []fileItem {
 	var entries []fileEntry
-	entries = scanDir(rootDir, 0, entries)
+	entries = scanDir(rootDir, 0, entries, exclude)
 	var items []fileItem
-	collectFiles(rootDir, entries, &items)
+	collectFiles(rootDir, entries, &items, exclude)
 	return items
 }
 
 // collectFiles recursively collects file items from entries,
 // expanding directories to get all nested files.
-func collectFiles(rootDir string, entries []fileEntry, items *[]fileItem) {
+func collectFiles(rootDir string, entries []fileEntry, items *[]fileItem, exclude ExcludeFunc) {
 	for _, e := range entries {
 		if e.isDir {
 			var children []fileEntry
-			children = scanDir(e.path, 0, children)
-			collectFiles(rootDir, children, items)
+			children = scanDir(e.path, 0, children, exclude)
+			collectFiles(rootDir, children, items, exclude)
 		} else {
 			rel, err := filepath.Rel(rootDir, e.path)
 			if err != nil {
@@ -167,8 +169,8 @@ func collectFiles(rootDir string, entries []fileEntry, items *[]fileItem) {
 }
 
 // open activates the open-file overlay and populates it with files.
-func (s *openFileOverlay) open(rootDir string) tea.Cmd {
-	s.allItems = scanAllFiles(rootDir)
+func (s *openFileOverlay) open(rootDir string, exclude ExcludeFunc) tea.Cmd {
+	s.allItems = scanAllFiles(rootDir, exclude)
 	s.targets = make([]string, len(s.allItems))
 	for i, fi := range s.allItems {
 		s.targets[i] = fi.path

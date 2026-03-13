@@ -44,6 +44,11 @@ type tab struct {
 	hasGitDiffModeTag bool        // true if opened from git panel
 	gitDiffLabel      string      // tab label prefix (e.g. "[working]", "[vs main]")
 
+	// diff syntax highlights (old/new sides)
+	diffOldHighlights []highlightedLine
+	diffNewHighlights []highlightedLine
+	diffOldSource     string // old-side source text for re-highlighting on theme change
+
 	// diff render cache (invalidated on width/theme change)
 	diffCachedLines []string // pre-rendered visual lines (same as viewport content)
 	diffCacheWidth  int
@@ -127,7 +132,7 @@ func (t *tab) syncContent(lines []string) {
 // renderDiffContent pre-renders diff lines and updates viewport content.
 // Returns the hunk visual offsets for initial scroll positioning.
 func (t *tab) renderDiffContent(theme themeConfig, width int) []int {
-	result := renderAllDiffLines(t.diffViewData, theme, width)
+	result := renderAllDiffLines(t.diffViewData, theme, width, t.diffOldHighlights, t.diffNewHighlights)
 	t.diffCachedLines = result.lines
 	t.vp.SetContentLines(result.lines)
 	t.diffCacheWidth = width

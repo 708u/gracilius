@@ -15,6 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/708u/gracilius/internal/comment"
 	"github.com/708u/gracilius/internal/config"
+	"github.com/708u/gracilius/internal/git"
 	"github.com/708u/gracilius/internal/server"
 	"github.com/708u/gracilius/internal/tui"
 	"github.com/alecthomas/kong"
@@ -109,7 +110,44 @@ func (c *ViewCmd) Run() error {
 	}
 	defer func() { _ = dirWatcher.Close() }()
 
-	if err := tui.WatchDirRecursive(dirWatcher, absRootDir); err != nil {
+	// Build exclude function based on gitignore rules.
+	// Falls back to nil (isHiddenEntry) for non-git repos.
+	var excludeFunc tui.ExcludeFunc
+	if repoRoot, rootErr := git.RepoRoot(absRootDir); rootErr == nil {
+		excludeFunc = func(absPaths []string) map[string]bool {
+			relPaths := make([]string, 0, len(absPaths))
+			absMap := make(map[string]string, len(absPaths)) // rel -> abs
+			for _, ap := range absPaths {
+				clean := ap
+				hasSuffix := strings.HasSuffix(ap, "/")
+				if hasSuffix {
+					clean = strings.TrimSuffix(ap, "/")
+				}
+				rel, err := filepath.Rel(repoRoot, clean)
+				if err != nil {
+					continue
+				}
+				if hasSuffix {
+					rel += "/"
+				}
+				relPaths = append(relPaths, rel)
+				absMap[rel] = ap
+			}
+			ignored := git.CheckIgnored(repoRoot, relPaths)
+			if len(ignored) == 0 {
+				return nil
+			}
+			result := make(map[string]bool, len(ignored))
+			for relPath := range ignored {
+				if ap, ok := absMap[relPath]; ok {
+					result[ap] = true
+				}
+			}
+			return result
+		}
+	}
+
+	if err := tui.WatchDirRecursive(dirWatcher, absRootDir, excludeFunc); err != nil {
 		return fmt.Errorf("failed to watch root dir: %w", err)
 	}
 
@@ -144,7 +182,7 @@ func (c *ViewCmd) Run() error {
 		}
 	}
 
-	m, err := tui.NewModel(srv, store, c.Path, watcher, dirWatcher, commentWatcher, gitDirWatcher)
+	m, err := tui.NewModel(srv, store, c.Path, watcher, dirWatcher, commentWatcher, gitDirWatcher, excludeFunc)
 	if err != nil {
 		return fmt.Errorf("failed to create TUI model: %w", err)
 	}

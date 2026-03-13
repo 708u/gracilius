@@ -124,6 +124,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					tab.filePath, strings.Join(tab.lines, "\n"), m.theme,
 				)
 			}
+			if tab.diffViewData != nil && tab.filePath != "" {
+				if tab.diffOldSource != "" {
+					tab.diffOldHighlights = highlightFile(
+						tab.filePath, tab.diffOldSource, m.theme,
+					)
+				}
+				if len(tab.lines) > 0 {
+					tab.diffNewHighlights = highlightFile(
+						tab.filePath, strings.Join(tab.lines, "\n"), m.theme,
+					)
+				}
+			}
 		}
 		return m, nil
 	case fileChangedMsg:

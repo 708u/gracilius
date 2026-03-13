@@ -195,6 +195,9 @@ type Model struct {
 	gitSyncGen       int  // generation counter for debounced git sync
 	gitMergeBase     string
 	gitDefaultBranch string
+
+	// file exclusion (gitignore-based when available)
+	excludeFunc ExcludeFunc
 }
 
 // lineKind distinguishes the type of a visual row.
@@ -286,7 +289,7 @@ func (m *Model) gitState() *gitPanelState {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher, gitDirWatcher *fsnotify.Watcher) (*Model, error) {
+func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher, gitDirWatcher *fsnotify.Watcher, exclude ExcludeFunc) (*Model, error) {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root directory: %w", err)
@@ -317,5 +320,6 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 		commentWatcher: commentWatcher,
 		gitDirWatcher:  gitDirWatcher,
 		gitDiffMode:    gitModeWorking,
+		excludeFunc:    exclude,
 	}, nil
 }

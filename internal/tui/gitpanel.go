@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	tea "charm.land/bubbletea/v2"
@@ -231,6 +232,16 @@ func (m *Model) openGitDiffEntry() {
 	}
 	dt.vp.SetWidth(lo.editorWidth)
 	dt.vp.SetHeight(lo.contentHeight)
+
+	if len(oldContent) > 0 {
+		oldSource := strings.Join(oldContent, "\n")
+		dt.diffOldHighlights = highlightFile(entry.absPath, oldSource, m.theme)
+		dt.diffOldSource = oldSource
+	}
+	if len(newContent) > 0 {
+		dt.diffNewHighlights = highlightFile(entry.absPath, strings.Join(newContent, "\n"), m.theme)
+	}
+
 	dt.diffViewData = buildDiffData(oldContent, newContent)
 	dt.initDiffContent(m.theme, lo.editorWidth)
 

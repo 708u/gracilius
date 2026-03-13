@@ -121,6 +121,14 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 	if oldContent, err := os.ReadFile(msg.FilePath); err == nil {
 		oldLines = splitLines(oldContent)
 	}
+
+	if len(oldLines) > 0 {
+		oldSource := strings.Join(oldLines, "\n")
+		dt.diffOldHighlights = highlightFile(msg.FilePath, oldSource, m.theme)
+		dt.diffOldSource = oldSource
+	}
+	dt.diffNewHighlights = highlightFile(msg.FilePath, msg.Contents, m.theme)
+
 	dt.diffViewData = buildDiffData(oldLines, newLines)
 	dt.initDiffContent(m.theme, dt.vp.Width())
 

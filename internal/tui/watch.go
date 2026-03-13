@@ -110,6 +110,7 @@ func (m *Model) watchGitDir() tea.Cmd {
 // watchDir returns a tea.Cmd that watches directories for changes.
 func (m *Model) watchDir() tea.Cmd {
 	w := m.dirWatcher
+	exclude := m.excludeFunc
 	return func() tea.Msg {
 		if w == nil {
 			return nil
@@ -124,8 +125,18 @@ func (m *Model) watchDir() tea.Cmd {
 					log.Printf("Directory changed: %s (%s)", event.Name, event.Op)
 					if event.Op&fsnotify.Create != 0 {
 						if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-							if !isHiddenEntry(info.Name()) {
-								if err := WatchDirRecursive(w, event.Name); err != nil {
+							var skip bool
+							switch {
+							case info.Name() == ".git":
+								skip = true
+							case exclude != nil:
+								ignored := exclude([]string{event.Name + "/"})
+								skip = ignored[event.Name+"/"]
+							default:
+								skip = isHiddenEntry(info.Name())
+							}
+							if !skip {
+								if err := WatchDirRecursive(w, event.Name, exclude); err != nil {
 									log.Printf("Failed to watch new dir: %v", err)
 								}
 							}
