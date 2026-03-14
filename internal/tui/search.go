@@ -149,12 +149,13 @@ func (m *Model) startSearch() {
 }
 
 // confirmSearch locks in the current query and exits search input mode.
+// If the query is empty or has no matches, it cancels the search instead.
 func (m *Model) confirmSearch() {
 	m.search.query = m.search.input.Value()
 	m.search.active = false
 	m.search.input.Blur()
-	if m.search.query == "" {
-		m.clearSearchMatches()
+	if m.search.query == "" || m.searchMatchCount() == 0 {
+		m.cancelSearch()
 	}
 }
 
