@@ -28,11 +28,11 @@ func diffColorsFor(theme themeConfig) diffColors {
 	}
 	if theme.name == "github-dark" {
 		return diffColors{
-			addBg:     bg("#0d2818"),
-			delBg:     bg("#2c1519"),
-			wordAddBg: bg("#174928"),
-			wordDelBg: bg("#6e302b"),
-			fillerBg:  bg("#1e1e1e"),
+			addBg:     bg("#122d1e"),
+			delBg:     bg("#351c20"),
+			wordAddBg: bg("#1f5c34"),
+			wordDelBg: bg("#7e3834"),
+			fillerBg:  bg("#222222"),
 		}
 	}
 	return diffColors{
