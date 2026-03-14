@@ -183,6 +183,9 @@ type Model struct {
 
 	// file exclusion (gitignore-based when available)
 	excludeFunc ExcludeFunc
+
+	// in-file search
+	search searchState
 }
 
 // gitChangedFilesMsg carries the result of loading git changed files.
@@ -306,5 +309,6 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 		commentWatcher:  commentWatcher,
 		gitIndexWatcher: gitIndexWatcher,
 		excludeFunc:     exclude,
+		search:          newSearchState(),
 	}, nil
 }

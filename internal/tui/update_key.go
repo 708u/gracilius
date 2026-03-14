@@ -43,6 +43,10 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyInputMode(t, msg)
 	}
 
+	if m.search.active {
+		return m.handleKeySearch(msg)
+	}
+
 	if m.gPending {
 		m.gPending = false
 		if key.Matches(msg, m.keys.GoTop) {
@@ -211,6 +215,8 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 		return m, nil, true
 
 	// No-op: suppress file-tab actions that should not fire on diff tabs.
+	// Search keys (/, n, N, Enter, Shift+Enter) are intentionally NOT
+	// listed here so they fall through to handleKeyNormal.
 	case key.Matches(msg, m.keys.Left),
 		key.Matches(msg, m.keys.Right),
 		key.Matches(msg, m.keys.Select),
@@ -236,6 +242,11 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	switch {
 	case key.Matches(msg, m.keys.Cancel):
+		if m.search.query != "" {
+			m.search.query = ""
+			m.clearSearchMatches()
+			return m, nil
+		}
 		if hasTab && t.selecting {
 			t.selecting = false
 			m.notifyClearSelection()
@@ -269,8 +280,14 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.focusPane = paneTree
 			}
 		}
+	case msg.Code == tea.KeyEnter && msg.Mod.Contains(tea.ModShift):
+		if m.focusPane == paneEditor && m.search.query != "" {
+			m.prevMatch()
+		}
 	case key.Matches(msg, m.keys.Enter):
-		if m.focusPane == paneTree {
+		if m.focusPane == paneEditor && m.search.query != "" {
+			m.nextMatch()
+		} else if m.focusPane == paneTree {
 			switch m.activePanel {
 			case panelFiles:
 				if len(m.fileTree) > 0 {
@@ -437,6 +454,14 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.gPending = true
 	case key.Matches(msg, m.keys.OpenFile):
 		return m, m.openFile.open(m.rootDir, m.excludeFunc)
+	case key.Matches(msg, m.keys.Search):
+		if hasTab {
+			m.startSearch()
+		}
+	case key.Matches(msg, m.keys.SearchNext):
+		m.nextMatch()
+	case key.Matches(msg, m.keys.SearchPrev):
+		m.prevMatch()
 	}
 
 	m.adjustScroll()

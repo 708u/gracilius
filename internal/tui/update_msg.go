@@ -46,6 +46,10 @@ func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.search.query != "" {
+		m.refreshSearchMatches()
+	}
+
 	cmd := m.watchFile()
 	return m, cmd
 }

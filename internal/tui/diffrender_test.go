@@ -15,7 +15,7 @@ func renderDiff(data *diffData, theme themeConfig, width, height, offset int) []
 
 // renderDiffHL is a test helper that pre-renders diff lines with optional syntax highlights.
 func renderDiffHL(data *diffData, theme themeConfig, width, height, offset int, oldHL, newHL []highlightedLine) []string {
-	result := renderAllDiffLines(data, theme, width, oldHL, newHL)
+	result := renderAllDiffLines(data, theme, width, oldHL, newHL, nil)
 	// Simulate viewport slicing.
 	start := min(offset, len(result.lines))
 	end := min(start+height, len(result.lines))
@@ -236,7 +236,7 @@ func TestRenderSideBySide_SoftWrapWithSyntax(t *testing.T) {
 
 	// Use a narrow width to force soft-wrapping.
 	width := 60
-	result := renderAllDiffLines(data, darkTheme, width, oldHL, newHL)
+	result := renderAllDiffLines(data, darkTheme, width, oldHL, newHL, nil)
 
 	// Should produce more visual lines than data rows due to wrapping.
 	if len(result.lines) <= len(data.rows) {
@@ -258,7 +258,7 @@ func TestRenderAllDiffLines_RowVisualStarts(t *testing.T) {
 	new := []string{"aaa", "BBB", "ccc"}
 	data := buildDiffData(old, new)
 
-	result := renderAllDiffLines(data, darkTheme, 80, nil, nil)
+	result := renderAllDiffLines(data, darkTheme, 80, nil, nil, nil)
 
 	if len(result.rowVisualStarts) != len(data.rows) {
 		t.Fatalf("rowVisualStarts length = %d, want %d", len(result.rowVisualStarts), len(data.rows))
@@ -280,7 +280,7 @@ func TestRenderAllDiffLines_RowVisualStarts_SoftWrap(t *testing.T) {
 	data := buildDiffData(old, new)
 
 	// Narrow width to force soft-wrapping on the long line.
-	result := renderAllDiffLines(data, darkTheme, 40, nil, nil)
+	result := renderAllDiffLines(data, darkTheme, 40, nil, nil, nil)
 
 	if len(result.rowVisualStarts) != len(data.rows) {
 		t.Fatalf("rowVisualStarts length = %d, want %d", len(result.rowVisualStarts), len(data.rows))
@@ -364,7 +364,7 @@ func TestEnsureDiffContent_PreservesLogicalPosition(t *testing.T) {
 
 	// Re-render at narrow width.
 	narrowWidth := 40
-	tb.ensureDiffContent(darkTheme, narrowWidth)
+	tb.ensureDiffContent(darkTheme, narrowWidth, 0)
 
 	// After re-render, the viewport should still point at the same logical row.
 	narrowVisualOff := tb.diffRowVisualStarts[lastRow]
@@ -385,7 +385,7 @@ func TestRenderSideBySide_SoftWrapWithWordDiff(t *testing.T) {
 
 	// Narrow width to force soft-wrapping on the modified row.
 	width := 50
-	result := renderAllDiffLines(data, darkTheme, width, oldHL, newHL)
+	result := renderAllDiffLines(data, darkTheme, width, oldHL, newHL, nil)
 
 	// Should produce more visual lines than data rows due to wrapping.
 	if len(result.lines) <= len(data.rows) {
@@ -423,7 +423,7 @@ func TestRenderSideBySide_SoftWrapWordDiffNoSyntax(t *testing.T) {
 	data := buildDiffData(old, new)
 
 	width := 50
-	result := renderAllDiffLines(data, darkTheme, width, nil, nil)
+	result := renderAllDiffLines(data, darkTheme, width, nil, nil, nil)
 
 	if len(result.lines) <= len(data.rows) {
 		t.Fatalf("expected soft-wrap, got %d lines for %d rows",

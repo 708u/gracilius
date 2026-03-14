@@ -32,6 +32,9 @@ type keyMap struct {
 	SwitchPanel   key.Binding
 	ToggleSidebar key.Binding
 	Confirm       key.Binding
+	Search        key.Binding
+	SearchNext    key.Binding
+	SearchPrev    key.Binding
 }
 
 func newKeyMap() keyMap {
@@ -139,6 +142,18 @@ func newKeyMap() keyMap {
 		Confirm: key.NewBinding(
 			key.WithKeys("y"),
 		),
+		Search: key.NewBinding(
+			key.WithKeys("/"),
+			key.WithHelp("/", "search"),
+		),
+		SearchNext: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "next match"),
+		),
+		SearchPrev: key.NewBinding(
+			key.WithKeys("N"),
+			key.WithHelp("N", "prev match"),
+		),
 	}
 }
 
@@ -147,7 +162,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.SwitchPane, k.SwitchPanel, k.ToggleSidebar,
 		k.PrevTab, k.NextTab, k.CloseTab,
-		k.Select, k.Copy, k.OpenFile,
+		k.Select, k.Copy, k.OpenFile, k.Search,
 		k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit,
 	}
 }
@@ -157,7 +172,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown},
 		{k.Enter, k.SwitchPane, k.SwitchPanel, k.ToggleSidebar, k.PrevTab, k.NextTab, k.CloseTab},
-		{k.Select, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
+		{k.Select, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.Search, k.SearchNext, k.SearchPrev, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
 	}
 }
 
@@ -179,5 +194,8 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km.SwitchPane.SetEnabled(hasTab && m.sidebarVisible)
 	km.SwitchPanel.SetEnabled(true)
 	km.ToggleSidebar.SetEnabled(true)
+	km.Search.SetEnabled(hasTab)
+	km.SearchNext.SetEnabled(m.search.query != "")
+	km.SearchPrev.SetEnabled(m.search.query != "")
 	return km
 }

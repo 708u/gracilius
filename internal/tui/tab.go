@@ -54,6 +54,11 @@ type tab struct {
 	diffCacheWidth      int
 	diffCacheTheme      string
 	diffRowVisualStarts []int // logical row → visual line offset
+
+	// search match cache (per-tab)
+	searchMatches     []searchMatch
+	diffSearchMatches []diffSearchMatch
+	searchGen         int // generation for diff cache invalidation
 }
 
 // diffState holds accept/reject callbacks for a diff review tab.
@@ -165,7 +170,7 @@ func (t *tab) syncContent(lines []string) {
 // renderDiffContent pre-renders diff lines and updates viewport content.
 // Returns the hunk visual offsets for initial scroll positioning.
 func (t *tab) renderDiffContent(theme themeConfig, width int) []int {
-	result := renderAllDiffLines(t.diffViewData, theme, width, t.diffOldHighlights, t.diffNewHighlights)
+	result := renderAllDiffLines(t.diffViewData, theme, width, t.diffOldHighlights, t.diffNewHighlights, t.diffSearchMatches)
 	t.diffCachedLines = result.lines
 	t.diffRowVisualStarts = result.rowVisualStarts
 	t.vp.SetContentLines(result.lines)
@@ -205,12 +210,14 @@ func (t *tab) diffVisualToLogical(visualOff int) (logicalRow, subOff int) {
 	return row, visualOff - starts[row]
 }
 
-// ensureDiffContent refreshes the diff render cache if width/theme changed.
+// ensureDiffContent refreshes the diff render cache if width/theme/search changed.
 // Anchors the viewport to the same logical diff row across re-renders.
-func (t *tab) ensureDiffContent(theme themeConfig, width int) {
-	if width <= diffSeparatorWidth || (t.diffCacheWidth == width && t.diffCacheTheme == theme.name) {
+func (t *tab) ensureDiffContent(theme themeConfig, width int, searchGen int) {
+	if width <= diffSeparatorWidth ||
+		(t.diffCacheWidth == width && t.diffCacheTheme == theme.name && t.searchGen == searchGen) {
 		return
 	}
+	t.searchGen = searchGen
 	logicalRow, subOff := t.diffVisualToLogical(t.vp.YOffset())
 	t.renderDiffContent(theme, width)
 	newOff := 0
@@ -362,6 +369,8 @@ func (t *tab) resetEditorState() {
 	t.inputMode = false
 	t.commentInput.Reset()
 	t.commentInput.Blur()
+	t.searchMatches = nil
+	t.diffSearchMatches = nil
 }
 
 // adjustScrollForCursor adjusts the scroll so the cursor stays visible.
