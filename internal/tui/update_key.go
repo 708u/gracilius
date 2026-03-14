@@ -52,7 +52,9 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			case m.focusPane == paneTree:
 				m.treeCursor = 0
 			case hasTab && t.diffViewData != nil:
-				t.vp.SetYOffset(0)
+				t.diffCursor = 0
+				t.syncDiffAnchor()
+				m.notifySelectionChanged()
 			case hasTab && len(t.lines) > 0:
 				t.cursorLine = 0
 				t.cursorChar = 0
@@ -197,31 +199,126 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 			return m, nil, true
 		}
 
-	// Viewport scrolling.
+	// Cursor movement.
 	case key.Matches(msg, m.keys.Up):
-		if t.vp.YOffset() > 0 {
-			t.vp.SetYOffset(t.vp.YOffset() - 1)
+		if t.diffViewData != nil && t.diffCursor > 0 {
+			t.diffCursor--
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
 		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.Down):
-		t.vp.SetYOffset(t.vp.YOffset() + 1)
+		if t.diffViewData != nil && t.diffCursor < len(t.diffViewData.rows)-1 {
+			t.diffCursor++
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
+		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.GoBottom):
-		t.vp.GotoBottom()
+		if t.diffViewData != nil && len(t.diffViewData.rows) > 0 {
+			t.diffCursor = len(t.diffViewData.rows) - 1
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
+		}
 		return m, nil, true
+
+	// Selection toggle.
+	case key.Matches(msg, m.keys.CharSelect),
+		key.Matches(msg, m.keys.LineSelect):
+		if t.diffViewData != nil {
+			if t.diffSelecting {
+				t.diffSelecting = false
+				m.notifyClearSelection()
+			} else {
+				t.diffSelecting = true
+				t.diffAnchor = t.diffCursor
+				m.notifySelectionChanged()
+			}
+		}
+		return m, nil, true
+
+	// Hunk jump.
+	case key.Matches(msg, m.keys.BlockUp):
+		m.diffJumpHunk(t, -1)
+		return m, nil, true
+	case key.Matches(msg, m.keys.BlockDown):
+		m.diffJumpHunk(t, 1)
+		return m, nil, true
+
+	// Copy selection.
+	case key.Matches(msg, m.keys.Copy):
+		if t.diffViewData != nil && t.diffSelecting {
+			text := t.diffSelectedText()
+			n := strings.Count(text, "\n") + 1
+			m.statusMsg = fmt.Sprintf("Copied %d lines", n)
+			return m, tea.Batch(
+				tea.SetClipboard(text),
+				statusTickCmd(),
+			), true
+		}
+		return m, nil, true
+
+	// Cancel selection.
+	case key.Matches(msg, m.keys.Cancel):
+		if t.diffSelecting {
+			t.diffSelecting = false
+			m.notifyClearSelection()
+			return m, nil, true
+		}
 
 	// No-op: suppress file-tab actions that should not fire on diff tabs.
 	case key.Matches(msg, m.keys.Left),
 		key.Matches(msg, m.keys.Right),
-		key.Matches(msg, m.keys.CharSelect),
-		key.Matches(msg, m.keys.LineSelect),
-		key.Matches(msg, m.keys.Comment),
-		key.Matches(msg, m.keys.BlockUp),
-		key.Matches(msg, m.keys.BlockDown):
+		key.Matches(msg, m.keys.Comment):
 		return m, nil, true
 	}
 
 	return m, nil, false
+}
+
+// diffJumpHunk moves the diff cursor to the next/previous hunk boundary.
+// dir is -1 for previous, +1 for next.
+func (m *Model) diffJumpHunk(t *tab, dir int) {
+	if t.diffViewData == nil || len(t.diffViewData.hunks) == 0 {
+		return
+	}
+	rows := t.diffViewData.rows
+	hunks := t.diffViewData.hunks
+	cur := t.diffCursor
+
+	if dir > 0 {
+		// Find first hunk whose first changed row is after current cursor.
+		for _, h := range hunks {
+			target := firstChangedRowInHunk(rows, h)
+			if target > cur {
+				t.diffCursor = target
+				t.syncDiffAnchor()
+				m.notifySelectionChanged()
+				return
+			}
+		}
+	} else {
+		// Find last hunk whose first changed row is before current cursor.
+		for i := len(hunks) - 1; i >= 0; i-- {
+			target := firstChangedRowInHunk(rows, hunks[i])
+			if target < cur {
+				t.diffCursor = target
+				t.syncDiffAnchor()
+				m.notifySelectionChanged()
+				return
+			}
+		}
+	}
+}
+
+// firstChangedRowInHunk returns the first changed (non-context) row index in a hunk.
+func firstChangedRowInHunk(rows []diffRow, h diffHunk) int {
+	for i := h.startIdx; i < h.endIdx && i < len(rows); i++ {
+		if rows[i].rowType != diffRowUnchanged {
+			return i
+		}
+	}
+	return h.startIdx
 }
 
 // handleKeyNormal handles key events in normal (non-input, non-overlay) mode.

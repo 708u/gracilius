@@ -81,7 +81,25 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if !hasTab || len(t.lines) == 0 {
+	if !hasTab {
+		return m, nil
+	}
+
+	// Diff tab click: set diff cursor by visual line → row mapping.
+	if t.diffViewData != nil && msg.Button == tea.MouseLeft && msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+		visualLine := msg.Y - contentStartY + t.vp.YOffset()
+		row := t.diffVisualLineToRow(visualLine)
+		m.focusPane = paneEditor
+		t.diffCursor = row
+		t.diffAnchor = row
+		t.diffSelecting = false
+		m.mouseDown = true
+		m.lastMouseLine = row
+		m.notifySelectionChanged()
+		return m, nil
+	}
+
+	if len(t.lines) == 0 {
 		return m, nil
 	}
 
@@ -109,11 +127,28 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
 	}
 
 	t, hasTab := m.activeTabState()
-	if !hasTab || len(t.lines) == 0 || !m.mouseDown {
+	if !hasTab || !m.mouseDown {
 		return m, nil
 	}
 
 	lo := m.computeLayout()
+
+	// Diff tab drag: select rows.
+	if t.diffViewData != nil && msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+		visualLine := msg.Y - contentStartY + t.vp.YOffset()
+		row := t.diffVisualLineToRow(visualLine)
+		if row != m.lastMouseLine {
+			t.diffSelecting = true
+			t.diffCursor = row
+			m.lastMouseLine = row
+		}
+		return m, nil
+	}
+
+	if len(t.lines) == 0 {
+		return m, nil
+	}
+
 	if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
 		targetLine, targetChar := m.editorTarget(t, lo, msg.X, msg.Y)
 		if targetLine != m.lastMouseLine || targetChar != m.lastMouseChar {
@@ -141,7 +176,23 @@ func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) (tea.Model, tea.Cmd)
 	m.mouseDown = false
 
 	t, hasTab := m.activeTabState()
-	if !hasTab || len(t.lines) == 0 {
+	if !hasTab {
+		return m, nil
+	}
+
+	// Diff tab release: finalize selection and notify.
+	if wasDown && t.diffViewData != nil && t.diffSelecting {
+		lo := m.computeLayout()
+		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+			visualLine := msg.Y - contentStartY + t.vp.YOffset()
+			row := t.diffVisualLineToRow(visualLine)
+			t.diffCursor = row
+		}
+		m.notifySelectionChanged()
+		return m, nil
+	}
+
+	if len(t.lines) == 0 {
 		return m, nil
 	}
 

@@ -172,11 +172,15 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km := m.keys
 	t, hasTab := m.activeTabState()
 	isDiffReview := hasTab && t.diff != nil
-	km.CharSelect.SetEnabled(hasTab && m.focusPane == paneEditor)
-	km.LineSelect.SetEnabled(hasTab && m.focusPane == paneEditor)
-	km.Copy.SetEnabled(hasTab && m.focusPane == paneEditor && t.selecting)
-	km.Comment.SetEnabled(hasTab && m.focusPane == paneEditor)
-	km.ClearAll.SetEnabled(hasTab && m.focusPane == paneEditor)
+	isDiffView := hasTab && t.diffViewData != nil
+	editorFocus := hasTab && m.focusPane == paneEditor
+	km.CharSelect.SetEnabled(editorFocus)
+	km.LineSelect.SetEnabled(editorFocus)
+	km.Copy.SetEnabled(editorFocus && ((isDiffView && t.diffSelecting) || (!isDiffView && t.selecting)))
+	km.Comment.SetEnabled(editorFocus && !isDiffView)
+	km.ClearAll.SetEnabled(editorFocus && !isDiffView)
+	km.BlockUp.SetEnabled(editorFocus && isDiffView)
+	km.BlockDown.SetEnabled(editorFocus && isDiffView)
 	km.NextTab.SetEnabled(hasTab)
 	km.PrevTab.SetEnabled(hasTab)
 	km.CloseTab.SetEnabled(hasTab)

@@ -206,7 +206,8 @@ func (m *Model) adjustScroll() {
 		}
 	} else if t, ok := m.activeTabState(); ok {
 		if t.diffViewData != nil {
-			return // viewport manages its own scroll limits
+			t.adjustDiffScrollForCursor(lo.contentHeight)
+			return
 		}
 		if len(t.lines) > 0 {
 			t.adjustScrollForCursor(lo.contentHeight, lo.textWidth)
