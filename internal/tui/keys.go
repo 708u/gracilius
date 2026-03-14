@@ -23,6 +23,8 @@ type keyMap struct {
 	GoBottom      key.Binding
 	BlockUp       key.Binding
 	BlockDown     key.Binding
+	ChangeUp      key.Binding
+	ChangeDown    key.Binding
 	NextTab       key.Binding
 	PrevTab       key.Binding
 	CloseTab      key.Binding
@@ -107,6 +109,14 @@ func newKeyMap() keyMap {
 			key.WithKeys("}"),
 			key.WithHelp("}", "block down"),
 		),
+		ChangeUp: key.NewBinding(
+			key.WithKeys("["),
+			key.WithHelp("[", "prev change"),
+		),
+		ChangeDown: key.NewBinding(
+			key.WithKeys("]"),
+			key.WithHelp("]", "next change"),
+		),
 		NextTab: key.NewBinding(
 			key.WithKeys("L"),
 			key.WithHelp("L", "next tab"),
@@ -170,7 +180,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 // FullHelp returns key bindings for the full help view.
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Left, k.Right, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown},
+		{k.Up, k.Down, k.Left, k.Right, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown, k.ChangeUp, k.ChangeDown},
 		{k.Enter, k.SwitchPane, k.SwitchPanel, k.ToggleSidebar, k.PrevTab, k.NextTab, k.CloseTab},
 		{k.Select, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.Search, k.SearchNext, k.SearchPrev, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
 	}
@@ -188,8 +198,10 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km.Copy.SetEnabled(editorFocus && ((isDiffView && t.diffSelecting) || (!isDiffView && t.selecting)))
 	km.Comment.SetEnabled(editorFocus && !isDiffView)
 	km.ClearAll.SetEnabled(editorFocus && !isDiffView)
-	km.BlockUp.SetEnabled(editorFocus && isDiffView)
-	km.BlockDown.SetEnabled(editorFocus && isDiffView)
+	km.BlockUp.SetEnabled(editorFocus)
+	km.BlockDown.SetEnabled(editorFocus)
+	km.ChangeUp.SetEnabled(editorFocus && isDiffView)
+	km.ChangeDown.SetEnabled(editorFocus && isDiffView)
 	km.NextTab.SetEnabled(hasTab)
 	km.PrevTab.SetEnabled(hasTab)
 	km.CloseTab.SetEnabled(hasTab)

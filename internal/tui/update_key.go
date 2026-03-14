@@ -240,12 +240,20 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 		}
 		return m, nil, true
 
-	// Hunk jump.
+	// Blank-line boundary jump (same as file tab {/}).
 	case key.Matches(msg, m.keys.BlockUp):
-		m.diffJumpHunk(t, -1)
+		m.diffJumpBlankLine(t, -1)
 		return m, nil, true
 	case key.Matches(msg, m.keys.BlockDown):
-		m.diffJumpHunk(t, 1)
+		m.diffJumpBlankLine(t, 1)
+		return m, nil, true
+
+	// Change block jump ([/]).
+	case key.Matches(msg, m.keys.ChangeUp):
+		m.diffJumpChange(t, -1)
+		return m, nil, true
+	case key.Matches(msg, m.keys.ChangeDown):
+		m.diffJumpChange(t, 1)
 		return m, nil, true
 
 	// Copy selection.
@@ -281,49 +289,90 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	return m, nil, false
 }
 
-// diffJumpHunk moves the diff cursor to the next/previous hunk boundary.
-// dir is -1 for previous, +1 for next.
-func (m *Model) diffJumpHunk(t *tab, dir int) {
-	if t.diffViewData == nil || len(t.diffViewData.hunks) == 0 {
+// diffJumpBlankLine moves the diff cursor to the next/previous blank-line
+// boundary, mirroring moveToParagraphBoundary for file tabs.
+func (m *Model) diffJumpBlankLine(t *tab, dir int) {
+	if t.diffViewData == nil {
 		return
 	}
 	rows := t.diffViewData.rows
-	hunks := t.diffViewData.hunks
 	cur := t.diffCursor
+	last := len(rows) - 1
 
-	if dir > 0 {
-		// Find first hunk whose first changed row is after current cursor.
-		for _, h := range hunks {
-			target := firstChangedRowInHunk(rows, h)
-			if target > cur {
-				t.diffCursor = target
-				t.syncDiffAnchor()
-				m.notifySelectionChanged()
-				return
-			}
+	inBounds := func(i int) bool {
+		if dir > 0 {
+			return i < last
 		}
-	} else {
-		// Find last hunk whose first changed row is before current cursor.
-		for i := len(hunks) - 1; i >= 0; i-- {
-			target := firstChangedRowInHunk(rows, hunks[i])
-			if target < cur {
-				t.diffCursor = target
-				t.syncDiffAnchor()
-				m.notifySelectionChanged()
-				return
-			}
+		return i > 0
+	}
+
+	isBlank := func(i int) bool {
+		return isBlankLine(diffRowText(rows[i]))
+	}
+
+	line := cur
+	if inBounds(line) {
+		line += dir
+		for inBounds(line) && isBlank(line) {
+			line += dir
 		}
+		for inBounds(line) && !isBlank(line) {
+			line += dir
+		}
+	}
+
+	if line != cur {
+		t.diffCursor = line
+		t.syncDiffAnchor()
+		m.notifySelectionChanged()
 	}
 }
 
-// firstChangedRowInHunk returns the first changed (non-context) row index in a hunk.
-func firstChangedRowInHunk(rows []diffRow, h diffHunk) int {
-	for i := h.startIdx; i < h.endIdx && i < len(rows); i++ {
-		if rows[i].rowType != diffRowUnchanged {
-			return i
+// diffJumpChange moves the diff cursor to the first changed row of
+// the next/previous change block, like vim's ]c / [c.
+func (m *Model) diffJumpChange(t *tab, dir int) {
+	if t.diffViewData == nil {
+		return
+	}
+	rows := t.diffViewData.rows
+	cur := t.diffCursor
+	last := len(rows) - 1
+
+	inBounds := func(i int) bool {
+		if dir > 0 {
+			return i <= last
+		}
+		return i >= 0
+	}
+
+	isChanged := func(i int) bool {
+		return rows[i].rowType != diffRowUnchanged
+	}
+
+	line := cur + dir
+	// Skip remaining rows of the current change block.
+	for inBounds(line) && isChanged(line) {
+		line += dir
+	}
+	// Skip unchanged rows.
+	for inBounds(line) && !isChanged(line) {
+		line += dir
+	}
+
+	if !inBounds(line) || !isChanged(line) {
+		return
+	}
+
+	// When going backward, find the start of this change block.
+	if dir < 0 {
+		for line > 0 && isChanged(line-1) {
+			line--
 		}
 	}
-	return h.startIdx
+
+	t.diffCursor = line
+	t.syncDiffAnchor()
+	m.notifySelectionChanged()
 }
 
 // handleKeyNormal handles key events in normal (non-input, non-overlay) mode.
