@@ -278,24 +278,26 @@ func TestGitDiffView_ScrollWithKeys(t *testing.T) {
 		t.Fatal("expected viewport content lines for diff")
 	}
 
-	// Set offset to 0 to test scrolling down.
+	// Set offset and cursor to 0 to test cursor movement.
 	tab.vp.SetYOffset(0)
-	initialOffset := tab.vp.YOffset()
+	tab.diffCursor = 0
+	tab.diffAnchor = 0
+	initialCursor := tab.diffCursor
 
-	// Press 'j' to scroll down.
+	// Press 'j' to move diff cursor down.
 	m.Update(tea.KeyPressMsg{Code: 'j', Text: "j"})
 
-	if tab.vp.YOffset() != initialOffset+1 {
-		t.Errorf("expected offset=%d after j, got %d",
-			initialOffset+1, tab.vp.YOffset())
+	if tab.diffCursor != initialCursor+1 {
+		t.Errorf("expected diffCursor=%d after j, got %d",
+			initialCursor+1, tab.diffCursor)
 	}
 
-	// Press 'k' to scroll up.
+	// Press 'k' to move diff cursor up.
 	m.Update(tea.KeyPressMsg{Code: 'k', Text: "k"})
 
-	if tab.vp.YOffset() != initialOffset {
-		t.Errorf("expected offset=%d after k, got %d",
-			initialOffset, tab.vp.YOffset())
+	if tab.diffCursor != initialCursor {
+		t.Errorf("expected diffCursor=%d after k, got %d",
+			initialCursor, tab.diffCursor)
 	}
 }
 

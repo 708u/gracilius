@@ -28,11 +28,11 @@ func diffColorsFor(theme themeConfig) diffColors {
 	}
 	if theme.name == "github-dark" {
 		return diffColors{
-			addBg:     bg("#0d2818"),
-			delBg:     bg("#2c1519"),
-			wordAddBg: bg("#174928"),
-			wordDelBg: bg("#6e302b"),
-			fillerBg:  bg("#1e1e1e"),
+			addBg:     bg("#122d1e"),
+			delBg:     bg("#351c20"),
+			wordAddBg: bg("#1f5c34"),
+			wordDelBg: bg("#7e3834"),
+			fillerBg:  bg("#222222"),
 		}
 	}
 	return diffColors{
@@ -58,12 +58,13 @@ func diffGutterWidth(maxLineNum int) int {
 
 // diffSideCtx holds layout and color parameters for rendering one side.
 type diffSideCtx struct {
-	sideWidth int
-	gutterW   int
-	textWidth int
-	colors    diffColors
-	fillerPad string // precomputed spaces for filler lines (sideWidth)
-	gutterPad string // precomputed spaces for continuation gutter
+	sideWidth       int
+	gutterW         int
+	textWidth       int
+	colors          diffColors
+	fillerPad       string // precomputed spaces for filler lines (sideWidth)
+	gutterPad       string // precomputed spaces for continuation gutter
+	gutterHighlight string // if non-empty, override gutter background for cursor/selection
 }
 
 // diffRenderResult holds pre-rendered diff lines and row-to-visual-line mapping.
@@ -73,14 +74,13 @@ type diffRenderResult struct {
 	rowVisualStarts []int    // logical row index → visual line offset
 }
 
-// renderAllDiffLines pre-renders all diff rows into a flat visual line slice.
-func renderAllDiffLines(data *diffData, theme themeConfig, width int, oldHL, newHL []highlightedLine, searchMatches []diffSearchMatch) diffRenderResult {
+// newDiffSideCtx creates a diffSideCtx from diff data, theme, and viewport width.
+func newDiffSideCtx(data *diffData, theme themeConfig, width int) diffSideCtx {
 	colors := diffColorsFor(theme)
 	maxLine := max(data.maxLineNum, 1)
-
 	sideWidth := (width - diffSeparatorWidth) / 2
 	gutterW := diffGutterWidth(maxLine)
-	ctx := diffSideCtx{
+	return diffSideCtx{
 		sideWidth: sideWidth,
 		gutterW:   gutterW,
 		textWidth: max(sideWidth-gutterW, 1),
@@ -88,6 +88,52 @@ func renderAllDiffLines(data *diffData, theme themeConfig, width int, oldHL, new
 		fillerPad: strings.Repeat(" ", sideWidth),
 		gutterPad: strings.Repeat(" ", gutterW),
 	}
+}
+
+// renderSingleDiffRow renders one diff row into visual lines.
+// ctx.gutterHighlight controls the gutter background color for cursor/selection.
+// oldSearchHL/newSearchHL are search match highlights for this row (may be nil).
+func renderSingleDiffRow(
+	row diffRow,
+	oldHL, newHL []highlightedLine,
+	ctx diffSideCtx,
+	width int,
+	oldSearchHL, newSearchHL []highlightRange,
+) []string {
+	var oldRuns, newRuns []styledRun
+	if row.oldLineNum > 0 && oldHL != nil && row.oldLineNum-1 < len(oldHL) {
+		oldRuns = oldHL[row.oldLineNum-1].runs
+	}
+	if row.newLineNum > 0 && newHL != nil && row.newLineNum-1 < len(newHL) {
+		newRuns = newHL[row.newLineNum-1].runs
+	}
+
+	oldVisuals := wrapDiffSide(row.oldLineNum, row.oldText, row.oldSpans, oldRuns, row.rowType, true, ctx, oldSearchHL)
+	newVisuals := wrapDiffSide(row.newLineNum, row.newText, row.newSpans, newRuns, row.rowType, false, ctx, newSearchHL)
+
+	rowCount := max(len(oldVisuals), len(newVisuals))
+	result := make([]string, 0, rowCount)
+	for j := range rowCount {
+		var sb strings.Builder
+		if j < len(oldVisuals) {
+			sb.WriteString(oldVisuals[j])
+		} else {
+			writeDiffFiller(&sb, row.oldLineNum, row.rowType, true, ctx)
+		}
+		sb.WriteString(diffSeparator)
+		if j < len(newVisuals) {
+			sb.WriteString(newVisuals[j])
+		} else {
+			writeDiffFiller(&sb, row.newLineNum, row.rowType, false, ctx)
+		}
+		result = append(result, padRight(sb.String(), width))
+	}
+	return result
+}
+
+// renderAllDiffLines pre-renders all diff rows into a flat visual line slice.
+func renderAllDiffLines(data *diffData, theme themeConfig, width int, oldHL, newHL []highlightedLine, searchMatches []diffSearchMatch) diffRenderResult {
+	ctx := newDiffSideCtx(data, theme, width)
 
 	// Index search matches by row (skip allocation when empty).
 	var oldSearchByRow, newSearchByRow map[int][]highlightRange
@@ -105,40 +151,13 @@ func renderAllDiffLines(data *diffData, theme themeConfig, width int, oldHL, new
 		}
 	}
 
-	// Build row-start mapping for hunk offset conversion.
 	rowVisualStart := make([]int, len(data.rows))
 	var lines []string
 
 	for i, row := range data.rows {
 		rowVisualStart[i] = len(lines)
-
-		var oldRuns, newRuns []styledRun
-		if row.oldLineNum > 0 && oldHL != nil && row.oldLineNum-1 < len(oldHL) {
-			oldRuns = oldHL[row.oldLineNum-1].runs
-		}
-		if row.newLineNum > 0 && newHL != nil && row.newLineNum-1 < len(newHL) {
-			newRuns = newHL[row.newLineNum-1].runs
-		}
-
-		oldVisuals := wrapDiffSide(row.oldLineNum, row.oldText, row.oldSpans, oldRuns, row.rowType, true, ctx, oldSearchByRow[i])
-		newVisuals := wrapDiffSide(row.newLineNum, row.newText, row.newSpans, newRuns, row.rowType, false, ctx, newSearchByRow[i])
-
-		rowCount := max(len(oldVisuals), len(newVisuals))
-		for j := range rowCount {
-			var sb strings.Builder
-			if j < len(oldVisuals) {
-				sb.WriteString(oldVisuals[j])
-			} else {
-				writeDiffFiller(&sb, row.oldLineNum, row.rowType, true, ctx)
-			}
-			sb.WriteString(diffSeparator)
-			if j < len(newVisuals) {
-				sb.WriteString(newVisuals[j])
-			} else {
-				writeDiffFiller(&sb, row.newLineNum, row.rowType, false, ctx)
-			}
-			lines = append(lines, padRight(sb.String(), width))
-		}
+		rowLines := renderSingleDiffRow(row, oldHL, newHL, ctx, width, oldSearchByRow[i], newSearchByRow[i])
+		lines = append(lines, rowLines...)
 	}
 
 	// Convert hunk start indices (row-based) to visual line offsets.
@@ -187,9 +206,13 @@ func wrapDiffSide(
 
 	lineBg, wordBg := diffSideBg(rowType, isOld, ctx.colors)
 	digits := ctx.gutterW - 1
+	gutterBg := lineBg
+	if ctx.gutterHighlight != "" {
+		gutterBg = ctx.gutterHighlight
+	}
 	gutterStyle := ansiFaint
-	if lineBg != "" {
-		gutterStyle = lineBg + ansiFaint
+	if gutterBg != "" {
+		gutterStyle = gutterBg + ansiFaint
 	}
 
 	expanded := expandTabs(text)

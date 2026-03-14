@@ -57,7 +57,9 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			case m.focusPane == paneTree:
 				m.treeCursor = 0
 			case hasTab && t.diffViewData != nil:
-				t.vp.SetYOffset(0)
+				t.diffCursor = 0
+				t.syncDiffAnchor()
+				m.notifySelectionChanged()
 			case hasTab && len(t.lines) > 0:
 				t.cursorLine = 0
 				t.cursorChar = 0
@@ -202,32 +204,176 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 			return m, nil, true
 		}
 
-	// Viewport scrolling.
+	// Cursor movement.
 	case key.Matches(msg, m.keys.Up):
-		if t.vp.YOffset() > 0 {
-			t.vp.SetYOffset(t.vp.YOffset() - 1)
+		if t.diffViewData != nil && t.diffCursor > 0 {
+			t.diffCursor--
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
 		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.Down):
-		t.vp.SetYOffset(t.vp.YOffset() + 1)
+		if t.diffViewData != nil && t.diffCursor < len(t.diffViewData.rows)-1 {
+			t.diffCursor++
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
+		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.GoBottom):
-		t.vp.GotoBottom()
+		if t.diffViewData != nil && len(t.diffViewData.rows) > 0 {
+			t.diffCursor = len(t.diffViewData.rows) - 1
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
+		}
 		return m, nil, true
+
+	// Selection toggle.
+	case key.Matches(msg, m.keys.Select):
+		if t.diffViewData != nil {
+			if t.diffSelecting {
+				t.diffSelecting = false
+				m.notifyClearSelection()
+			} else {
+				t.diffSelecting = true
+				t.diffAnchor = t.diffCursor
+				m.notifySelectionChanged()
+			}
+		}
+		return m, nil, true
+
+	// Blank-line boundary jump (same as file tab {/}).
+	case key.Matches(msg, m.keys.BlockUp):
+		m.diffJumpBlankLine(t, -1)
+		return m, nil, true
+	case key.Matches(msg, m.keys.BlockDown):
+		m.diffJumpBlankLine(t, 1)
+		return m, nil, true
+
+	// Change block jump ([/]).
+	case key.Matches(msg, m.keys.ChangeUp):
+		m.diffJumpChange(t, -1)
+		return m, nil, true
+	case key.Matches(msg, m.keys.ChangeDown):
+		m.diffJumpChange(t, 1)
+		return m, nil, true
+
+	// Copy selection.
+	case key.Matches(msg, m.keys.Copy):
+		if t.diffViewData != nil && t.diffSelecting {
+			text := t.diffSelectedText()
+			n := strings.Count(text, "\n") + 1
+			m.statusMsg = fmt.Sprintf("Copied %d lines", n)
+			return m, tea.Batch(
+				tea.SetClipboard(text),
+				statusTickCmd(),
+			), true
+		}
+		return m, nil, true
+
+	// Cancel selection.
+	case key.Matches(msg, m.keys.Cancel):
+		if t.diffSelecting {
+			t.diffSelecting = false
+			m.notifyClearSelection()
+			return m, nil, true
+		}
 
 	// No-op: suppress file-tab actions that should not fire on diff tabs.
 	// Search keys (/, n, N, Enter, Shift+Enter) are intentionally NOT
 	// listed here so they fall through to handleKeyNormal.
 	case key.Matches(msg, m.keys.Left),
 		key.Matches(msg, m.keys.Right),
-		key.Matches(msg, m.keys.Select),
-		key.Matches(msg, m.keys.Comment),
-		key.Matches(msg, m.keys.BlockUp),
-		key.Matches(msg, m.keys.BlockDown):
+		key.Matches(msg, m.keys.Comment):
 		return m, nil, true
 	}
 
 	return m, nil, false
+}
+
+// diffJumpBlankLine moves the diff cursor to the next/previous blank-line
+// boundary, mirroring moveToParagraphBoundary for file tabs.
+func (m *Model) diffJumpBlankLine(t *tab, dir int) {
+	if t.diffViewData == nil {
+		return
+	}
+	rows := t.diffViewData.rows
+	cur := t.diffCursor
+	last := len(rows) - 1
+
+	inBounds := func(i int) bool {
+		if dir > 0 {
+			return i < last
+		}
+		return i > 0
+	}
+
+	isBlank := func(i int) bool {
+		return isBlankLine(diffRowText(rows[i]))
+	}
+
+	line := cur
+	if inBounds(line) {
+		line += dir
+		for inBounds(line) && isBlank(line) {
+			line += dir
+		}
+		for inBounds(line) && !isBlank(line) {
+			line += dir
+		}
+	}
+
+	if line != cur {
+		t.diffCursor = line
+		t.syncDiffAnchor()
+		m.notifySelectionChanged()
+	}
+}
+
+// diffJumpChange moves the diff cursor to the first changed row of
+// the next/previous change block, like vim's ]c / [c.
+func (m *Model) diffJumpChange(t *tab, dir int) {
+	if t.diffViewData == nil {
+		return
+	}
+	rows := t.diffViewData.rows
+	cur := t.diffCursor
+	last := len(rows) - 1
+
+	inBounds := func(i int) bool {
+		if dir > 0 {
+			return i <= last
+		}
+		return i >= 0
+	}
+
+	isChanged := func(i int) bool {
+		return rows[i].rowType != diffRowUnchanged
+	}
+
+	line := cur + dir
+	// Skip remaining rows of the current change block.
+	for inBounds(line) && isChanged(line) {
+		line += dir
+	}
+	// Skip unchanged rows.
+	for inBounds(line) && !isChanged(line) {
+		line += dir
+	}
+
+	if !inBounds(line) || !isChanged(line) {
+		return
+	}
+
+	// When going backward, find the start of this change block.
+	if dir < 0 {
+		for line > 0 && isChanged(line-1) {
+			line--
+		}
+	}
+
+	t.diffCursor = line
+	t.syncDiffAnchor()
+	m.notifySelectionChanged()
 }
 
 // handleKeyNormal handles key events in normal (non-input, non-overlay) mode.
