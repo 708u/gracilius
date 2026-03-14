@@ -253,6 +253,82 @@ func TestRenderSideBySide_SoftWrapWithSyntax(t *testing.T) {
 	}
 }
 
+func TestRenderSideBySide_SoftWrapWithWordDiff(t *testing.T) {
+	// Use a long modified line that forces soft-wrapping at narrow width.
+	old := []string{"func processData(inputValue int, extraParam string) error {"}
+	new := []string{"func processData(inputValue int, changedParam string) error {"}
+	data := buildDiffData(old, new)
+
+	oldHL := highlightFile("test.go", strings.Join(old, "\n"), darkTheme)
+	newHL := highlightFile("test.go", strings.Join(new, "\n"), darkTheme)
+
+	// Narrow width to force soft-wrapping on the modified row.
+	width := 50
+	result := renderAllDiffLines(data, darkTheme, width, oldHL, newHL)
+
+	// Should produce more visual lines than data rows due to wrapping.
+	if len(result.lines) <= len(data.rows) {
+		t.Fatalf("expected soft-wrap to produce extra lines, got %d lines for %d rows",
+			len(result.lines), len(data.rows))
+	}
+
+	// All visual lines should have correct width.
+	for i, line := range result.lines {
+		w := ansi.StringWidth(line)
+		if w != width {
+			t.Errorf("line %d: expected width %d, got %d", i, width, w)
+		}
+	}
+
+	// Word-diff background color should be present in at least one visual line.
+	// The modified row uses wordDelBg (old side) and wordAddBg (new side).
+	colors := diffColorsFor(darkTheme)
+	foundWordBg := false
+	for _, line := range result.lines {
+		if strings.Contains(line, colors.wordDelBg) || strings.Contains(line, colors.wordAddBg) {
+			foundWordBg = true
+			break
+		}
+	}
+	if !foundWordBg {
+		t.Error("word-diff background color not found in any wrapped line")
+	}
+}
+
+func TestRenderSideBySide_SoftWrapWordDiffNoSyntax(t *testing.T) {
+	// Word-diff with wrapping but without syntax highlighting.
+	old := []string{"this is a long line with some original words that will be wrapped"}
+	new := []string{"this is a long line with some modified words that will be wrapped"}
+	data := buildDiffData(old, new)
+
+	width := 50
+	result := renderAllDiffLines(data, darkTheme, width, nil, nil)
+
+	if len(result.lines) <= len(data.rows) {
+		t.Fatalf("expected soft-wrap, got %d lines for %d rows",
+			len(result.lines), len(data.rows))
+	}
+
+	for i, line := range result.lines {
+		w := ansi.StringWidth(line)
+		if w != width {
+			t.Errorf("line %d: expected width %d, got %d", i, width, w)
+		}
+	}
+
+	colors := diffColorsFor(darkTheme)
+	foundWordBg := false
+	for _, line := range result.lines {
+		if strings.Contains(line, colors.wordDelBg) || strings.Contains(line, colors.wordAddBg) {
+			foundWordBg = true
+			break
+		}
+	}
+	if !foundWordBg {
+		t.Error("word-diff background color not found without syntax highlighting")
+	}
+}
+
 func TestRenderSideBySide_NilSyntaxFallback(t *testing.T) {
 	old := []string{"aaa", "bbb"}
 	new := []string{"aaa", "BBB"}
