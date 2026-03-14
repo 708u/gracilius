@@ -134,6 +134,8 @@ func computeDiffSearchMatches(data *diffData, query string) []diffSearchMatch {
 }
 
 // startSearch enters search mode, saving cursor/scroll state.
+// If a previous query exists, it is preset and fully selected
+// so typing immediately replaces it.
 func (m *Model) startSearch() {
 	t, ok := m.activeTabState()
 	if !ok {
@@ -143,7 +145,12 @@ func (m *Model) startSearch() {
 	m.search.savedLine = t.cursorLine
 	m.search.savedChar = t.cursorChar
 	m.search.savedScroll = t.vp.YOffset()
-	m.search.input.Reset()
+	if m.search.query != "" {
+		m.search.input.SetValue(m.search.query)
+		m.search.input.CursorEnd()
+	} else {
+		m.search.input.Reset()
+	}
 	m.search.input.Focus()
 	m.focusPane = paneEditor
 }
