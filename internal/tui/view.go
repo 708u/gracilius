@@ -352,6 +352,16 @@ func (m *Model) renderFooter() string {
 			sb.WriteString("Open a file from the tree to begin")
 		case m.focusPane == paneEditor:
 			switch {
+			case t.diffViewData != nil && t.diffSelecting:
+				startRow, endRow := t.diffNormalizedSelection()
+				n := endRow - startRow + 1
+				fmt.Fprintf(&sb, "Selection: %d rows", n)
+				if m.statusMsg != "" {
+					fmt.Fprintf(&sb, "  %s", m.statusMsg)
+				}
+			case t.diffViewData != nil:
+				lineNum := t.diffCursorLineNum() + 1
+				fmt.Fprintf(&sb, "Line %d", lineNum)
 			case t.selecting:
 				sLine, sChar, eLine, eChar := t.normalizedSelection()
 				fmt.Fprintf(&sb, "Selection: %d:%d - %d:%d",
@@ -452,6 +462,7 @@ func (m *Model) renderTree(width, height int) []string {
 
 // renderDiffEditor generates the editor pane lines for a diff tab.
 // The viewport owns scrolling; we slice cached rendered lines directly.
+// Cursor and selected rows are re-rendered with gutter highlights.
 func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 	width := lo.editorWidth
 	height := lo.contentHeight
@@ -468,7 +479,57 @@ func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 	for len(diffLines) < height {
 		diffLines = append(diffLines, padRight("", width))
 	}
+
+	// Apply cursor/selection gutter highlights to visible rows.
+	if t.diffViewData != nil && len(t.diffRowVisualStarts) > 0 && m.focusPane == paneEditor {
+		m.applyDiffGutterHighlights(t, diffLines, off, width)
+	}
+
 	return diffLines
+}
+
+// applyDiffGutterHighlights re-renders diff rows that need cursor or selection
+// gutter highlighting within the visible window.
+func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, width int) {
+	if t.diffViewData == nil || len(t.diffRowVisualStarts) == 0 {
+		return
+	}
+
+	ctx := newDiffSideCtx(t.diffViewData, m.theme, width)
+	highlightBg := m.theme.selectionBgSeq()
+
+	startRow, endRow := t.diffCursor, t.diffCursor
+	if t.diffSelecting {
+		startRow, endRow = t.diffNormalizedSelection()
+	}
+
+	viewEnd := viewOff + len(diffLines)
+
+	// Only iterate cursor/selection rows instead of all rows.
+	for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.rows); rowIdx++ {
+		rowVisStart := t.diffRowVisualStarts[rowIdx]
+		rowVisEnd := len(t.diffCachedLines)
+		if rowIdx+1 < len(t.diffRowVisualStarts) {
+			rowVisEnd = t.diffRowVisualStarts[rowIdx+1]
+		}
+
+		// Skip if entirely outside visible window.
+		if rowVisEnd <= viewOff || rowVisStart >= viewEnd {
+			continue
+		}
+
+		row := t.diffViewData.rows[rowIdx]
+		hlCtx := ctx
+		hlCtx.gutterHighlight = highlightBg
+		reRendered := renderSingleDiffRow(row, t.diffOldHighlights, t.diffNewHighlights, hlCtx, width, nil, nil)
+
+		for j, line := range reRendered {
+			visIdx := rowVisStart + j - viewOff
+			if visIdx >= 0 && visIdx < len(diffLines) {
+				diffLines[visIdx] = line
+			}
+		}
+	}
 }
 
 // renderEditor generates the editor pane lines.
