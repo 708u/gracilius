@@ -54,6 +54,11 @@ type tab struct {
 	diffCachedLines []string // pre-rendered visual lines (same as viewport content)
 	diffCacheWidth  int
 	diffCacheTheme  string
+
+	// search match cache (per-tab)
+	searchMatches     []searchMatch
+	diffSearchMatches []diffSearchMatch
+	searchGen         int // generation for diff cache invalidation
 }
 
 // diffState holds accept/reject callbacks for a diff review tab.
@@ -165,7 +170,7 @@ func (t *tab) syncContent(lines []string) {
 // renderDiffContent pre-renders diff lines and updates viewport content.
 // Returns the hunk visual offsets for initial scroll positioning.
 func (t *tab) renderDiffContent(theme themeConfig, width int) []int {
-	result := renderAllDiffLines(t.diffViewData, theme, width, t.diffOldHighlights, t.diffNewHighlights)
+	result := renderAllDiffLines(t.diffViewData, theme, width, t.diffOldHighlights, t.diffNewHighlights, t.diffSearchMatches)
 	t.diffCachedLines = result.lines
 	t.vp.SetContentLines(result.lines)
 	t.diffCacheWidth = width
@@ -187,11 +192,13 @@ func (t *tab) initDiffContent(theme themeConfig, width, height int) {
 	}
 }
 
-// ensureDiffContent refreshes the diff render cache if width/theme changed.
-func (t *tab) ensureDiffContent(theme themeConfig, width int) {
-	if width <= diffSeparatorWidth || (t.diffCacheWidth == width && t.diffCacheTheme == theme.name) {
+// ensureDiffContent refreshes the diff render cache if width/theme/search changed.
+func (t *tab) ensureDiffContent(theme themeConfig, width int, searchGen int) {
+	if width <= diffSeparatorWidth ||
+		(t.diffCacheWidth == width && t.diffCacheTheme == theme.name && t.searchGen == searchGen) {
 		return
 	}
+	t.searchGen = searchGen
 	off := t.vp.YOffset()
 	t.renderDiffContent(theme, width)
 	t.vp.SetYOffset(off)
@@ -333,6 +340,8 @@ func (t *tab) resetEditorState() {
 	t.inputMode = false
 	t.commentInput.Reset()
 	t.commentInput.Blur()
+	t.searchMatches = nil
+	t.diffSearchMatches = nil
 }
 
 // adjustScrollForCursor adjusts the scroll so the cursor stays visible.

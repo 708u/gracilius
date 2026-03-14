@@ -15,7 +15,7 @@ func renderDiff(data *diffData, theme themeConfig, width, height, offset int) []
 
 // renderDiffHL is a test helper that pre-renders diff lines with optional syntax highlights.
 func renderDiffHL(data *diffData, theme themeConfig, width, height, offset int, oldHL, newHL []highlightedLine) []string {
-	result := renderAllDiffLines(data, theme, width, oldHL, newHL)
+	result := renderAllDiffLines(data, theme, width, oldHL, newHL, nil)
 	// Simulate viewport slicing.
 	start := min(offset, len(result.lines))
 	end := min(start+height, len(result.lines))
@@ -236,7 +236,7 @@ func TestRenderSideBySide_SoftWrapWithSyntax(t *testing.T) {
 
 	// Use a narrow width to force soft-wrapping.
 	width := 60
-	result := renderAllDiffLines(data, darkTheme, width, oldHL, newHL)
+	result := renderAllDiffLines(data, darkTheme, width, oldHL, newHL, nil)
 
 	// Should produce more visual lines than data rows due to wrapping.
 	if len(result.lines) <= len(data.rows) {

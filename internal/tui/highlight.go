@@ -22,10 +22,20 @@ type themeConfig struct {
 	openFileMatchFg     string // Fuzzy match highlight fg
 	logoLeaf            string // Welcome logo top color (green/leaf)
 	logoTrunk           string // Welcome logo bottom color (brown/trunk)
+	searchMatchBg       string // Search match background hex color
+	searchCurrentBg     string // Current search match background hex color
 }
 
 func (t themeConfig) selectionBgSeq() string {
 	return termenv.CSI + termenv.RGBColor(t.selectionBg).Sequence(true) + "m"
+}
+
+func (t themeConfig) searchMatchBgSeq() string {
+	return termenv.CSI + termenv.RGBColor(t.searchMatchBg).Sequence(true) + "m"
+}
+
+func (t themeConfig) searchCurrentBgSeq() string {
+	return termenv.CSI + termenv.RGBColor(t.searchCurrentBg).Sequence(true) + "m"
 }
 
 var (
@@ -41,6 +51,8 @@ var (
 		openFileMatchFg:     "#FFCC66",
 		logoLeaf:            "#73C991",
 		logoTrunk:           "#CE9178",
+		searchMatchBg:       "#613214",
+		searchCurrentBg:     "#9E6A03",
 	}
 	lightTheme = themeConfig{
 		name:                "github",
@@ -54,6 +66,8 @@ var (
 		openFileMatchFg:     "#0066CC",
 		logoLeaf:            "#1B7F37",
 		logoTrunk:           "#795E26",
+		searchMatchBg:       "#FFF2CC",
+		searchCurrentBg:     "#FFD700",
 	}
 )
 
@@ -197,5 +211,66 @@ func writeStyledText(sb *strings.Builder, ansi, text string) {
 		sb.WriteString(ansiReset)
 	} else {
 		sb.WriteString(text)
+	}
+}
+
+// highlightRange represents a range to highlight with a specific background.
+type highlightRange struct {
+	start int    // rune offset (inclusive)
+	end   int    // rune offset (exclusive)
+	bgSeq string // ANSI SGR background sequence
+}
+
+// renderStyledLineWithHighlights renders runs with multiple highlight ranges.
+// Highlights are applied in order; later ranges override earlier ones for
+// overlapping positions.
+func renderStyledLineWithHighlights(sb *strings.Builder, runs []styledRun, highlights []highlightRange) {
+	if len(highlights) == 0 {
+		for _, run := range runs {
+			writeStyledText(sb, run.ANSI, expandTabs(run.Text))
+		}
+		return
+	}
+
+	// Build a per-rune background map from highlights (later wins).
+	totalRunes := 0
+	for _, r := range runs {
+		totalRunes += len([]rune(r.Text))
+	}
+	bgMap := make([]string, totalRunes)
+	for _, h := range highlights {
+		for i := h.start; i < h.end && i < totalRunes; i++ {
+			if i >= 0 {
+				bgMap[i] = h.bgSeq
+			}
+		}
+	}
+
+	pos := 0
+	for _, run := range runs {
+		runes := []rune(run.Text)
+		runLen := len(runes)
+		// Split run into chunks with the same background.
+		i := 0
+		for i < runLen {
+			bg := bgMap[pos+i]
+			j := i + 1
+			for j < runLen && bgMap[pos+j] == bg {
+				j++
+			}
+			chunk := expandTabs(string(runes[i:j]))
+			if bg != "" {
+				if run.ANSI != "" {
+					sb.WriteString(run.ANSI)
+				}
+				sb.WriteString(bg)
+				sb.WriteString(chunk)
+				sb.WriteString(ansiReset)
+			} else {
+				writeStyledText(sb, run.ANSI, chunk)
+			}
+			i = j
+		}
+		pos += runLen
 	}
 }

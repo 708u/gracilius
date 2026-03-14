@@ -43,6 +43,10 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyInputMode(t, msg)
 	}
 
+	if m.search.active {
+		return m.handleKeySearch(msg)
+	}
+
 	if m.gPending {
 		m.gPending = false
 		if key.Matches(msg, m.keys.GoTop) {
@@ -208,6 +212,17 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 		return m, nil, true
 	case key.Matches(msg, m.keys.GoBottom):
 		t.vp.GotoBottom()
+		return m, nil, true
+
+	// Search navigation in diff tabs.
+	case key.Matches(msg, m.keys.Search):
+		m.startSearch()
+		return m, nil, true
+	case key.Matches(msg, m.keys.SearchNext):
+		m.nextMatch()
+		return m, nil, true
+	case key.Matches(msg, m.keys.SearchPrev):
+		m.prevMatch()
 		return m, nil, true
 
 	// No-op: suppress file-tab actions that should not fire on diff tabs.
@@ -459,6 +474,14 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.gPending = true
 	case key.Matches(msg, m.keys.OpenFile):
 		return m, m.openFile.open(m.rootDir, m.excludeFunc)
+	case key.Matches(msg, m.keys.Search):
+		if hasTab {
+			m.startSearch()
+		}
+	case key.Matches(msg, m.keys.SearchNext):
+		m.nextMatch()
+	case key.Matches(msg, m.keys.SearchPrev):
+		m.prevMatch()
 	}
 
 	m.adjustScroll()
