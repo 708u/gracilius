@@ -289,7 +289,7 @@ func (m *Model) renderTabBar(offset int) string {
 
 	for i, t := range m.tabs {
 		label := tabLabel(t)
-		w := len([]rune(label))
+		w := ansi.StringWidth(label)
 		if i == m.activeTab {
 			labels = append(labels, styleActive.Render(label))
 			borders = append(borders, styleBorder.Render(
