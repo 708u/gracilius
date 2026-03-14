@@ -103,13 +103,21 @@ func (m *Model) View() tea.View {
 		editorLines = m.renderEditor(lo)
 	}
 
-	// Overlay search bar on the first editor line (top-right).
-	var searchBarW int
+	// Overlay search box on the top-right of the editor.
+	var searchBoxW int
 	if len(editorLines) > 0 && (m.search.active || m.search.query != "") {
-		bar := m.renderSearchOverlay(lo.editorWidth)
-		searchBarW = ansi.StringWidth(bar)
-		startX := max(lo.editorWidth-searchBarW, 0)
-		editorLines[0] = composeLine(editorLines[0], bar, startX)
+		boxLines := m.renderSearchOverlay(lo.editorWidth)
+		for _, l := range boxLines {
+			if w := ansi.StringWidth(l); w > searchBoxW {
+				searchBoxW = w
+			}
+		}
+		startX := max(lo.editorWidth-searchBoxW, 0)
+		for i, boxLine := range boxLines {
+			if i < len(editorLines) {
+				editorLines[i] = composeLine(editorLines[i], boxLine, startX)
+			}
+		}
 	}
 
 	var content string
@@ -160,7 +168,7 @@ func (m *Model) View() tea.View {
 	var cp cursorPosition
 	switch {
 	case m.search.active:
-		cp = m.searchCursorScreenPos(lo, searchBarW)
+		cp = m.searchCursorScreenPos(lo, searchBoxW)
 	case hasTab && t.inputMode:
 		cp = m.commentCursorScreenPos(lo)
 	case hasTab && t.diffViewData != nil:

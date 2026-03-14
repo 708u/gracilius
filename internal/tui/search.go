@@ -307,14 +307,9 @@ func (m *Model) handleKeySearch(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// searchOverlayStyle is the style for the search bar overlay.
-var searchOverlayStyle = lipgloss.NewStyle().
-	Padding(0, 1).
-	Bold(true)
-
-// renderSearchOverlay renders the search bar as a styled string
-// suitable for overlaying on the first editor line.
-func (m *Model) renderSearchOverlay(editorWidth int) string {
+// renderSearchOverlay renders the search bar as a bordered box
+// and returns its lines for overlaying on the editor.
+func (m *Model) renderSearchOverlay(editorWidth int) []string {
 	total := m.searchMatchCount()
 
 	var content string
@@ -335,34 +330,39 @@ func (m *Model) renderSearchOverlay(editorWidth int) string {
 		}
 	}
 
-	bar := searchOverlayStyle.
-		Background(lipgloss.Color(m.theme.searchMatchBg)).
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(m.theme.tabActiveBorder)).
+		Padding(0, 1).
 		Render(content)
 
-	// Clamp to editor width.
-	barW := ansi.StringWidth(bar)
-	if barW > editorWidth {
-		bar = ansi.Truncate(bar, editorWidth, "")
+	boxLines := strings.Split(box, "\n")
+
+	// Clamp each line to editor width.
+	for i, line := range boxLines {
+		if ansi.StringWidth(line) > editorWidth {
+			boxLines[i] = ansi.Truncate(line, editorWidth, "")
+		}
 	}
 
-	return bar
+	return boxLines
 }
 
 // searchCursorScreenPos returns the cursor position within the search overlay
-// at the top-right of the editor area. lo and barW must be pre-computed by
+// at the top-right of the editor area. lo and boxW must be pre-computed by
 // the caller to avoid redundant work.
-func (m *Model) searchCursorScreenPos(lo layout, barW int) cursorPosition {
+func (m *Model) searchCursorScreenPos(lo layout, boxW int) cursorPosition {
 	c := m.search.input.Cursor()
 	if c == nil {
 		return cursorPosition{}
 	}
 	// Overlay is right-aligned within the editor area.
-	startX := lo.editorStartX + lo.editorWidth - barW
-	// Overlay is on the first content line.
-	y := contentStartY
-	// Cursor offset: padding (1) + prompt width + cursor.X
+	startX := lo.editorStartX + lo.editorWidth - boxW
+	// Content is on the second line (after top border).
+	y := contentStartY + 1
+	// Cursor offset: border (1) + padding (1) + prompt width + cursor.X
 	promptW := ansi.StringWidth(m.search.input.Prompt)
-	x := startX + 1 + promptW + c.X // +1 for left padding
+	x := startX + 1 + 1 + promptW + c.X // border + padding
 	return cursorPosition{x: x, y: y}
 }
 
