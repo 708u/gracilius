@@ -312,34 +312,37 @@ const (
 	searchOverlayWidthPercent = 40 // percentage of editor width
 	searchOverlayMinWidth     = 24
 	searchOverlayMaxWidth     = 50
-	searchOverlayBorderW      = 2 // left + right border
-	searchOverlayPaddingW     = 2 // left + right padding
-	searchOverlayCounterW     = 8 // fixed width reserved for counter (e.g. " 99/999")
+	searchOverlayCounterW     = 8 // fixed width reserved for counter
 )
 
-// renderSearchOverlay renders the search bar as a bordered box
+// renderSearchOverlay renders the search bar as a bordered box (3 lines)
 // and returns its lines for overlaying on the editor.
 func (m *Model) renderSearchOverlay(editorWidth int) []string {
 	total := m.searchMatchCount()
+	borderFg := lipgloss.Color(m.theme.tabActiveBorder)
+	borderStyle := lipgloss.NewStyle().Foreground(borderFg)
 
-	// Compute fixed box width.
+	// Compute fixed box width (outer, including borders).
 	boxW := editorWidth * searchOverlayWidthPercent / 100
 	boxW = min(max(min(boxW, searchOverlayMaxWidth), searchOverlayMinWidth), editorWidth)
-	innerW := boxW - searchOverlayBorderW - searchOverlayPaddingW
+	// Inner content width: box - 2 borders - 2 padding spaces.
+	innerW := max(boxW-4, 1)
 
-	// Input always gets the left portion, counter always gets the right.
+	// Input gets left portion, counter gets right portion (fixed).
 	inputW := max(innerW-searchOverlayCounterW, 1)
 
-	// Render input view at fixed width.
+	// Render input.
 	m.search.input.SetWidth(inputW)
 	var inputView string
 	if m.search.active {
 		inputView = m.search.input.View()
 	} else {
-		inputView = ansi.Truncate(m.search.query, inputW, "")
+		inputView = m.search.query
 	}
+	// Truncate to inputW to guarantee single-line.
+	inputView = ansi.Truncate(inputView, inputW, "")
 
-	// Build counter (always right-aligned in its fixed-width zone).
+	// Build counter string.
 	query := m.search.query
 	if m.search.active {
 		query = m.search.input.Value()
@@ -353,29 +356,25 @@ func (m *Model) renderSearchOverlay(editorWidth int) []string {
 		}
 	}
 
-	// Right-align counter within its fixed zone.
-	counterPadded := counter
+	// Right-align counter within its fixed-width zone.
+	counterRendered := counter
 	if pad := searchOverlayCounterW - ansi.StringWidth(counter); pad > 0 {
-		counterPadded = strings.Repeat(" ", pad) + counter
+		counterRendered = strings.Repeat(" ", pad) + counter
 	}
 
-	content := inputView + counterPadded
-
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(m.theme.tabActiveBorder)).
-		Padding(0, 1).
-		Width(innerW + searchOverlayPaddingW).
-		Render(content)
-
-	boxLines := strings.Split(box, "\n")
-
-	// Ensure only top border + content + bottom border (3 lines max).
-	if len(boxLines) > 3 {
-		boxLines = boxLines[:3]
+	// Compose the single content line: input + counter, padded to innerW.
+	contentLine := inputView + counterRendered
+	contentVisualW := ansi.StringWidth(contentLine)
+	if contentVisualW < innerW {
+		contentLine += strings.Repeat(" ", innerW-contentVisualW)
 	}
 
-	return boxLines
+	// Build 3 lines manually: top border, content, bottom border.
+	top := borderStyle.Render("\u256d" + strings.Repeat("\u2500", boxW-2) + "\u256e")
+	mid := borderStyle.Render("\u2502") + " " + contentLine + " " + borderStyle.Render("\u2502")
+	bot := borderStyle.Render("\u2570" + strings.Repeat("\u2500", boxW-2) + "\u256f")
+
+	return []string{top, mid, bot}
 }
 
 // searchCursorScreenPos returns the cursor position within the search overlay
