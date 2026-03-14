@@ -68,8 +68,9 @@ type diffSideCtx struct {
 
 // diffRenderResult holds pre-rendered diff lines and row-to-visual-line mapping.
 type diffRenderResult struct {
-	lines          []string // flat visual lines for viewport content
-	hunkVisualOffs []int    // visual line offset for each hunk
+	lines           []string // flat visual lines for viewport content
+	hunkVisualOffs  []int    // visual line offset for each hunk
+	rowVisualStarts []int    // logical row index → visual line offset
 }
 
 // renderAllDiffLines pre-renders all diff rows into a flat visual line slice.
@@ -132,7 +133,7 @@ func renderAllDiffLines(data *diffData, theme themeConfig, width int, oldHL, new
 		}
 	}
 
-	return diffRenderResult{lines: lines, hunkVisualOffs: hunkOffs}
+	return diffRenderResult{lines: lines, hunkVisualOffs: hunkOffs, rowVisualStarts: rowVisualStart}
 }
 
 // diffSideBg returns the line and word background colors for a diff side.
