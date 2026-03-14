@@ -51,9 +51,10 @@ type tab struct {
 	diffOldSource     string // old-side source text for re-highlighting on theme change
 
 	// diff render cache (invalidated on width/theme change)
-	diffCachedLines []string // pre-rendered visual lines (same as viewport content)
-	diffCacheWidth  int
-	diffCacheTheme  string
+	diffCachedLines     []string // pre-rendered visual lines (same as viewport content)
+	diffCacheWidth      int
+	diffCacheTheme      string
+	diffRowVisualStarts []int // logical row → visual line offset
 }
 
 // diffState holds accept/reject callbacks for a diff review tab.
@@ -167,6 +168,7 @@ func (t *tab) syncContent(lines []string) {
 func (t *tab) renderDiffContent(theme themeConfig, width int) []int {
 	result := renderAllDiffLines(t.diffViewData, theme, width, t.diffOldHighlights, t.diffNewHighlights)
 	t.diffCachedLines = result.lines
+	t.diffRowVisualStarts = result.rowVisualStarts
 	t.vp.SetContentLines(result.lines)
 	t.diffCacheWidth = width
 	t.diffCacheTheme = theme.name
@@ -187,14 +189,44 @@ func (t *tab) initDiffContent(theme themeConfig, width, height int) {
 	}
 }
 
+// diffVisualToLogical converts a visual line offset to a logical row index
+// and a sub-offset within that row.
+func (t *tab) diffVisualToLogical(visualOff int) (logicalRow, subOff int) {
+	starts := t.diffRowVisualStarts
+	if len(starts) == 0 {
+		return 0, 0
+	}
+	row := 0
+	for i, s := range starts {
+		if s > visualOff {
+			break
+		}
+		row = i
+	}
+	return row, visualOff - starts[row]
+}
+
 // ensureDiffContent refreshes the diff render cache if width/theme changed.
+// Anchors the viewport to the same logical diff row across re-renders.
 func (t *tab) ensureDiffContent(theme themeConfig, width int) {
 	if width <= diffSeparatorWidth || (t.diffCacheWidth == width && t.diffCacheTheme == theme.name) {
 		return
 	}
-	off := t.vp.YOffset()
+	logicalRow, subOff := t.diffVisualToLogical(t.vp.YOffset())
 	t.renderDiffContent(theme, width)
-	t.vp.SetYOffset(off)
+	newOff := 0
+	if logicalRow < len(t.diffRowVisualStarts) {
+		newOff = t.diffRowVisualStarts[logicalRow]
+		rowLines := len(t.diffCachedLines) - newOff
+		if logicalRow+1 < len(t.diffRowVisualStarts) {
+			rowLines = t.diffRowVisualStarts[logicalRow+1] - newOff
+		}
+		if subOff >= rowLines {
+			subOff = max(rowLines-1, 0)
+		}
+		newOff += subOff
+	}
+	t.vp.SetYOffset(newOff)
 }
 
 // rejectAndClear calls onReject if set and nils the diff state.

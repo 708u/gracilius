@@ -253,6 +253,127 @@ func TestRenderSideBySide_SoftWrapWithSyntax(t *testing.T) {
 	}
 }
 
+func TestRenderAllDiffLines_RowVisualStarts(t *testing.T) {
+	old := []string{"aaa", "bbb", "ccc"}
+	new := []string{"aaa", "BBB", "ccc"}
+	data := buildDiffData(old, new)
+
+	result := renderAllDiffLines(data, darkTheme, 80, nil, nil)
+
+	if len(result.rowVisualStarts) != len(data.rows) {
+		t.Fatalf("rowVisualStarts length = %d, want %d", len(result.rowVisualStarts), len(data.rows))
+	}
+
+	// Without soft-wrap at width 80, each row occupies exactly 1 visual line,
+	// so rowVisualStarts should be [0, 1, 2].
+	for i, start := range result.rowVisualStarts {
+		if start != i {
+			t.Errorf("rowVisualStarts[%d] = %d, want %d", i, start, i)
+		}
+	}
+}
+
+func TestRenderAllDiffLines_RowVisualStarts_SoftWrap(t *testing.T) {
+	longLine := strings.Repeat("x", 100)
+	old := []string{"short", longLine}
+	new := []string{"short", longLine}
+	data := buildDiffData(old, new)
+
+	// Narrow width to force soft-wrapping on the long line.
+	result := renderAllDiffLines(data, darkTheme, 40, nil, nil)
+
+	if len(result.rowVisualStarts) != len(data.rows) {
+		t.Fatalf("rowVisualStarts length = %d, want %d", len(result.rowVisualStarts), len(data.rows))
+	}
+
+	// First row starts at 0.
+	if result.rowVisualStarts[0] != 0 {
+		t.Errorf("rowVisualStarts[0] = %d, want 0", result.rowVisualStarts[0])
+	}
+
+	// Starts must be strictly increasing.
+	for i := 1; i < len(result.rowVisualStarts); i++ {
+		if result.rowVisualStarts[i] <= result.rowVisualStarts[i-1] {
+			t.Errorf("rowVisualStarts[%d]=%d not > rowVisualStarts[%d]=%d",
+				i, result.rowVisualStarts[i], i-1, result.rowVisualStarts[i-1])
+		}
+	}
+
+	// The second row (long line) should cause extra visual lines.
+	if len(result.lines) <= len(data.rows) {
+		t.Errorf("expected soft-wrap to produce extra lines, got %d for %d rows",
+			len(result.lines), len(data.rows))
+	}
+}
+
+func TestDiffVisualToLogical(t *testing.T) {
+	tb := &tab{
+		diffRowVisualStarts: []int{0, 1, 4, 7},
+	}
+
+	tests := []struct {
+		visualOff  int
+		wantRow    int
+		wantSubOff int
+	}{
+		{0, 0, 0},
+		{1, 1, 0},
+		{2, 1, 1},
+		{3, 1, 2},
+		{4, 2, 0},
+		{6, 2, 2},
+		{7, 3, 0},
+		{9, 3, 2},
+	}
+	for _, tt := range tests {
+		row, sub := tb.diffVisualToLogical(tt.visualOff)
+		if row != tt.wantRow || sub != tt.wantSubOff {
+			t.Errorf("diffVisualToLogical(%d) = (%d, %d), want (%d, %d)",
+				tt.visualOff, row, sub, tt.wantRow, tt.wantSubOff)
+		}
+	}
+}
+
+func TestDiffVisualToLogical_Empty(t *testing.T) {
+	tb := &tab{}
+	row, sub := tb.diffVisualToLogical(5)
+	if row != 0 || sub != 0 {
+		t.Errorf("diffVisualToLogical(5) on empty = (%d, %d), want (0, 0)", row, sub)
+	}
+}
+
+func TestEnsureDiffContent_PreservesLogicalPosition(t *testing.T) {
+	longLine := strings.Repeat("x", 100)
+	old := []string{"short", longLine, "end"}
+	new := []string{"short", longLine, "end"}
+	data := buildDiffData(old, new)
+
+	tb := newDiffTab("test.go", nil, nil, nil)
+	tb.diffViewData = data
+
+	// Initial render at wide width.
+	wideWidth := 120
+	tb.renderDiffContent(darkTheme, wideWidth)
+	tb.diffCacheWidth = wideWidth
+	tb.diffCacheTheme = darkTheme.name
+
+	// Find the visual offset for the "end" row (last logical row).
+	lastRow := len(data.rows) - 1
+	wideVisualOff := tb.diffRowVisualStarts[lastRow]
+	tb.vp.SetYOffset(wideVisualOff)
+
+	// Re-render at narrow width.
+	narrowWidth := 40
+	tb.ensureDiffContent(darkTheme, narrowWidth)
+
+	// After re-render, the viewport should still point at the same logical row.
+	narrowVisualOff := tb.diffRowVisualStarts[lastRow]
+	if tb.vp.YOffset() != narrowVisualOff {
+		t.Errorf("after width change: YOffset = %d, want %d (visual start of logical row %d)",
+			tb.vp.YOffset(), narrowVisualOff, lastRow)
+	}
+}
+
 func TestRenderSideBySide_SoftWrapWithWordDiff(t *testing.T) {
 	// Use a long modified line that forces soft-wrapping at narrow width.
 	old := []string{"func processData(inputValue int, extraParam string) error {"}
