@@ -190,22 +190,20 @@ func (t *tab) initDiffContent(theme themeConfig, width, height int) {
 }
 
 // diffVisualToLogical converts a visual line offset to a logical row index
-// and a sub-offset within that row. Uses binary search on diffRowVisualStarts.
+// and a sub-offset within that row.
 func (t *tab) diffVisualToLogical(visualOff int) (logicalRow, subOff int) {
 	starts := t.diffRowVisualStarts
 	if len(starts) == 0 {
 		return 0, 0
 	}
-	lo, hi := 0, len(starts)-1
-	for lo < hi {
-		mid := (lo + hi + 1) / 2
-		if starts[mid] <= visualOff {
-			lo = mid
-		} else {
-			hi = mid - 1
+	row := 0
+	for i, s := range starts {
+		if s > visualOff {
+			break
 		}
+		row = i
 	}
-	return lo, visualOff - starts[lo]
+	return row, visualOff - starts[row]
 }
 
 // ensureDiffContent refreshes the diff render cache if width/theme changed.
