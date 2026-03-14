@@ -15,6 +15,10 @@ type tabKind int
 const (
 	fileTab tabKind = iota
 	diffTab
+
+	// diffScrollRatio is the golden-ratio position (≈38% from top)
+	// used to place the first hunk when opening a diff view.
+	diffScrollRatio = 38
 )
 
 // tab holds all per-tab state.
@@ -176,7 +180,7 @@ func (t *tab) initDiffContent(theme themeConfig, width, height int) {
 	}
 	hunkOffs := t.renderDiffContent(theme, width)
 	if len(hunkOffs) > 0 {
-		offset := max(hunkOffs[0]-height/2, 0)
+		offset := max(hunkOffs[0]-height*diffScrollRatio/100, 0)
 		maxOff := max(len(t.diffCachedLines)-height, 0)
 		offset = min(offset, maxOff)
 		t.vp.SetYOffset(offset)
