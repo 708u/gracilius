@@ -42,8 +42,8 @@ type searchState struct {
 
 func newSearchState() searchState {
 	ti := textinput.New()
-	ti.Placeholder = "Search..."
-	ti.Prompt = "/ "
+	ti.Placeholder = "Search"
+	ti.Prompt = ""
 	ti.CharLimit = 500
 	ti.SetVirtualCursor(false)
 	return searchState{input: ti}
@@ -307,51 +307,84 @@ func (m *Model) handleKeySearch(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// searchOverlayMinWidth is the minimum inner width for the search box
-// to prevent layout shift when the counter appears.
-const searchOverlayMinWidth = 20
+// Search overlay geometry.
+const (
+	searchOverlayWidthPercent = 40 // percentage of editor width
+	searchOverlayMinWidth     = 24
+	searchOverlayMaxWidth     = 50
+	searchOverlayBorderW      = 2 // left + right border
+	searchOverlayPaddingW     = 2 // left + right padding
+	searchOverlayCounterGap   = 2 // spaces between input and counter
+)
 
 // renderSearchOverlay renders the search bar as a bordered box
 // and returns its lines for overlaying on the editor.
 func (m *Model) renderSearchOverlay(editorWidth int) []string {
 	total := m.searchMatchCount()
 
-	var content string
+	// Compute fixed box width.
+	boxW := editorWidth * searchOverlayWidthPercent / 100
+	boxW = min(max(min(boxW, searchOverlayMaxWidth), searchOverlayMinWidth), editorWidth)
+	innerW := boxW - searchOverlayBorderW - searchOverlayPaddingW
+
+	// Build counter string.
+	var counter string
+	query := m.search.query
 	if m.search.active {
-		var sb strings.Builder
-		sb.WriteString(m.search.input.View())
+		query = m.search.input.Value()
+	}
+	if query != "" {
 		if total > 0 {
-			fmt.Fprintf(&sb, "  %d/%d", m.search.currentMatch+1, total)
-		} else if m.search.input.Value() != "" {
-			sb.WriteString("  0 results")
-		}
-		content = sb.String()
-	} else {
-		if total > 0 {
-			content = fmt.Sprintf("/ %s  %d/%d", m.search.query, m.search.currentMatch+1, total)
+			counter = fmt.Sprintf("%d/%d", m.search.currentMatch+1, total)
 		} else {
-			content = fmt.Sprintf("/ %s", m.search.query)
+			counter = "0/0"
 		}
 	}
 
-	// Enforce minimum width to prevent layout shift.
-	contentW := ansi.StringWidth(content)
-	innerW := max(contentW, searchOverlayMinWidth)
+	// Compute input width: inner minus counter and gap.
+	counterW := ansi.StringWidth(counter)
+	inputW := innerW
+	if counterW > 0 {
+		inputW = innerW - counterW - searchOverlayCounterGap
+	}
+	if inputW < 1 {
+		inputW = 1
+	}
+
+	// Render input view at fixed width.
+	m.search.input.SetWidth(inputW)
+	var inputView string
+	if m.search.active {
+		inputView = m.search.input.View()
+	} else {
+		inputView = m.search.query
+	}
+
+	// Compose content: input (padded to inputW) + gap + counter.
+	var content string
+	if counterW > 0 {
+		inputVisualW := ansi.StringWidth(inputView)
+		pad := ""
+		if gap := inputW - inputVisualW + searchOverlayCounterGap; gap > 0 {
+			pad = strings.Repeat(" ", gap)
+		}
+		content = inputView + pad + counter
+	} else {
+		content = inputView
+	}
 
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(m.theme.tabActiveBorder)).
 		Padding(0, 1).
-		Width(innerW + 2). // +2 for left/right padding
+		Width(innerW + searchOverlayPaddingW).
 		Render(content)
 
 	boxLines := strings.Split(box, "\n")
 
-	// Clamp each line to editor width.
-	for i, line := range boxLines {
-		if ansi.StringWidth(line) > editorWidth {
-			boxLines[i] = ansi.Truncate(line, editorWidth, "")
-		}
+	// Ensure only top border + content + bottom border (3 lines max).
+	if len(boxLines) > 3 {
+		boxLines = boxLines[:3]
 	}
 
 	return boxLines
@@ -369,9 +402,8 @@ func (m *Model) searchCursorScreenPos(lo layout, boxW int) cursorPosition {
 	startX := lo.editorStartX + lo.editorWidth - boxW
 	// Content is on the second line (after top border).
 	y := contentStartY + 1
-	// Cursor offset: border (1) + padding (1) + cursor.X
-	// cursor.X already includes the prompt width.
-	x := startX + 1 + 1 + c.X // border + padding
+	// Cursor offset: border (1) + padding (1) + cursor.X.
+	x := startX + 1 + 1 + c.X
 	return cursorPosition{x: x, y: y}
 }
 
