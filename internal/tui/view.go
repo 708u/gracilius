@@ -147,6 +147,10 @@ func (m *Model) View() tea.View {
 		return v
 	}
 
+	if m.clearAllPending {
+		return newView(m.renderClearAllOverlay(base))
+	}
+
 	v := newView(base)
 	var cp cursorPosition
 	switch {
@@ -307,16 +311,6 @@ func (m *Model) renderFooter() string {
 		return sb.String()
 	}
 
-	if m.clearAllPending {
-		n := 0
-		if hasTab {
-			n = len(t.comments)
-		}
-		sb.WriteString(styleWarning.Render(
-			fmt.Sprintf("Clear %d comments? (y/n)", n)))
-		return sb.String()
-	}
-
 	if hasTab && t.inputMode {
 		hint := commentHintBasic
 		if m.enhancedKeyboard {
@@ -357,6 +351,25 @@ func (m *Model) renderFooter() string {
 	}
 
 	return sb.String()
+}
+
+// renderClearAllOverlay renders a centered confirmation overlay for clearing all comments.
+func (m *Model) renderClearAllOverlay(bg string) string {
+	t, hasTab := m.activeTabState()
+	n := 0
+	if hasTab {
+		n = len(t.comments)
+	}
+
+	text := styleWarning.Render(fmt.Sprintf("Clear %d comments? (y/n)", n))
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("1")).
+		Padding(0, 2).
+		Render(text)
+
+	return placeCenteredOverlay(m.width, m.height, box, dimBackground(bg))
 }
 
 // renderLeftPane generates the left pane lines with a header and panel body.

@@ -42,6 +42,11 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.clearAllPending {
+		m.clearAllPending = false
+		return m, nil
+	}
+
 	if msg.Button == tea.MouseLeft &&
 		msg.Y >= headerHeight && msg.Y < headerHeight+tabBarHeight {
 		if idx := m.tabIndexAtX(msg.X); idx >= 0 {
@@ -131,6 +136,9 @@ func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) (tea.Model, tea.Cmd)
 	if m.openFile.active {
 		return m, nil
 	}
+	if m.clearAllPending {
+		return m, nil
+	}
 	if m.resizingPane {
 		m.resizingPane = false
 		return m, nil
@@ -159,6 +167,9 @@ func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) (tea.Model, tea.Cmd)
 // handleMouseWheel handles mouse scroll events.
 func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	if m.openFile.active {
+		return m, nil
+	}
+	if m.clearAllPending {
 		return m, nil
 	}
 	lo := m.computeLayout()
