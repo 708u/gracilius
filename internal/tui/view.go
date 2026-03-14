@@ -103,6 +103,15 @@ func (m *Model) View() tea.View {
 		editorLines = m.renderEditor(lo)
 	}
 
+	// Overlay search bar on the first editor line (top-right).
+	var searchBarW int
+	if len(editorLines) > 0 && (m.search.active || m.search.query != "") {
+		bar := m.renderSearchOverlay(lo.editorWidth)
+		searchBarW = ansi.StringWidth(bar)
+		startX := max(lo.editorWidth-searchBarW, 0)
+		editorLines[0] = composeLine(editorLines[0], bar, startX)
+	}
+
 	var content string
 	if m.sidebarVisible {
 		panelLines := m.renderLeftPane(lo.treeWidth, lo.contentHeight)
@@ -151,7 +160,7 @@ func (m *Model) View() tea.View {
 	var cp cursorPosition
 	switch {
 	case m.search.active:
-		cp = m.searchCursorScreenPos()
+		cp = m.searchCursorScreenPos(lo, searchBarW)
 	case hasTab && t.inputMode:
 		cp = m.commentCursorScreenPos(lo)
 	case hasTab && t.diffViewData != nil:
@@ -299,17 +308,6 @@ func (m *Model) renderFooter() string {
 
 	var sb strings.Builder
 
-	if m.search.active {
-		sb.WriteString(m.search.input.View())
-		total := m.searchMatchCount()
-		if total > 0 {
-			fmt.Fprintf(&sb, "  %d/%d", m.search.currentMatch+1, total)
-		} else if m.search.input.Value() != "" {
-			sb.WriteString("  0 results")
-		}
-		return sb.String()
-	}
-
 	if m.gPending {
 		sb.WriteString("g → g: top")
 		return sb.String()
@@ -358,12 +356,6 @@ func (m *Model) renderFooter() string {
 					t.cursorLine+1, t.cursorChar+1)
 			default:
 				sb.WriteString(emptyStateMsg)
-			}
-			if m.search.query != "" {
-				total := m.searchMatchCount()
-				if total > 0 {
-					fmt.Fprintf(&sb, "  [/: %d/%d]", m.search.currentMatch+1, total)
-				}
 			}
 		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
 			if m.gitCursor < len(m.gitChangedFiles) {

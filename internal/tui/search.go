@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"unicode"
@@ -8,6 +9,8 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // searchMatch represents a single match in a file tab.
@@ -304,17 +307,62 @@ func (m *Model) handleKeySearch(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// searchCursorScreenPos returns the cursor position within the search input in the footer.
-func (m *Model) searchCursorScreenPos() cursorPosition {
+// searchOverlayStyle is the style for the search bar overlay.
+var searchOverlayStyle = lipgloss.NewStyle().
+	Padding(0, 1).
+	Bold(true)
+
+// renderSearchOverlay renders the search bar as a styled string
+// suitable for overlaying on the first editor line.
+func (m *Model) renderSearchOverlay(editorWidth int) string {
+	total := m.searchMatchCount()
+
+	var content string
+	if m.search.active {
+		var sb strings.Builder
+		sb.WriteString(m.search.input.View())
+		if total > 0 {
+			fmt.Fprintf(&sb, "  %d/%d", m.search.currentMatch+1, total)
+		} else if m.search.input.Value() != "" {
+			sb.WriteString("  0 results")
+		}
+		content = sb.String()
+	} else {
+		if total > 0 {
+			content = fmt.Sprintf("/ %s  %d/%d", m.search.query, m.search.currentMatch+1, total)
+		} else {
+			content = fmt.Sprintf("/ %s", m.search.query)
+		}
+	}
+
+	bar := searchOverlayStyle.
+		Background(lipgloss.Color(m.theme.searchMatchBg)).
+		Render(content)
+
+	// Clamp to editor width.
+	barW := ansi.StringWidth(bar)
+	if barW > editorWidth {
+		bar = ansi.Truncate(bar, editorWidth, "")
+	}
+
+	return bar
+}
+
+// searchCursorScreenPos returns the cursor position within the search overlay
+// at the top-right of the editor area. lo and barW must be pre-computed by
+// the caller to avoid redundant work.
+func (m *Model) searchCursorScreenPos(lo layout, barW int) cursorPosition {
 	c := m.search.input.Cursor()
 	if c == nil {
 		return cursorPosition{}
 	}
-	// The search input is rendered at the start of the footer area.
-	// Footer starts at: headerHeight + tabBarHeight + contentHeight + 1 (border)
-	lo := m.computeLayout()
-	y := headerHeight + tabBarHeight + lo.contentHeight + 1 // +1 for footer border
-	x := len([]rune(m.search.input.Prompt)) + c.X
+	// Overlay is right-aligned within the editor area.
+	startX := lo.editorStartX + lo.editorWidth - barW
+	// Overlay is on the first content line.
+	y := contentStartY
+	// Cursor offset: padding (1) + prompt width + cursor.X
+	promptW := ansi.StringWidth(m.search.input.Prompt)
+	x := startX + 1 + promptW + c.X // +1 for left padding
 	return cursorPosition{x: x, y: y}
 }
 

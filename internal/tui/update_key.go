@@ -252,6 +252,11 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	switch {
 	case key.Matches(msg, m.keys.Cancel):
+		if m.search.query != "" {
+			m.search.query = ""
+			m.clearSearchMatches()
+			return m, nil
+		}
 		if hasTab && t.selecting {
 			t.selecting = false
 			t.lineSelect = false
