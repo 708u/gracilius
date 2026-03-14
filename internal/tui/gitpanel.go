@@ -168,7 +168,7 @@ func (m *Model) openGitDiffEntry() {
 	}
 
 	dt.diffViewData = buildDiffData(oldContent, newContent)
-	dt.initDiffContent(m.theme, lo.editorWidth)
+	dt.initDiffContent(m.theme, lo.editorWidth, lo.contentHeight)
 
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1

@@ -14,8 +14,7 @@ type keyMap struct {
 	Down          key.Binding
 	Left          key.Binding
 	Right         key.Binding
-	CharSelect    key.Binding
-	LineSelect    key.Binding
+	Select        key.Binding
 	Copy          key.Binding
 	Comment       key.Binding
 	CommentSubmit key.Binding
@@ -33,6 +32,9 @@ type keyMap struct {
 	SwitchPanel   key.Binding
 	ToggleSidebar key.Binding
 	Confirm       key.Binding
+	Search        key.Binding
+	SearchNext    key.Binding
+	SearchPrev    key.Binding
 }
 
 func newKeyMap() keyMap {
@@ -69,13 +71,9 @@ func newKeyMap() keyMap {
 			key.WithKeys("right", "l"),
 			key.WithHelp("→/l", "right"),
 		),
-		CharSelect: key.NewBinding(
+		Select: key.NewBinding(
 			key.WithKeys("v"),
 			key.WithHelp("v", "select"),
-		),
-		LineSelect: key.NewBinding(
-			key.WithKeys("V"),
-			key.WithHelp("V", "select line"),
 		),
 		Copy: key.NewBinding(
 			key.WithKeys("y"),
@@ -144,6 +142,18 @@ func newKeyMap() keyMap {
 		Confirm: key.NewBinding(
 			key.WithKeys("y"),
 		),
+		Search: key.NewBinding(
+			key.WithKeys("/"),
+			key.WithHelp("/", "search"),
+		),
+		SearchNext: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "next match"),
+		),
+		SearchPrev: key.NewBinding(
+			key.WithKeys("N"),
+			key.WithHelp("N", "prev match"),
+		),
 	}
 }
 
@@ -152,7 +162,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.SwitchPane, k.SwitchPanel, k.ToggleSidebar,
 		k.PrevTab, k.NextTab, k.CloseTab,
-		k.CharSelect, k.LineSelect, k.Copy, k.OpenFile,
+		k.Select, k.Copy, k.OpenFile, k.Search,
 		k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit,
 	}
 }
@@ -162,7 +172,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown},
 		{k.Enter, k.SwitchPane, k.SwitchPanel, k.ToggleSidebar, k.PrevTab, k.NextTab, k.CloseTab},
-		{k.CharSelect, k.LineSelect, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
+		{k.Select, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.Search, k.SearchNext, k.SearchPrev, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
 	}
 }
 
@@ -174,8 +184,7 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	isDiffReview := hasTab && t.diff != nil
 	isDiffView := hasTab && t.diffViewData != nil
 	editorFocus := hasTab && m.focusPane == paneEditor
-	km.CharSelect.SetEnabled(editorFocus)
-	km.LineSelect.SetEnabled(editorFocus)
+	km.Select.SetEnabled(editorFocus)
 	km.Copy.SetEnabled(editorFocus && ((isDiffView && t.diffSelecting) || (!isDiffView && t.selecting)))
 	km.Comment.SetEnabled(editorFocus && !isDiffView)
 	km.ClearAll.SetEnabled(editorFocus && !isDiffView)
@@ -189,5 +198,8 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km.SwitchPane.SetEnabled(hasTab && m.sidebarVisible)
 	km.SwitchPanel.SetEnabled(true)
 	km.ToggleSidebar.SetEnabled(true)
+	km.Search.SetEnabled(hasTab)
+	km.SearchNext.SetEnabled(m.search.query != "")
+	km.SearchPrev.SetEnabled(m.search.query != "")
 	return km
 }

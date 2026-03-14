@@ -46,6 +46,10 @@ func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.search.query != "" {
+		m.refreshSearchMatches()
+	}
+
 	cmd := m.watchFile()
 	return m, cmd
 }
@@ -131,7 +135,10 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 	dt.diffNewHighlights = highlightFile(msg.FilePath, msg.Contents, m.theme)
 
 	dt.diffViewData = buildDiffData(oldLines, newLines)
-	dt.initDiffContent(m.theme, dt.vp.Width())
+	lo := m.computeLayout()
+	dt.vp.SetWidth(lo.editorWidth)
+	dt.vp.SetHeight(lo.contentHeight)
+	dt.initDiffContent(m.theme, lo.editorWidth, lo.contentHeight)
 
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1
