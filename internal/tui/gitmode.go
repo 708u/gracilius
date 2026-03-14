@@ -34,17 +34,7 @@ func (m gitDiffMode) label(defaultBranch string) string {
 
 // tabPrefix returns the bracketed prefix for diff tab labels.
 func (m gitDiffMode) tabPrefix(defaultBranch string) string {
-	switch m {
-	case gitModeWorking:
-		return "[working]"
-	case gitModeBranch:
-		if defaultBranch != "" {
-			return "[vs " + defaultBranch + "]"
-		}
-		return "[vs main]"
-	default:
-		return "[working]"
-	}
+	return "[" + m.label(defaultBranch) + "]"
 }
 
 // gitPanelState holds per-mode state for the git changes panel.
