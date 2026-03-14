@@ -177,17 +177,15 @@ func wrapDiffSide(
 	expanded := expandTabs(text)
 	bp := wrapBreakpoints(expanded, ctx.textWidth)
 
-	// Case A & C: no soft-wrap
+	// No soft-wrap: single visual line.
 	if bp == nil {
 		var sb strings.Builder
 		numStr := fmt.Sprintf("%*d ", digits, lineNum)
 		writeStyledText(&sb, gutterStyle, numStr)
 		switch {
 		case spans != nil:
-			// Case C: word-diff
 			renderWordDiffWithSyntax(&sb, spans, syntaxRuns, lineBg, wordBg, ctx.textWidth)
 		case syntaxRuns != nil:
-			// Case A: syntax highlight without word-diff
 			renderSyntaxWithBg(&sb, syntaxRuns, lineBg, ctx.textWidth)
 		default:
 			truncated := ansi.Truncate(expanded, ctx.textWidth, "")
@@ -196,8 +194,7 @@ func wrapDiffSide(
 		return []string{sb.String()}
 	}
 
-	// Case B: soft-wrapped with syntax highlighting
-	// Case D: soft-wrapped with word-diff spans
+	// Soft-wrapped with syntax or word-diff styling.
 	if syntaxRuns != nil || spans != nil {
 		var runs []styledRun
 		if spans != nil {
