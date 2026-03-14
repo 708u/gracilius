@@ -307,6 +307,10 @@ func (m *Model) handleKeySearch(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// searchOverlayMinWidth is the minimum inner width for the search box
+// to prevent layout shift when the counter appears.
+const searchOverlayMinWidth = 20
+
 // renderSearchOverlay renders the search bar as a bordered box
 // and returns its lines for overlaying on the editor.
 func (m *Model) renderSearchOverlay(editorWidth int) []string {
@@ -330,10 +334,15 @@ func (m *Model) renderSearchOverlay(editorWidth int) []string {
 		}
 	}
 
+	// Enforce minimum width to prevent layout shift.
+	contentW := ansi.StringWidth(content)
+	innerW := max(contentW, searchOverlayMinWidth)
+
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(m.theme.tabActiveBorder)).
 		Padding(0, 1).
+		Width(innerW + 2). // +2 for left/right padding
 		Render(content)
 
 	boxLines := strings.Split(box, "\n")
@@ -360,9 +369,9 @@ func (m *Model) searchCursorScreenPos(lo layout, boxW int) cursorPosition {
 	startX := lo.editorStartX + lo.editorWidth - boxW
 	// Content is on the second line (after top border).
 	y := contentStartY + 1
-	// Cursor offset: border (1) + padding (1) + prompt width + cursor.X
-	promptW := ansi.StringWidth(m.search.input.Prompt)
-	x := startX + 1 + 1 + promptW + c.X // border + padding
+	// Cursor offset: border (1) + padding (1) + cursor.X
+	// cursor.X already includes the prompt width.
+	x := startX + 1 + 1 + c.X // border + padding
 	return cursorPosition{x: x, y: y}
 }
 
