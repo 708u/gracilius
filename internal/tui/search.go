@@ -362,10 +362,18 @@ func (m *Model) renderSearchOverlay(editorWidth int) []string {
 		counterRendered = strings.Repeat(" ", pad) + counter
 	}
 
-	// Compose the single content line: input + counter, padded to innerW.
+	// Compose the single content line: input padded to inputW, then counter.
+	inputVisualW := ansi.StringWidth(inputView)
+	if inputVisualW < inputW {
+		inputView += strings.Repeat(" ", inputW-inputVisualW)
+	}
 	contentLine := inputView + counterRendered
+
+	// Ensure contentLine is exactly innerW (truncate if over, pad if under).
 	contentVisualW := ansi.StringWidth(contentLine)
-	if contentVisualW < innerW {
+	if contentVisualW > innerW {
+		contentLine = ansi.Truncate(contentLine, innerW, "")
+	} else if contentVisualW < innerW {
 		contentLine += strings.Repeat(" ", innerW-contentVisualW)
 	}
 
