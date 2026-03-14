@@ -49,6 +49,15 @@ func newSearchState() searchState {
 	return searchState{input: ti}
 }
 
+// currentSearchQuery returns the active search query: the textinput value
+// during input mode, or the confirmed query otherwise.
+func (m *Model) currentSearchQuery() string {
+	if m.search.active {
+		return m.search.input.Value()
+	}
+	return m.search.query
+}
+
 // isSmartCaseSensitive returns true if query contains any uppercase letter.
 func isSmartCaseSensitive(query string) bool {
 	for _, r := range query {
@@ -196,10 +205,7 @@ func (m *Model) refreshSearchMatches() {
 	if !ok {
 		return
 	}
-	query := m.search.query
-	if m.search.active {
-		query = m.search.input.Value()
-	}
+	query := m.currentSearchQuery()
 	if query == "" {
 		t.searchMatches = nil
 		t.diffSearchMatches = nil
@@ -351,10 +357,7 @@ func (m *Model) renderSearchOverlay(editorWidth int) []string {
 	inputView = ansi.Truncate(inputView, inputW, "")
 
 	// Build counter string.
-	query := m.search.query
-	if m.search.active {
-		query = m.search.input.Value()
-	}
+	query := m.currentSearchQuery()
 	var counter string
 	if query != "" {
 		if total > 0 {

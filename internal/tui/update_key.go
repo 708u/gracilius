@@ -214,27 +214,9 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 		t.vp.GotoBottom()
 		return m, nil, true
 
-	// Search navigation in diff tabs.
-	case key.Matches(msg, m.keys.Search):
-		m.startSearch()
-		return m, nil, true
-	case key.Matches(msg, m.keys.SearchNext):
-		m.nextMatch()
-		return m, nil, true
-	case key.Matches(msg, m.keys.SearchPrev):
-		m.prevMatch()
-		return m, nil, true
-	case key.Matches(msg, m.keys.Enter):
-		if m.search.query != "" {
-			if msg.Mod.Contains(tea.ModShift) {
-				m.prevMatch()
-			} else {
-				m.nextMatch()
-			}
-			return m, nil, true
-		}
-
 	// No-op: suppress file-tab actions that should not fire on diff tabs.
+	// Search keys (/, n, N, Enter, Shift+Enter) are intentionally NOT
+	// listed here so they fall through to handleKeyNormal.
 	case key.Matches(msg, m.keys.Left),
 		key.Matches(msg, m.keys.Right),
 		key.Matches(msg, m.keys.CharSelect),
@@ -300,13 +282,13 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.focusPane = paneTree
 			}
 		}
+	case msg.Code == tea.KeyEnter && msg.Mod.Contains(tea.ModShift):
+		if m.focusPane == paneEditor && m.search.query != "" {
+			m.prevMatch()
+		}
 	case key.Matches(msg, m.keys.Enter):
 		if m.focusPane == paneEditor && m.search.query != "" {
-			if msg.Mod.Contains(tea.ModShift) {
-				m.prevMatch()
-			} else {
-				m.nextMatch()
-			}
+			m.nextMatch()
 		} else if m.focusPane == paneTree {
 			switch m.activePanel {
 			case panelFiles:
