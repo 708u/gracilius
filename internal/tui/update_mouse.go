@@ -94,7 +94,6 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		t.anchorLine = targetLine
 		t.anchorChar = targetChar
 		t.selecting = false
-		t.lineSelect = false
 		m.mouseDown = true
 		m.lastMouseLine = targetLine
 		m.lastMouseChar = targetChar

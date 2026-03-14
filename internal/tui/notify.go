@@ -8,15 +8,14 @@ func (m *Model) notifySelectionChanged() {
 	if !ok {
 		return
 	}
-	startLine, startChar, endLine, endChar := t.normalizedSelection()
-
+	sel := t.getSelectionInfo()
 	m.server.NotifySelectionChanged(
 		t.filePath,
-		t.selectedText(),
-		startLine,
-		startChar,
-		endLine,
-		endChar,
+		sel.text,
+		sel.startLine,
+		sel.startChar,
+		sel.endLine,
+		sel.endChar,
 	)
 }
 
@@ -26,13 +25,14 @@ func (m *Model) notifyClearSelection() {
 	if !ok {
 		return
 	}
+	line, char := t.getCursorPos()
 	m.server.NotifySelectionChanged(
 		t.filePath,
 		"",
-		t.cursorLine,
-		t.cursorChar,
-		t.cursorLine,
-		t.cursorChar,
+		line,
+		char,
+		line,
+		char,
 	)
 }
 

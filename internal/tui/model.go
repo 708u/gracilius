@@ -199,6 +199,9 @@ type Model struct {
 
 	// file exclusion (gitignore-based when available)
 	excludeFunc ExcludeFunc
+
+	// in-file search
+	search searchState
 }
 
 // lineKind distinguishes the type of a visual row.
@@ -323,5 +326,6 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 		gitDiffMode:    gitModeWorking,
 		gitModeState:   make([]gitPanelState, len(gitDiffModes)),
 		excludeFunc:    exclude,
+		search:         newSearchState(),
 	}, nil
 }

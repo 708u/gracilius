@@ -105,6 +105,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Route non-key messages to search input when active.
+	if m.search.active {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.MouseClickMsg,
+			tea.WindowSizeMsg,
+			fileChangedMsg, treeChangedMsg, commentsChangedMsg,
+			OpenDiffMsg, CloseDiffMsg,
+			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
+			// Fall through to normal handling below.
+		default:
+			var cmd tea.Cmd
+			m.search.input, cmd = m.search.input.Update(msg)
+			return m, cmd
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyboardEnhancementsMsg:
 		m.enhancedKeyboard = msg.SupportsKeyDisambiguation()

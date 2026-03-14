@@ -106,6 +106,23 @@ func (m *Model) View() tea.View {
 		editorLines = m.renderEditor(lo)
 	}
 
+	// Overlay search box on the top-right of the editor.
+	var searchBoxW int
+	if len(editorLines) > 0 && (m.search.active || m.search.query != "") {
+		boxLines := m.renderSearchOverlay(lo.editorWidth)
+		for _, l := range boxLines {
+			if w := ansi.StringWidth(l); w > searchBoxW {
+				searchBoxW = w
+			}
+		}
+		startX := max(lo.editorWidth-searchBoxW, 0)
+		for i, boxLine := range boxLines {
+			if i < len(editorLines) {
+				editorLines[i] = composeLine(editorLines[i], boxLine, startX)
+			}
+		}
+	}
+
 	var content string
 	if m.sidebarVisible {
 		panelLines := m.renderLeftPane(lo.treeWidth, lo.contentHeight)
@@ -153,6 +170,8 @@ func (m *Model) View() tea.View {
 	v := newView(base)
 	var cp cursorPosition
 	switch {
+	case m.search.active:
+		cp = m.searchCursorScreenPos(lo, searchBoxW)
 	case hasTab && t.inputMode:
 		cp = m.commentCursorScreenPos(lo)
 	case hasTab && t.diffViewData != nil:
@@ -441,9 +460,36 @@ func (m *Model) renderTree(width, height int) []string {
 	return lines
 }
 
+// renderDiffEditor generates the editor pane lines for a diff tab.
+// The viewport owns scrolling; we slice cached rendered lines directly.
+func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
+	width := lo.editorWidth
+	height := lo.contentHeight
+
+	t.ensureDiffContent(m.theme, width, m.search.gen)
+	m.lastMapping = nil
+
+	off := t.vp.YOffset()
+	end := min(off+height, len(t.diffCachedLines))
+	diffLines := make([]string, 0, height)
+	if off < len(t.diffCachedLines) {
+		diffLines = append(diffLines, t.diffCachedLines[off:end]...)
+	}
+	for len(diffLines) < height {
+		diffLines = append(diffLines, padRight("", width))
+	}
+	return diffLines
+}
+
 // renderEditor generates the editor pane lines.
 func (m *Model) renderEditor(lo layout) []string {
 	t, hasTab := m.activeTabState()
+
+	// Diff view dispatch: separate renderer owns the diff path.
+	if hasTab && t.diffViewData != nil {
+		return m.renderDiffEditor(t, lo)
+	}
+
 	width := lo.editorWidth
 	height := lo.contentHeight
 	lnw := lo.lineNumWidth
@@ -451,22 +497,6 @@ func (m *Model) renderEditor(lo layout) []string {
 
 	lines := make([]string, 0, height)
 	var mapping []visualEntry
-
-	// Diff view dispatch: viewport owns scroll, we slice cached lines directly.
-	if hasTab && t.diffViewData != nil {
-		t.ensureDiffContent(m.theme, width)
-		m.lastMapping = nil
-		off := t.vp.YOffset()
-		end := min(off+height, len(t.diffCachedLines))
-		diffLines := make([]string, 0, height)
-		if off < len(t.diffCachedLines) {
-			diffLines = append(diffLines, t.diffCachedLines[off:end]...)
-		}
-		for len(diffLines) < height {
-			diffLines = append(diffLines, padRight("", width))
-		}
-		return diffLines
-	}
 
 	if !hasTab || len(t.lines) == 0 {
 		emptyMsg := emptyStateMsg
@@ -480,6 +510,12 @@ func (m *Model) renderEditor(lo layout) []string {
 
 	startLine, startChar, endLine, endChar := t.normalizedSelection()
 	selBgSeq := m.theme.selectionBgSeq()
+	hasSearchMatches := len(t.searchMatches) > 0
+	var searchMatchBg, searchCurrentBg string
+	if hasSearchMatches {
+		searchMatchBg = m.theme.searchMatchBgSeq()
+		searchCurrentBg = m.theme.searchCurrentBgSeq()
+	}
 	offset := t.vp.YOffset()
 	commentBodyWidth := width - lnw - commentBlockMargin
 	total := len(t.lines)
@@ -496,20 +532,25 @@ func (m *Model) renderEditor(lo layout) []string {
 		// Build content and emit visual rows
 		isSelected := m.focusPane == paneEditor && t.selecting && i >= startLine && i <= endLine
 
+		// Collect highlight ranges: search matches first, then selection (later wins).
+		lineHighlights := m.searchHighlightsForLine(t, i, searchMatchBg, searchCurrentBg)
+		if isSelected {
+			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
+			if sc < ec {
+				lineHighlights = append(lineHighlights, highlightRange{start: sc, end: ec, bgSeq: selBgSeq})
+			}
+		}
+		hasHighlights := len(lineHighlights) > 0
+
 		bp := wrapBreakpoints(lineContent, textWidth)
 		if bp != nil {
 			// Per-segment rendering: split runs at wrap breakpoints,
-			// then apply cursor/selection per segment independently.
+			// then apply highlights per segment independently.
 			var runs []styledRun
 			if hl := t.getHighlightedLine(i); hl != nil {
 				runs = hl.runs
 			} else {
 				runs = []styledRun{{Text: lineContent}}
-			}
-
-			var sc, ec int
-			if isSelected {
-				sc, ec = selRange(i, startLine, endLine, startChar, endChar, lineContent)
 			}
 
 			segRunsList := splitRunsAtBreakpoints(runs, bp)
@@ -528,22 +569,19 @@ func (m *Model) renderEditor(lo layout) []string {
 					segLen += len([]rune(r.Text))
 				}
 
-				// Clamp selection range to this segment.
-				segSC, segEC := 0, 0
-				if isSelected && sc < ec {
-					segSC = max(0, sc-wrapOff)
-					segEC = min(segLen, ec-wrapOff)
-					if segSC >= segEC {
-						segSC, segEC = 0, 0
-					}
-				}
-
 				// Render segment content.
 				var segSB strings.Builder
-				switch {
-				case segSC < segEC:
-					renderStyledLineWithSelection(&segSB, segRuns, segSC, segEC, selBgSeq)
-				default:
+				if hasHighlights {
+					// Clamp highlights to this segment.
+					segHL := clampHighlightsToSegment(lineHighlights, wrapOff, segLen)
+					if len(segHL) > 0 {
+						renderStyledLineWithHighlights(&segSB, segRuns, segHL)
+					} else {
+						for _, r := range segRuns {
+							writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
+						}
+					}
+				} else {
 					for _, r := range segRuns {
 						writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
 					}
@@ -566,15 +604,15 @@ func (m *Model) renderEditor(lo layout) []string {
 			// Non-wrapped: build full content then emit.
 			var contentSB strings.Builder
 
-			switch {
-			case isSelected:
-				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
+			if hasHighlights {
+				var runs []styledRun
 				if hl := t.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec, selBgSeq)
+					runs = hl.runs
 				} else {
-					renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec, selBgSeq)
+					runs = []styledRun{{Text: lineContent}}
 				}
-			default:
+				renderStyledLineWithHighlights(&contentSB, runs, lineHighlights)
+			} else {
 				if hl := t.getHighlightedLine(i); hl != nil {
 					contentSB.WriteString(hl.rendered)
 				} else {
@@ -675,10 +713,4 @@ func selRange(line, startLine, endLine, startChar, endChar int, content string) 
 		ec = endChar
 	}
 	return sc, ec
-}
-
-// renderLineWithCursorAndSelection renders a line with selection highlight.
-func renderLineWithCursorAndSelection(sb *strings.Builder, line string, selStart, selEnd int, selBgSeq string) {
-	runs := []styledRun{{Text: line}}
-	renderStyledLineWithSelection(sb, runs, selStart, selEnd, selBgSeq)
 }
