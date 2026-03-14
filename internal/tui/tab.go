@@ -33,7 +33,6 @@ type tab struct {
 	anchorLine       int
 	anchorChar       int
 	selecting        bool
-	lineSelect       bool
 	vp               viewport.Model
 
 	comments     []comment.Entry
@@ -51,9 +50,10 @@ type tab struct {
 	diffOldSource     string // old-side source text for re-highlighting on theme change
 
 	// diff render cache (invalidated on width/theme change)
-	diffCachedLines []string // pre-rendered visual lines (same as viewport content)
-	diffCacheWidth  int
-	diffCacheTheme  string
+	diffCachedLines     []string // pre-rendered visual lines (same as viewport content)
+	diffCacheWidth      int
+	diffCacheTheme      string
+	diffRowVisualStarts []int // logical row → visual line offset
 
 	// search match cache (per-tab)
 	searchMatches     []searchMatch
@@ -172,6 +172,7 @@ func (t *tab) syncContent(lines []string) {
 func (t *tab) renderDiffContent(theme themeConfig, width int) []int {
 	result := renderAllDiffLines(t.diffViewData, theme, width, t.diffOldHighlights, t.diffNewHighlights, t.diffSearchMatches)
 	t.diffCachedLines = result.lines
+	t.diffRowVisualStarts = result.rowVisualStarts
 	t.vp.SetContentLines(result.lines)
 	t.diffCacheWidth = width
 	t.diffCacheTheme = theme.name
@@ -192,16 +193,46 @@ func (t *tab) initDiffContent(theme themeConfig, width, height int) {
 	}
 }
 
+// diffVisualToLogical converts a visual line offset to a logical row index
+// and a sub-offset within that row.
+func (t *tab) diffVisualToLogical(visualOff int) (logicalRow, subOff int) {
+	starts := t.diffRowVisualStarts
+	if len(starts) == 0 {
+		return 0, 0
+	}
+	row := 0
+	for i, s := range starts {
+		if s > visualOff {
+			break
+		}
+		row = i
+	}
+	return row, visualOff - starts[row]
+}
+
 // ensureDiffContent refreshes the diff render cache if width/theme/search changed.
+// Anchors the viewport to the same logical diff row across re-renders.
 func (t *tab) ensureDiffContent(theme themeConfig, width int, searchGen int) {
 	if width <= diffSeparatorWidth ||
 		(t.diffCacheWidth == width && t.diffCacheTheme == theme.name && t.searchGen == searchGen) {
 		return
 	}
 	t.searchGen = searchGen
-	off := t.vp.YOffset()
+	logicalRow, subOff := t.diffVisualToLogical(t.vp.YOffset())
 	t.renderDiffContent(theme, width)
-	t.vp.SetYOffset(off)
+	newOff := 0
+	if logicalRow < len(t.diffRowVisualStarts) {
+		newOff = t.diffRowVisualStarts[logicalRow]
+		rowLines := len(t.diffCachedLines) - newOff
+		if logicalRow+1 < len(t.diffRowVisualStarts) {
+			rowLines = t.diffRowVisualStarts[logicalRow+1] - newOff
+		}
+		if subOff >= rowLines {
+			subOff = max(rowLines-1, 0)
+		}
+		newOff += subOff
+	}
+	t.vp.SetYOffset(newOff)
 }
 
 // rejectAndClear calls onReject if set and nils the diff state.
@@ -279,17 +310,16 @@ func (t *tab) selectedTextRange(startLine, startChar, endLine, endChar int) stri
 }
 
 // normalizedSelection returns the selection range with start <= end.
+// Selection is always line-granular: startChar is 0 and endChar is the
+// full length of the end line.
 func (t *tab) normalizedSelection() (startLine, startChar, endLine, endChar int) {
-	startLine, startChar = t.anchorLine, t.anchorChar
-	endLine, endChar = t.cursorLine, t.cursorChar
-	if startLine > endLine || (startLine == endLine && startChar > endChar) {
+	startLine = t.anchorLine
+	endLine = t.cursorLine
+	if startLine > endLine {
 		startLine, endLine = endLine, startLine
-		startChar, endChar = endChar, startChar
 	}
-	if t.lineSelect {
-		startChar = 0
-		endChar = t.lineLen(endLine)
-	}
+	startChar = 0
+	endChar = t.lineLen(endLine)
 	return
 }
 
@@ -335,7 +365,6 @@ func (t *tab) resetEditorState() {
 	t.anchorChar = 0
 	t.vp.SetYOffset(0)
 	t.selecting = false
-	t.lineSelect = false
 	t.comments = nil
 	t.inputMode = false
 	t.commentInput.Reset()
