@@ -170,13 +170,16 @@ func (t *tab) renderDiffContent(theme themeConfig, width int) []int {
 }
 
 // initDiffContent pre-renders diff lines and jumps to the first hunk.
-func (t *tab) initDiffContent(theme themeConfig, width int) {
+func (t *tab) initDiffContent(theme themeConfig, width, height int) {
 	if width <= diffSeparatorWidth {
 		return
 	}
 	hunkOffs := t.renderDiffContent(theme, width)
 	if len(hunkOffs) > 0 {
-		t.vp.SetYOffset(hunkOffs[0])
+		offset := max(hunkOffs[0]-height/2, 0)
+		maxOff := max(len(t.diffCachedLines)-height, 0)
+		offset = min(offset, maxOff)
+		t.vp.SetYOffset(offset)
 	}
 }
 
