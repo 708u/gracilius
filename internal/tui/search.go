@@ -314,7 +314,7 @@ const (
 	searchOverlayMaxWidth     = 50
 	searchOverlayBorderW      = 2 // left + right border
 	searchOverlayPaddingW     = 2 // left + right padding
-	searchOverlayCounterGap   = 2 // spaces between input and counter
+	searchOverlayCounterW     = 8 // fixed width reserved for counter (e.g. " 99/999")
 )
 
 // renderSearchOverlay renders the search bar as a bordered box
@@ -327,29 +327,8 @@ func (m *Model) renderSearchOverlay(editorWidth int) []string {
 	boxW = min(max(min(boxW, searchOverlayMaxWidth), searchOverlayMinWidth), editorWidth)
 	innerW := boxW - searchOverlayBorderW - searchOverlayPaddingW
 
-	// Build counter string.
-	var counter string
-	query := m.search.query
-	if m.search.active {
-		query = m.search.input.Value()
-	}
-	if query != "" {
-		if total > 0 {
-			counter = fmt.Sprintf("%d/%d", m.search.currentMatch+1, total)
-		} else {
-			counter = "0/0"
-		}
-	}
-
-	// Compute input width: inner minus counter and gap.
-	counterW := ansi.StringWidth(counter)
-	inputW := innerW
-	if counterW > 0 {
-		inputW = innerW - counterW - searchOverlayCounterGap
-	}
-	if inputW < 1 {
-		inputW = 1
-	}
+	// Input always gets the left portion, counter always gets the right.
+	inputW := max(innerW-searchOverlayCounterW, 1)
 
 	// Render input view at fixed width.
 	m.search.input.SetWidth(inputW)
@@ -357,21 +336,30 @@ func (m *Model) renderSearchOverlay(editorWidth int) []string {
 	if m.search.active {
 		inputView = m.search.input.View()
 	} else {
-		inputView = m.search.query
+		inputView = ansi.Truncate(m.search.query, inputW, "")
 	}
 
-	// Compose content: input (padded to inputW) + gap + counter.
-	var content string
-	if counterW > 0 {
-		inputVisualW := ansi.StringWidth(inputView)
-		pad := ""
-		if gap := inputW - inputVisualW + searchOverlayCounterGap; gap > 0 {
-			pad = strings.Repeat(" ", gap)
-		}
-		content = inputView + pad + counter
-	} else {
-		content = inputView
+	// Build counter (always right-aligned in its fixed-width zone).
+	query := m.search.query
+	if m.search.active {
+		query = m.search.input.Value()
 	}
+	var counter string
+	if query != "" {
+		if total > 0 {
+			counter = fmt.Sprintf("%d/%d", m.search.currentMatch+1, total)
+		} else {
+			counter = "-/0"
+		}
+	}
+
+	// Right-align counter within its fixed zone.
+	counterPadded := counter
+	if pad := searchOverlayCounterW - ansi.StringWidth(counter); pad > 0 {
+		counterPadded = strings.Repeat(" ", pad) + counter
+	}
+
+	content := inputView + counterPadded
 
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
