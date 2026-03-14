@@ -33,7 +33,6 @@ type tab struct {
 	anchorLine       int
 	anchorChar       int
 	selecting        bool
-	lineSelect       bool
 	vp               viewport.Model
 
 	comments     []comment.Entry
@@ -304,17 +303,16 @@ func (t *tab) selectedTextRange(startLine, startChar, endLine, endChar int) stri
 }
 
 // normalizedSelection returns the selection range with start <= end.
+// Selection is always line-granular: startChar is 0 and endChar is the
+// full length of the end line.
 func (t *tab) normalizedSelection() (startLine, startChar, endLine, endChar int) {
-	startLine, startChar = t.anchorLine, t.anchorChar
-	endLine, endChar = t.cursorLine, t.cursorChar
-	if startLine > endLine || (startLine == endLine && startChar > endChar) {
+	startLine = t.anchorLine
+	endLine = t.cursorLine
+	if startLine > endLine {
 		startLine, endLine = endLine, startLine
-		startChar, endChar = endChar, startChar
 	}
-	if t.lineSelect {
-		startChar = 0
-		endChar = t.lineLen(endLine)
-	}
+	startChar = 0
+	endChar = t.lineLen(endLine)
 	return
 }
 
@@ -360,7 +358,6 @@ func (t *tab) resetEditorState() {
 	t.anchorChar = 0
 	t.vp.SetYOffset(0)
 	t.selecting = false
-	t.lineSelect = false
 	t.comments = nil
 	t.inputMode = false
 	t.commentInput.Reset()

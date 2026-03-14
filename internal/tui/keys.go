@@ -14,8 +14,7 @@ type keyMap struct {
 	Down          key.Binding
 	Left          key.Binding
 	Right         key.Binding
-	CharSelect    key.Binding
-	LineSelect    key.Binding
+	Select        key.Binding
 	Copy          key.Binding
 	Comment       key.Binding
 	CommentSubmit key.Binding
@@ -69,13 +68,9 @@ func newKeyMap() keyMap {
 			key.WithKeys("right", "l"),
 			key.WithHelp("→/l", "right"),
 		),
-		CharSelect: key.NewBinding(
+		Select: key.NewBinding(
 			key.WithKeys("v"),
 			key.WithHelp("v", "select"),
-		),
-		LineSelect: key.NewBinding(
-			key.WithKeys("V"),
-			key.WithHelp("V", "select line"),
 		),
 		Copy: key.NewBinding(
 			key.WithKeys("y"),
@@ -152,7 +147,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.SwitchPane, k.SwitchPanel, k.ToggleSidebar,
 		k.PrevTab, k.NextTab, k.CloseTab,
-		k.CharSelect, k.LineSelect, k.Copy, k.OpenFile,
+		k.Select, k.Copy, k.OpenFile,
 		k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit,
 	}
 }
@@ -162,7 +157,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown},
 		{k.Enter, k.SwitchPane, k.SwitchPanel, k.ToggleSidebar, k.PrevTab, k.NextTab, k.CloseTab},
-		{k.CharSelect, k.LineSelect, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
+		{k.Select, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
 	}
 }
 
@@ -172,8 +167,7 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km := m.keys
 	t, hasTab := m.activeTabState()
 	isDiffReview := hasTab && t.diff != nil
-	km.CharSelect.SetEnabled(hasTab && m.focusPane == paneEditor)
-	km.LineSelect.SetEnabled(hasTab && m.focusPane == paneEditor)
+	km.Select.SetEnabled(hasTab && m.focusPane == paneEditor)
 	km.Copy.SetEnabled(hasTab && m.focusPane == paneEditor && t.selecting)
 	km.Comment.SetEnabled(hasTab && m.focusPane == paneEditor)
 	km.ClearAll.SetEnabled(hasTab && m.focusPane == paneEditor)

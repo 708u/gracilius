@@ -213,8 +213,7 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	// No-op: suppress file-tab actions that should not fire on diff tabs.
 	case key.Matches(msg, m.keys.Left),
 		key.Matches(msg, m.keys.Right),
-		key.Matches(msg, m.keys.CharSelect),
-		key.Matches(msg, m.keys.LineSelect),
+		key.Matches(msg, m.keys.Select),
 		key.Matches(msg, m.keys.Comment),
 		key.Matches(msg, m.keys.BlockUp),
 		key.Matches(msg, m.keys.BlockDown):
@@ -239,7 +238,6 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Cancel):
 		if hasTab && t.selecting {
 			t.selecting = false
-			t.lineSelect = false
 			m.notifyClearSelection()
 			return m, nil
 		}
@@ -350,32 +348,13 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.notifySelectionChanged()
 			}
 		}
-	case key.Matches(msg, m.keys.CharSelect):
+	case key.Matches(msg, m.keys.Select):
 		if hasTab && m.focusPane == paneEditor && len(t.lines) > 0 {
-			switch {
-			case t.selecting && !t.lineSelect:
+			if t.selecting {
 				t.selecting = false
 				m.notifyClearSelection()
-			case t.selecting && t.lineSelect:
-				t.lineSelect = false
-				m.notifySelectionChanged()
-			default:
+			} else {
 				t.startSelecting()
-			}
-		}
-	case key.Matches(msg, m.keys.LineSelect):
-		if hasTab && m.focusPane == paneEditor && len(t.lines) > 0 {
-			switch {
-			case t.selecting && t.lineSelect:
-				t.selecting = false
-				t.lineSelect = false
-				m.notifyClearSelection()
-			case t.selecting && !t.lineSelect:
-				t.lineSelect = true
-				m.notifySelectionChanged()
-			default:
-				t.startSelecting()
-				t.lineSelect = true
 				m.notifySelectionChanged()
 			}
 		}
@@ -387,7 +366,6 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				t.inputStart = s
 				t.inputEnd = e
 				t.selecting = false
-				t.lineSelect = false
 			} else {
 				t.inputStart = t.cursorLine
 				t.inputEnd = t.cursorLine
