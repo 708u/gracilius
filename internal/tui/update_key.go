@@ -226,7 +226,7 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 		return m, nil, true
 	case key.Matches(msg, m.keys.Enter):
 		if m.search.query != "" {
-			if m.enhancedKeyboard && msg.Mod.Contains(tea.ModShift) {
+			if msg.Mod.Contains(tea.ModShift) {
 				m.prevMatch()
 			} else {
 				m.nextMatch()
@@ -302,7 +302,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, m.keys.Enter):
 		if m.focusPane == paneEditor && m.search.query != "" {
-			if m.enhancedKeyboard && msg.Mod.Contains(tea.ModShift) {
+			if msg.Mod.Contains(tea.ModShift) {
 				m.prevMatch()
 			} else {
 				m.nextMatch()
