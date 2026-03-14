@@ -224,6 +224,11 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	case key.Matches(msg, m.keys.SearchPrev):
 		m.prevMatch()
 		return m, nil, true
+	case key.Matches(msg, m.keys.Enter):
+		if m.search.query != "" {
+			m.nextMatch()
+			return m, nil, true
+		}
 
 	// No-op: suppress file-tab actions that should not fire on diff tabs.
 	case key.Matches(msg, m.keys.Left),
@@ -292,7 +297,9 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case key.Matches(msg, m.keys.Enter):
-		if m.focusPane == paneTree {
+		if m.focusPane == paneEditor && m.search.query != "" {
+			m.nextMatch()
+		} else if m.focusPane == paneTree {
 			switch m.activePanel {
 			case panelFiles:
 				if len(m.fileTree) > 0 {
