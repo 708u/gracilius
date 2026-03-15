@@ -52,49 +52,35 @@ Claude Code acts as the client.
 ### Package Layout
 
 ```txt
-cmd/gra/
-  main.go          Entry point, wiring, callback registration
+cmd/gra/         Entry point, wiring
 
 internal/
-  config/
-    config.go      DataDir() for data directory path
-  tui/
-    model.go       MCPServer interface, Model struct,
-                   message types, NewModel
-    update.go      Init(), Update(), helpers
-    view.go        View(), renderTree, renderEditor,
-                   renderLineWith*
-    filetree.go    fileEntry, buildFileTree, scanDir,
-                   expandDir, collapseDir,
-                   WatchDirRecursive
-    diff.go        diffLine, computeLineDiff
-    display.go     displayWidth, isWideRune,
-                   truncateString, padRight, expandTabs
-    notify.go      notifySelectionChanged,
-                   notifyClearSelection, notifyComment
-    watch.go       watchFile, watchDir
-    fileio.go      loadFile, isBinary
-  protocol/
-    jsonrpc.go     JSON-RPC 2.0 type definitions
-    handler.go     MCP method handler
-  server/
-    server.go      WebSocket server, client management
-    lockfile.go    Lock file management
+  config/        DataDir
+  fileutil/      IsBinary, SplitLines (shared)
+  comment/       Review comment persistence
+  diff/          Diff computation (Row, Data, Build)
+  git/           Git operations (status, diff, ignore)
+  protocol/      MCP/JSON-RPC protocol + handlers
+  server/        WebSocket server, lockfile, auth
+  tui/           TUI (Bubbletea Elm Architecture)
+    render/      Rendering primitives (theme,
+                 syntax highlight, display utils)
 ```
 
 ### Dependency Graph
 
 ```txt
-cmd/gra → internal/config   (DataDir)
-cmd/gra → internal/tui      (Model, message types)
-cmd/gra → internal/server   (Server creation, callbacks)
-       internal/server  → internal/config
-       internal/server  → internal/protocol
-       internal/comment → internal/config
+cmd/gra → config, comment, git, server, tui
+
+server   → config, protocol
+tui      → tui/render, diff, comment,
+           git, fileutil
+comment  → config
+git      → fileutil
 ```
 
-`tui` has zero dependencies on other internal packages.
-There is no direct dependency between `tui` and `server`.
+`tui` and `server` have no direct dependency.
+They are bridged via callbacks in `cmd/gra`.
 
 ### cmd/gra/main.go
 
@@ -182,10 +168,12 @@ Lock file:
 | --- | --- |
 | `charmbracelet/bubbletea` | TUI framework |
 | `charmbracelet/lipgloss` | TUI styling |
-| `gorilla/websocket` | WebSocket communication |
+| `gorilla/websocket` | WebSocket server |
 | `fsnotify/fsnotify` | File change watching |
 | `google/uuid` | Auth token generation |
-| `sergi/go-diff` | Line-level diff computation |
+| `sergi/go-diff` | Diff computation |
+| `alecthomas/chroma` | Syntax highlighting |
+| `mattn/go-runewidth` | Display width calc |
 
 ## User Instructions
 
