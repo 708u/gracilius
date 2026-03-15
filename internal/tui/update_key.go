@@ -32,8 +32,10 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.clearAllPending = false
 		if key.Matches(msg, m.keys.Confirm) {
 			if hasTab && t.kind == diffTab {
+				if err := m.diffCommentRepo.DeleteByFile(t.diffScope, t.filePath); err != nil {
+					log.Printf("Failed to clear diff comments from store: %v", err)
+				}
 				t.comments = nil
-				t.diffCommentSides = nil
 				t.diffCacheWidth = 0
 			} else if hasTab && t.filePath != "" {
 				if err := m.commentRepo.DeleteByFile(t.filePath); err != nil {
@@ -175,15 +177,18 @@ func (m *Model) submitComment(t *tab) {
 	}
 }
 
-// submitDiffComment handles comment submission for diff tabs (in-memory only).
+// submitDiffComment handles comment submission for diff tabs with persistence.
 func (m *Model) submitDiffComment(t *tab) {
 	val := t.commentInput.Value()
 	side := t.diffInputSide
 	idx := t.findDiffComment(t.inputStart, side)
 
 	if val == "" && idx >= 0 {
+		oldID := t.comments[idx].ID
+		if err := m.diffCommentRepo.Delete(t.diffScope, oldID); err != nil {
+			log.Printf("Failed to delete diff comment: %v", err)
+		}
 		t.comments = append(t.comments[:idx], t.comments[idx+1:]...)
-		t.diffCommentSides = append(t.diffCommentSides[:idx], t.diffCommentSides[idx+1:]...)
 		t.diffCacheWidth = 0
 		return
 	}
@@ -203,13 +208,20 @@ func (m *Model) submitDiffComment(t *tab) {
 		EndLine:   t.inputEnd,
 		Text:      val,
 		Snippet:   t.diffCaptureSnippet(t.inputStart, t.inputEnd, side),
+		Side:      side.String(),
 		CreatedAt: time.Now(),
 	}
 	if idx >= 0 {
+		oldID := t.comments[idx].ID
+		if err := m.diffCommentRepo.Replace(t.diffScope, oldID, sc); err != nil {
+			log.Printf("Failed to update diff comment: %v", err)
+		}
 		t.comments[idx] = sc
 	} else {
+		if err := m.diffCommentRepo.Add(t.diffScope, sc); err != nil {
+			log.Printf("Failed to persist diff comment: %v", err)
+		}
 		t.comments = append(t.comments, sc)
-		t.diffCommentSides = append(t.diffCommentSides, side)
 	}
 	t.diffCacheWidth = 0
 }

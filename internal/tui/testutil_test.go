@@ -43,6 +43,59 @@ func (s *mockCommentRepository) Delete(id string) error {
 func (s *mockCommentRepository) DeleteByFile(string) error { s.comments = nil; return nil }
 func (s *mockCommentRepository) DataPath() string          { return "" }
 
+// mockDiffCommentRepository is a no-op DiffCommentRepository for tests.
+type mockDiffCommentRepository struct {
+	comments map[string][]comment.Entry // key: context.Key()
+}
+
+func newMockDiffCommentRepo() *mockDiffCommentRepository {
+	return &mockDiffCommentRepository{comments: map[string][]comment.Entry{}}
+}
+
+func (s *mockDiffCommentRepository) List(sc comment.DiffScope, filePath string, _ bool) ([]comment.Entry, error) {
+	var result []comment.Entry
+	for _, c := range s.comments[sc.Key()] {
+		if filePath == "" || c.FilePath == filePath {
+			result = append(result, c)
+		}
+	}
+	return result, nil
+}
+func (s *mockDiffCommentRepository) Add(sc comment.DiffScope, c comment.Entry) error {
+	s.comments[sc.Key()] = append(s.comments[sc.Key()], c)
+	return nil
+}
+func (s *mockDiffCommentRepository) Replace(sc comment.DiffScope, oldID string, c comment.Entry) error {
+	key := sc.Key()
+	for i := range s.comments[key] {
+		if s.comments[key][i].ID == oldID {
+			s.comments[key] = append(s.comments[key][:i], s.comments[key][i+1:]...)
+			break
+		}
+	}
+	s.comments[key] = append(s.comments[key], c)
+	return nil
+}
+func (s *mockDiffCommentRepository) Delete(sc comment.DiffScope, id string) error {
+	key := sc.Key()
+	for i := range s.comments[key] {
+		if s.comments[key][i].ID == id {
+			s.comments[key] = append(s.comments[key][:i], s.comments[key][i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+func (s *mockDiffCommentRepository) DeleteByFile(sc comment.DiffScope, _ string) error {
+	s.comments[sc.Key()] = nil
+	return nil
+}
+func (s *mockDiffCommentRepository) DeleteScope(sc comment.DiffScope) error {
+	delete(s.comments, sc.Key())
+	return nil
+}
+func (s *mockDiffCommentRepository) DiffDir() string { return "" }
+
 // newTestModel creates a minimal Model with mock server and temp directory.
 func newTestModel(t *testing.T) *Model {
 	t.Helper()
@@ -51,6 +104,7 @@ func newTestModel(t *testing.T) *Model {
 	m := &Model{
 		server:                srv,
 		commentRepo:           &mockCommentRepository{},
+		diffCommentRepo:       newMockDiffCommentRepo(),
 		rootDir:               tmpDir,
 		tabs:                  []*tab{},
 		treeWidth:             30,

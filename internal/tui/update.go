@@ -29,7 +29,7 @@ type selectionDebounceMsg struct{ gen int }
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.watchFile(), m.watchDir(), m.watchComments(), m.watchGitDir(), tea.RequestBackgroundColor, m.initGitBranchInfoAsync())
+	return tea.Batch(m.watchFile(), m.watchDir(), m.watchComments(), m.watchDiffComments(), m.watchGitDir(), tea.RequestBackgroundColor, m.initGitBranchInfoAsync())
 }
 
 type direction int
@@ -101,6 +101,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyPressMsg, tea.MouseClickMsg,
 			tea.WindowSizeMsg, tea.FocusMsg,
 			fileChangedMsg, treeChangedMsg, commentsChangedMsg,
+			diffCommentsChangedMsg,
 			OpenDiffMsg, CloseDiffMsg,
 			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
 			// Fall through to normal handling below.
@@ -116,6 +117,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyPressMsg, tea.MouseClickMsg,
 			tea.WindowSizeMsg, tea.FocusMsg,
 			fileChangedMsg, treeChangedMsg, commentsChangedMsg,
+			diffCommentsChangedMsg,
 			OpenDiffMsg, CloseDiffMsg,
 			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
 			// Fall through to normal handling below.
@@ -168,6 +170,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleTreeChanged()
 	case commentsChangedMsg:
 		return m.handleCommentsChanged()
+	case diffCommentsChangedMsg:
+		return m.handleDiffCommentsChanged()
 	case gitChangedFilesMsg:
 		return m.handleGitChangedFiles(msg)
 	case gitBranchInfoMsg:
@@ -249,6 +253,10 @@ func (m *Model) closeTab(idx int) {
 	t := m.tabs[idx]
 	if t.kind == diffTab && t.diff != nil {
 		t.rejectAndClear()
+		// Clean up review context file on accept/reject.
+		if t.diffScope.Kind == "review" {
+			_ = m.diffCommentRepo.DeleteScope(t.diffScope)
+		}
 	}
 	filePath := t.filePath
 	m.tabs = slices.Delete(m.tabs, idx, idx+1)

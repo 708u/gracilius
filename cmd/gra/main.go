@@ -157,6 +157,9 @@ func (c *ViewCmd) Run() error {
 		return fmt.Errorf("failed to create comment repository: %w", err)
 	}
 
+	// Diff comment repository
+	diffStore := comment.NewDiffRepository(store)
+
 	// Comment file watcher
 	commentWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -167,6 +170,21 @@ func (c *ViewCmd) Run() error {
 	commentDir := filepath.Dir(store.DataPath())
 	if err := commentWatcher.Add(commentDir); err != nil {
 		return fmt.Errorf("failed to watch comment directory: %w", err)
+	}
+
+	// Diff comment file watcher
+	diffCommentWatcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create diff comment watcher: %w", err)
+	}
+	defer func() { _ = diffCommentWatcher.Close() }()
+
+	diffDir := diffStore.DiffDir()
+	if err := os.MkdirAll(diffDir, 0700); err != nil {
+		return fmt.Errorf("failed to create diff comment directory: %w", err)
+	}
+	if err := diffCommentWatcher.Add(diffDir); err != nil {
+		return fmt.Errorf("failed to watch diff comment directory: %w", err)
 	}
 
 	// Git directory watcher (.git/index, .git/HEAD)
@@ -182,7 +200,7 @@ func (c *ViewCmd) Run() error {
 		}
 	}
 
-	m, err := tui.NewModel(srv, store, c.Path, watcher, dirWatcher, commentWatcher, gitDirWatcher, excludeFunc)
+	m, err := tui.NewModel(srv, store, diffStore, c.Path, watcher, dirWatcher, commentWatcher, diffCommentWatcher, gitDirWatcher, excludeFunc)
 	if err != nil {
 		return fmt.Errorf("failed to create TUI model: %w", err)
 	}

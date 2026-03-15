@@ -11,6 +11,14 @@ import (
 	"github.com/708u/gracilius/internal/tui/render"
 )
 
+// diffSideFromString converts a string ("old"/"new") to diffSide.
+func diffSideFromString(s string) diffSide {
+	if s == "old" {
+		return diffSideOld
+	}
+	return diffSideNew
+}
+
 // tabKind distinguishes between file and diff tabs.
 type tabKind int
 
@@ -60,9 +68,9 @@ type tab struct {
 	diffSelecting bool     // whether row-level selection is active
 	diffSide      diffSide // old/new side the cursor is on
 
-	// diff comments (in-memory only, not persisted)
-	diffCommentSides []diffSide // parallel to comments: which side each comment is on
-	diffInputSide    diffSide   // side during input mode
+	// diff comment context for persistence
+	diffScope     comment.DiffScope
+	diffInputSide diffSide // side during input mode
 
 	// diff render cache (invalidated on width/theme change)
 	diffCachedLines     []string // pre-rendered visual lines (same as viewport content)
@@ -590,7 +598,6 @@ func (t *tab) resetEditorState() {
 	t.vp.SetYOffset(0)
 	t.selecting = false
 	t.comments = nil
-	t.diffCommentSides = nil
 	t.inputMode = false
 	t.commentInput.Reset()
 	t.commentInput.Blur()
@@ -666,8 +673,7 @@ func (t *tab) maxScrollOffset(contentHeight, textWidth int) int {
 // findDiffComment returns the index of the diff comment covering line on the given side, or -1.
 func (t *tab) findDiffComment(line int, side diffSide) int {
 	for i := range t.comments {
-		if i < len(t.diffCommentSides) &&
-			t.diffCommentSides[i] == side &&
+		if t.comments[i].Side == side.String() &&
 			line >= t.comments[i].StartLine && line <= t.comments[i].EndLine {
 			return i
 		}

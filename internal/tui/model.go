@@ -61,6 +61,18 @@ type CommentRepository interface {
 	DataPath() string
 }
 
+// DiffCommentRepository is the interface for diff comment persistence.
+// comment.DiffRepository satisfies this implicitly.
+type DiffCommentRepository interface {
+	List(sc comment.DiffScope, filePath string, includeResolved bool) ([]comment.Entry, error)
+	Add(sc comment.DiffScope, c comment.Entry) error
+	Replace(sc comment.DiffScope, oldID string, c comment.Entry) error
+	Delete(sc comment.DiffScope, id string) error
+	DeleteByFile(sc comment.DiffScope, filePath string) error
+	DeleteScope(sc comment.DiffScope) error
+	DiffDir() string
+}
+
 // OpenDiffMsg notifies the TUI to open a diff tab.
 type OpenDiffMsg struct {
 	FilePath string
@@ -86,6 +98,9 @@ type treeChangedMsg struct{}
 
 // commentsChangedMsg notifies the TUI that comments.json has changed on disk.
 type commentsChangedMsg struct{}
+
+// diffCommentsChangedMsg notifies the TUI that a diff comments file has changed on disk.
+type diffCommentsChangedMsg struct{}
 
 // gitDirChangedMsg notifies the TUI that a file in .git/ has changed
 // (e.g. index, HEAD).
@@ -184,6 +199,10 @@ type Model struct {
 	// comment persistence
 	commentRepo    CommentRepository
 	commentWatcher *fsnotify.Watcher
+
+	// diff comment persistence
+	diffCommentRepo    DiffCommentRepository
+	diffCommentWatcher *fsnotify.Watcher
 
 	// git directory watcher (.git/index, .git/HEAD)
 	gitDirWatcher *fsnotify.Watcher
@@ -298,7 +317,7 @@ func (m *Model) gitState() *gitPanelState {
 }
 
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher, gitDirWatcher *fsnotify.Watcher, exclude ExcludeFunc) (*Model, error) {
+func NewModel(srv MCPServer, store CommentRepository, diffStore DiffCommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher, diffCommentWatcher *fsnotify.Watcher, gitDirWatcher *fsnotify.Watcher, exclude ExcludeFunc) (*Model, error) {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root directory: %w", err)
@@ -308,29 +327,31 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 
 	im := detectIconMode()
 	return &Model{
-		server:         srv,
-		rootDir:        absRootDir,
-		fileTree:       ft,
-		treeCursor:     0,
-		focusPane:      paneTree,
-		watcher:        watcher,
-		dirWatcher:     dirWatcher,
-		tabs:           []*tab{},
-		treeWidth:      30,
-		activePanel:    panelGitDiff,
-		sidebarVisible: true,
-		keys:           newKeyMap(),
-		help:           help.New(),
-		iconMode:       im,
-		openFile:       newOpenFileOverlay(im, render.Dark),
-		isDark:         true,
-		theme:          render.Dark,
-		commentRepo:    store,
-		commentWatcher: commentWatcher,
-		gitDirWatcher:  gitDirWatcher,
-		gitDiffMode:    gitModeBranch,
-		gitModeState:   make([]gitPanelState, len(gitDiffModes)),
-		excludeFunc:    exclude,
-		search:         newSearchState(),
+		server:             srv,
+		rootDir:            absRootDir,
+		fileTree:           ft,
+		treeCursor:         0,
+		focusPane:          paneTree,
+		watcher:            watcher,
+		dirWatcher:         dirWatcher,
+		tabs:               []*tab{},
+		treeWidth:          30,
+		activePanel:        panelGitDiff,
+		sidebarVisible:     true,
+		keys:               newKeyMap(),
+		help:               help.New(),
+		iconMode:           im,
+		openFile:           newOpenFileOverlay(im, render.Dark),
+		isDark:             true,
+		theme:              render.Dark,
+		commentRepo:        store,
+		commentWatcher:     commentWatcher,
+		diffCommentRepo:    diffStore,
+		diffCommentWatcher: diffCommentWatcher,
+		gitDirWatcher:      gitDirWatcher,
+		gitDiffMode:        gitModeBranch,
+		gitModeState:       make([]gitPanelState, len(gitDiffModes)),
+		excludeFunc:        exclude,
+		search:             newSearchState(),
 	}, nil
 }
