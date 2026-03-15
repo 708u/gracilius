@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/708u/gracilius/internal/diff"
+	"github.com/708u/gracilius/internal/tui/render"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -23,7 +24,7 @@ func renderDiffHL(data *diff.Data, theme themeConfig, width, height, offset int,
 	lines := make([]string, 0, height)
 	lines = append(lines, result.lines[start:end]...)
 	for len(lines) < height {
-		lines = append(lines, padRight("", width))
+		lines = append(lines, render.PadRight("", width))
 	}
 	return lines
 }

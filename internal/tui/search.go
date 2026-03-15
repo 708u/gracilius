@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/708u/gracilius/internal/diff"
+	"github.com/708u/gracilius/internal/tui/render"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -422,7 +423,7 @@ func (m *Model) searchCursorScreenPos(lo layout, boxW int) cursorPosition {
 	// See: https://github.com/charmbracelet/bubbles/issues/906
 	val := m.search.input.Value()
 	pos := m.search.input.Position()
-	cursorCol := min(displayWidthRange(val, 0, pos), searchOverlayInputWidth(boxW))
+	cursorCol := min(render.DisplayWidthRange(val, 0, pos), searchOverlayInputWidth(boxW))
 	x := startX + 1 + 1 + cursorCol
 	return cursorPosition{x: x, y: y}
 }

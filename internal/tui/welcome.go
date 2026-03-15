@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/708u/gracilius/internal/tui/render"
 )
 
 const asciiArt = `                       _ _ _
@@ -91,7 +92,7 @@ func renderWelcome(width, height int, theme themeConfig) []string {
 			styleSection.Render("  "+sec.title),
 		)
 		for _, e := range sec.entries {
-			key := padRight(e.key, 16)
+			key := render.PadRight(e.key, 16)
 			line := "    " + stylePrimary.Render(key) +
 				styleSecondary.Render(e.desc)
 			raw = append(raw, line)
@@ -121,7 +122,7 @@ func renderWelcome(width, height int, theme themeConfig) []string {
 	result := make([]string, 0, height)
 
 	for i := 0; i < topPad; i++ {
-		result = append(result, padRight("", width))
+		result = append(result, render.PadRight("", width))
 	}
 	for _, l := range raw {
 		if len(result) >= height {
@@ -130,7 +131,7 @@ func renderWelcome(width, height int, theme themeConfig) []string {
 		result = append(result, padding+l)
 	}
 	for len(result) < height {
-		result = append(result, padRight("", width))
+		result = append(result, render.PadRight("", width))
 	}
 
 	return result

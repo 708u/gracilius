@@ -8,6 +8,7 @@ import (
 
 	"charm.land/bubbles/v2/help"
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/tui/render"
 )
 
 const (
@@ -229,7 +230,7 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 			targetChar = i
 			break
 		}
-		w += runeWidth(runes[i])
+		w += render.RuneWidth(runes[i])
 	}
 	return targetLine, targetChar
 }

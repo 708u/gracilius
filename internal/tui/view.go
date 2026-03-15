@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/708u/gracilius/internal/comment"
+	"github.com/708u/gracilius/internal/tui/render"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -233,7 +234,7 @@ func (m *Model) cursorScreenPos(lo layout) cursorPosition {
 
 	return cursorPosition{
 		x: lo.editorStartX + lo.lineNumWidth +
-			displayWidthRange(
+			render.DisplayWidthRange(
 				t.lines[t.cursorLine],
 				m.lastMapping[visualRow].wrapOffset,
 				t.cursorChar,
@@ -459,7 +460,7 @@ func (m *Model) renderTree(width, height int) []string {
 
 		line := indent + arrow + icon.prefix() + entry.name
 		displayLine := ansi.Truncate(line, width, "...")
-		displayLine = padRight(displayLine, width)
+		displayLine = render.PadRight(displayLine, width)
 
 		switch {
 		case isCursor:
@@ -476,7 +477,7 @@ func (m *Model) renderTree(width, height int) []string {
 	}
 
 	for len(lines) < height {
-		lines = append(lines, padRight("", width))
+		lines = append(lines, render.PadRight("", width))
 	}
 
 	return lines
@@ -500,7 +501,7 @@ func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 		diffLines = append(diffLines, t.diffCachedLines[off:end]...)
 	}
 	for len(diffLines) < height {
-		diffLines = append(diffLines, padRight("", width))
+		diffLines = append(diffLines, render.PadRight("", width))
 	}
 
 	// Apply cursor/selection gutter highlights to visible rows.
@@ -641,9 +642,9 @@ func (m *Model) renderEditor(lo layout) []string {
 
 	if !hasTab || len(t.lines) == 0 {
 		emptyMsg := emptyStateMsg
-		lines = append(lines, padRight(emptyMsg, width))
+		lines = append(lines, render.PadRight(emptyMsg, width))
 		for len(lines) < height {
-			lines = append(lines, padRight("", width))
+			lines = append(lines, render.PadRight("", width))
 		}
 		m.lastMapping = nil
 		return lines
@@ -683,7 +684,7 @@ func (m *Model) renderEditor(lo layout) []string {
 		}
 		hasHighlights := len(lineHighlights) > 0
 
-		bp := wrapBreakpoints(lineContent, textWidth)
+		bp := render.WrapBreakpoints(lineContent, textWidth)
 		if bp != nil {
 			// Per-segment rendering: split runs at wrap breakpoints,
 			// then apply highlights per segment independently.
@@ -719,12 +720,12 @@ func (m *Model) renderEditor(lo layout) []string {
 						renderStyledLineWithHighlights(&segSB, segRuns, segHL)
 					} else {
 						for _, r := range segRuns {
-							writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
+							writeStyledText(&segSB, r.ANSI, render.ExpandTabs(r.Text))
 						}
 					}
 				} else {
 					for _, r := range segRuns {
-						writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
+						writeStyledText(&segSB, r.ANSI, render.ExpandTabs(r.Text))
 					}
 				}
 
@@ -732,9 +733,9 @@ func (m *Model) renderEditor(lo layout) []string {
 				if si > 0 {
 					gutterCtx.Soft = true
 					lnPad := t.vp.LeftGutterFunc(gutterCtx)
-					lines = append(lines, padRight(lnPad+seg+ansiReset, width))
+					lines = append(lines, render.PadRight(lnPad+seg+ansiReset, width))
 				} else {
-					lines = append(lines, padRight(lineNumStr+seg+ansiReset, width))
+					lines = append(lines, render.PadRight(lineNumStr+seg+ansiReset, width))
 				}
 				mapping = append(mapping, visualEntry{
 					logicalLine: i,
@@ -757,12 +758,12 @@ func (m *Model) renderEditor(lo layout) []string {
 				if hl := t.getHighlightedLine(i); hl != nil {
 					contentSB.WriteString(hl.rendered)
 				} else {
-					contentSB.WriteString(expandTabs(lineContent))
+					contentSB.WriteString(render.ExpandTabs(lineContent))
 				}
 			}
 
 			content := contentSB.String()
-			lines = append(lines, padRight(lineNumStr+content+ansiReset, width))
+			lines = append(lines, render.PadRight(lineNumStr+content+ansiReset, width))
 			mapping = append(mapping, visualEntry{logicalLine: i})
 		}
 
@@ -802,7 +803,7 @@ func (m *Model) renderEditor(lo layout) []string {
 	}
 
 	for len(lines) < height {
-		lines = append(lines, padRight("", width))
+		lines = append(lines, render.PadRight("", width))
 	}
 
 	m.lastMapping = mapping
@@ -846,7 +847,7 @@ func renderBlock(text, label string, width int, borderStyle, bodyStyle lipgloss.
 	for line := range strings.SplitSeq(text, "\n") {
 		content := "\u2502 " + bodyStyle.Render(line)
 		content = ansi.Truncate(content, width-1, "")
-		content = padRight(content, width-1)
+		content = render.PadRight(content, width-1)
 		rows = append(rows, borderStyle.Render(content+"\u2502"))
 	}
 
