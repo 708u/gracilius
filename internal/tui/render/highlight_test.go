@@ -168,3 +168,233 @@ func TestHighlightFileMultilineToken(t *testing.T) {
 		t.Error("expected non-empty runs for middle of multi-line token")
 	}
 }
+
+func TestHighlightFile_Go(t *testing.T) {
+	source := "package main\n\nfunc main() {\n\tx := 42\n}\n"
+	result := HighlightFile("example.go", source, Dark)
+	if result == nil {
+		t.Fatal("HighlightFile returned nil for Go source")
+	}
+
+	// Every non-empty source line should produce styled runs
+	for i, hl := range result {
+		sourceLine := strings.Split(source, "\n")[i]
+		if sourceLine != "" && len(hl.Runs) == 0 {
+			t.Errorf("line %d (%q): expected non-empty runs", i, sourceLine)
+		}
+	}
+
+	// Keyword "func" line (index 2) should have ANSI
+	funcLine := result[2]
+	hasKeywordANSI := false
+	for _, run := range funcLine.Runs {
+		if strings.Contains(run.Text, "func") && run.ANSI != "" {
+			hasKeywordANSI = true
+			break
+		}
+	}
+	if !hasKeywordANSI {
+		t.Error("expected 'func' keyword to have ANSI styling")
+	}
+
+	// Rendered output should contain the text
+	if !strings.Contains(funcLine.Rendered, "func") {
+		t.Error("expected 'func' in rendered output")
+	}
+}
+
+func TestHighlightFile_Unknown(t *testing.T) {
+	source := "line one\nline two\nline three"
+	result := HighlightFile("data.xyzunknown", source, Dark)
+	if result == nil {
+		t.Fatal("HighlightFile returned nil for unknown extension")
+	}
+
+	// Should still produce correct number of lines
+	lines := strings.Split(source, "\n")
+	if len(result) != len(lines) {
+		t.Errorf("expected %d lines, got %d", len(lines), len(result))
+	}
+
+	// Each line should have at least one run with the text content
+	for i, hl := range result {
+		combined := ""
+		for _, run := range hl.Runs {
+			combined += run.Text
+		}
+		if combined != lines[i] {
+			t.Errorf("line %d: combined run text %q != source line %q",
+				i, combined, lines[i])
+		}
+	}
+}
+
+func TestRenderStyledLineWithHighlights_MultipleRanges(t *testing.T) {
+	runs := []StyledRun{
+		{Text: "abcdefghij", ANSI: "\033[31m"},
+	}
+	bg1 := "\033[42m"
+	bg2 := "\033[44m"
+	highlights := []HighlightRange{
+		{Start: 1, End: 4, BgSeq: bg1}, // "bcd"
+		{Start: 6, End: 9, BgSeq: bg2}, // "ghi"
+	}
+
+	var sb strings.Builder
+	RenderStyledLineWithHighlights(&sb, runs, highlights)
+	output := sb.String()
+
+	if !strings.Contains(output, bg1) {
+		t.Error("expected first highlight background in output")
+	}
+	if !strings.Contains(output, bg2) {
+		t.Error("expected second highlight background in output")
+	}
+	// Non-highlighted parts should still render
+	if !strings.Contains(output, "a") {
+		t.Error("expected 'a' (before first highlight) in output")
+	}
+	if !strings.Contains(output, "j") {
+		t.Error("expected 'j' (after second highlight) in output")
+	}
+}
+
+func TestRenderStyledLineWithHighlights_Overlapping(t *testing.T) {
+	runs := []StyledRun{
+		{Text: "abcdef", ANSI: ""},
+	}
+	bg1 := "\033[42m"
+	bg2 := "\033[44m"
+	// Overlapping ranges: later wins
+	highlights := []HighlightRange{
+		{Start: 1, End: 5, BgSeq: bg1},
+		{Start: 3, End: 6, BgSeq: bg2},
+	}
+
+	var sb strings.Builder
+	RenderStyledLineWithHighlights(&sb, runs, highlights)
+	output := sb.String()
+
+	// bg2 should be present (overrides bg1 in the overlap)
+	if !strings.Contains(output, bg2) {
+		t.Error("expected later highlight to be present")
+	}
+}
+
+func TestRenderStyledLineWithHighlights_EmptyRuns(t *testing.T) {
+	var sb strings.Builder
+	RenderStyledLineWithHighlights(&sb, nil, []HighlightRange{
+		{Start: 0, End: 5, BgSeq: "\033[42m"},
+	})
+	output := sb.String()
+
+	if output != "" {
+		t.Errorf("expected empty output for nil runs, got %q", output)
+	}
+}
+
+func TestRenderStyledLineWithHighlights_NoHighlights(t *testing.T) {
+	runs := []StyledRun{
+		{Text: "hello", ANSI: "\033[31m"},
+	}
+
+	var sb strings.Builder
+	RenderStyledLineWithHighlights(&sb, runs, nil)
+	output := sb.String()
+
+	// Should render normally with ANSI codes
+	if !strings.Contains(output, "\033[31m") {
+		t.Error("expected foreground ANSI in output")
+	}
+	if !strings.Contains(output, "hello") {
+		t.Error("expected 'hello' in output")
+	}
+}
+
+func TestClampHighlightsToSegment(t *testing.T) {
+	tests := []struct {
+		name       string
+		highlights []HighlightRange
+		wrapOff    int
+		segLen     int
+		wantLen    int
+		wantFirst  *HighlightRange // nil means no results expected
+	}{
+		{
+			name: "fully within segment",
+			highlights: []HighlightRange{
+				{Start: 2, End: 5, BgSeq: "bg1"},
+			},
+			wrapOff:   0,
+			segLen:    10,
+			wantLen:   1,
+			wantFirst: &HighlightRange{Start: 2, End: 5, BgSeq: "bg1"},
+		},
+		{
+			name: "clamp to segment start",
+			highlights: []HighlightRange{
+				{Start: 3, End: 8, BgSeq: "bg1"},
+			},
+			wrapOff:   5,
+			segLen:    10,
+			wantLen:   1,
+			wantFirst: &HighlightRange{Start: 0, End: 3, BgSeq: "bg1"},
+		},
+		{
+			name: "clamp to segment end",
+			highlights: []HighlightRange{
+				{Start: 2, End: 15, BgSeq: "bg1"},
+			},
+			wrapOff:   0,
+			segLen:    10,
+			wantLen:   1,
+			wantFirst: &HighlightRange{Start: 2, End: 10, BgSeq: "bg1"},
+		},
+		{
+			name: "entirely before segment",
+			highlights: []HighlightRange{
+				{Start: 0, End: 3, BgSeq: "bg1"},
+			},
+			wrapOff: 5,
+			segLen:  10,
+			wantLen: 0,
+		},
+		{
+			name: "entirely after segment",
+			highlights: []HighlightRange{
+				{Start: 20, End: 25, BgSeq: "bg1"},
+			},
+			wrapOff: 0,
+			segLen:  10,
+			wantLen: 0,
+		},
+		{
+			name: "multiple highlights",
+			highlights: []HighlightRange{
+				{Start: 5, End: 8, BgSeq: "bg1"},
+				{Start: 12, End: 18, BgSeq: "bg2"},
+			},
+			wrapOff: 10,
+			segLen:  10,
+			wantLen: 1, // only the second overlaps
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ClampHighlightsToSegment(tc.highlights, tc.wrapOff, tc.segLen)
+			if len(result) != tc.wantLen {
+				t.Fatalf("expected %d results, got %d: %+v",
+					tc.wantLen, len(result), result)
+			}
+			if tc.wantFirst != nil && len(result) > 0 {
+				got := result[0]
+				if got.Start != tc.wantFirst.Start ||
+					got.End != tc.wantFirst.End ||
+					got.BgSeq != tc.wantFirst.BgSeq {
+					t.Errorf("first result = %+v, want %+v", got, *tc.wantFirst)
+				}
+			}
+		})
+	}
+}
