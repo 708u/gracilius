@@ -390,8 +390,29 @@ func dimBackground(bg string) string {
 }
 
 // placeOverlay composites fg on top of bg, horizontally centered
-// and positioned at the upper 1/5 of the screen.
+// and positioned near the top of the content area.
 func placeOverlay(width, height int, fg, bg string) string {
+	fgH := len(strings.Split(fg, "\n"))
+	maxBottom := height - footerHeight
+	startY := headerHeight + tabBarHeight
+	if startY+fgH > maxBottom {
+		startY = max(maxBottom-fgH, 0)
+	}
+	return compositeOverlay(width, height, startY, fg, bg)
+}
+
+// placeCenteredOverlay composites fg on top of bg, horizontally centered
+// and vertically centered within the content area (contentStartY to height-footerHeight).
+func placeCenteredOverlay(width, height int, fg, bg string) string {
+	fgH := len(strings.Split(fg, "\n"))
+	contentTop := contentStartY
+	contentH := (height - footerHeight) - contentTop
+	startY := contentTop + max((contentH-fgH)/2, 0)
+	return compositeOverlay(width, height, startY, fg, bg)
+}
+
+// compositeOverlay places fg on top of bg at startY, horizontally centered.
+func compositeOverlay(width, height, startY int, fg, bg string) string {
 	fgLines := strings.Split(fg, "\n")
 	bgLines := strings.Split(bg, "\n")
 
@@ -406,19 +427,12 @@ func placeOverlay(width, height int, fg, bg string) string {
 			fgW = w
 		}
 	}
-
-	maxBottom := height - footerHeight
-	startY := headerHeight + tabBarHeight
-	if startY+fgH > maxBottom {
-		startY = max(maxBottom-fgH, 0)
-	}
 	startX := max((width-fgW)/2, 0)
 
 	result := make([]string, len(bgLines))
 	for i, bgLine := range bgLines {
 		if i >= startY && i < startY+fgH {
-			fgIdx := i - startY
-			result[i] = composeLine(bgLine, fgLines[fgIdx], startX)
+			result[i] = composeLine(bgLine, fgLines[i-startY], startX)
 		} else {
 			result[i] = bgLine
 		}
