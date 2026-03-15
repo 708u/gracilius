@@ -96,6 +96,20 @@ type CloseTabCallback func()
 // IdeConnectedCallback is called when ide_connected is received.
 type IdeConnectedCallback func()
 
+// GetSelectionCallback returns the current selection state.
+// Returns nil when no selection is available.
+type GetSelectionCallback func() *SelectionResult
+
+// SelectionResult represents the result of getCurrentSelection / getLatestSelection.
+type SelectionResult struct {
+	Success   bool       `json:"success"`
+	Text      string     `json:"text,omitempty"`
+	FilePath  string     `json:"filePath,omitempty"`
+	FileURL   string     `json:"fileUrl,omitempty"`
+	Selection *Selection `json:"selection,omitempty"`
+	Message   string     `json:"message,omitempty"`
+}
+
 // MCPContent represents a content item in MCP response.
 type MCPContent struct {
 	Type string `json:"type"`
@@ -170,6 +184,7 @@ type Handler struct {
 	onOpenDiff       OpenDiffCallback
 	onCloseTab       CloseTabCallback
 	onIdeConnected   IdeConnectedCallback
+	onGetSelection   GetSelectionCallback
 
 	pendingDiffs map[string]*DiffResponder
 	diffMu       sync.Mutex
@@ -196,6 +211,11 @@ func (h *Handler) SetCloseTabCallback(cb CloseTabCallback) {
 // SetIdeConnectedCallback sets the callback for ide_connected events.
 func (h *Handler) SetIdeConnectedCallback(cb IdeConnectedCallback) {
 	h.onIdeConnected = cb
+}
+
+// SetGetSelectionCallback sets the callback for getCurrentSelection/getLatestSelection.
+func (h *Handler) SetGetSelectionCallback(cb GetSelectionCallback) {
+	h.onGetSelection = cb
 }
 
 // RejectAllPendingDiffs rejects all pending diff responses.
@@ -292,13 +312,41 @@ func (h *Handler) handleToolsList(req *Request) *Response {
 				Properties: map[string]propertySchema{},
 			},
 		},
+		{
+			Name:        "getCurrentSelection",
+			Description: "Get the current selection in the active editor",
+			InputSchema: inputSchema{
+				Type:       "object",
+				Properties: map[string]propertySchema{},
+			},
+		},
+		{
+			Name:        "getLatestSelection",
+			Description: "Get the latest selection from any editor",
+			InputSchema: inputSchema{
+				Type:       "object",
+				Properties: map[string]propertySchema{},
+			},
+		},
 	}
 	return NewResponse(req.ID, map[string]any{"tools": tools})
 }
 
-// fileURI converts an absolute file path to a file:// URI using net/url.
-func fileURI(path string) string {
+// FileURI converts an absolute file path to a file:// URI using net/url.
+func FileURI(path string) string {
 	return (&url.URL{Scheme: "file", Path: path}).String()
+}
+
+func (h *Handler) handleGetSelection(fallbackMsg string) MCPResult {
+	var result *SelectionResult
+	if h.onGetSelection != nil {
+		result = h.onGetSelection()
+	}
+	if result == nil {
+		result = &SelectionResult{Message: fallbackMsg}
+	}
+	resultJSON, _ := json.Marshal(result)
+	return NewMCPResult(string(resultJSON))
 }
 
 func (h *Handler) handleToolsCall(req *Request, send func(*Response)) {
@@ -317,7 +365,7 @@ func (h *Handler) handleToolsCall(req *Request, send func(*Response)) {
 				rootPath = path
 			}
 			folders[i] = WorkspaceFolder{
-				URI:  fileURI(path),
+				URI:  FileURI(path),
 				Name: path,
 				Path: path,
 			}
@@ -363,6 +411,10 @@ func (h *Handler) handleToolsCall(req *Request, send func(*Response)) {
 		}
 	case "getDiagnostics":
 		send(NewResponse(req.ID, NewMCPResultEmpty()))
+	case "getCurrentSelection":
+		send(NewResponse(req.ID, h.handleGetSelection("No active editor found")))
+	case "getLatestSelection":
+		send(NewResponse(req.ID, h.handleGetSelection("No selection available")))
 	case "closeAllDiffTabs":
 		h.RejectAllPendingDiffs()
 		if h.onCloseTab != nil {

@@ -9,7 +9,6 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -95,6 +94,14 @@ type selectionChange struct {
 	endChar   int
 }
 
+func (sc *selectionChange) toSelection() protocol.Selection {
+	return protocol.Selection{
+		Start:   protocol.Position{Line: sc.startLine, Character: sc.startChar},
+		End:     protocol.Position{Line: sc.endLine, Character: sc.endChar},
+		IsEmpty: sc.startLine == sc.endLine && sc.startChar == sc.endChar,
+	}
+}
+
 // loadOrCreateToken loads an existing token from ~/.config/gracilius/token or creates a new one.
 func loadOrCreateToken() string {
 	dataDir, err := config.DataDir()
@@ -138,16 +145,19 @@ func loadOrCreateToken() string {
 func New(workspaceFolders []string) (*Server, error) {
 	authToken := loadOrCreateToken()
 
-	return &Server{
+	h := protocol.NewHandler(workspaceFolders)
+	s := &Server{
 		authToken:        authToken,
 		workspaceFolders: workspaceFolders,
-		handler:          protocol.NewHandler(workspaceFolders),
+		handler:          h,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
 			},
 		},
-	}, nil
+	}
+	h.SetGetSelectionCallback(s.GetLatestSelection)
+	return s, nil
 }
 
 // Listen binds a random port and creates the lock file.
@@ -250,6 +260,25 @@ func (s *Server) SetIdeConnectedCallback(cb protocol.IdeConnectedCallback) {
 	s.handler.SetIdeConnectedCallback(cb)
 }
 
+// GetLatestSelection returns the last sent selection state.
+func (s *Server) GetLatestSelection() *protocol.SelectionResult {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.lastSentSelection == nil {
+		return nil
+	}
+	sel := s.lastSentSelection
+	selection := sel.toSelection()
+	return &protocol.SelectionResult{
+		Success:   true,
+		Text:      sel.text,
+		FilePath:  sel.filePath,
+		FileURL:   protocol.FileURI(sel.filePath),
+		Selection: &selection,
+	}
+}
+
 // hasSelectionChanged checks if the selection has changed from the last sent state.
 func (s *Server) hasSelectionChanged(filePath, text string, startLine, startChar, endLine, endChar int) bool {
 	if s.lastSentSelection == nil {
@@ -320,28 +349,19 @@ func (s *Server) NotifySelectionChanged(filePath, text string, startLine, startC
 		n := s.pendingNotify
 		s.pendingNotify = nil
 		s.broadcastSelection(n)
-		s.lastSentSelection = n
 	})
 }
 
 // broadcastSelection sends a selection_changed notification to all connected clients.
 // The caller must hold s.mu.
 func (s *Server) broadcastSelection(sel *selectionChange) {
+	s.lastSentSelection = sel
+
 	params := protocol.SelectionChangedParams{
-		Text:     sel.text,
-		FilePath: sel.filePath,
-		FileURL:  (&url.URL{Scheme: "file", Path: sel.filePath}).String(),
-		Selection: protocol.Selection{
-			Start: protocol.Position{
-				Line:      sel.startLine,
-				Character: sel.startChar,
-			},
-			End: protocol.Position{
-				Line:      sel.endLine,
-				Character: sel.endChar,
-			},
-			IsEmpty: sel.startLine == sel.endLine && sel.startChar == sel.endChar,
-		},
+		Text:      sel.text,
+		FilePath:  sel.filePath,
+		FileURL:   protocol.FileURI(sel.filePath),
+		Selection: sel.toSelection(),
 	}
 
 	notification := protocol.NewNotification("selection_changed", params)
