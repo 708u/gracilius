@@ -1,4 +1,4 @@
-package tui
+package diff
 
 import (
 	"strings"
@@ -6,48 +6,48 @@ import (
 )
 
 func TestComputeWordDiff_Identical(t *testing.T) {
-	old, new := computeWordDiff("hello world", "hello world")
+	old, new := ComputeWordDiff("hello world", "hello world")
 	for i, s := range old {
-		if s.op != diffOpEqual {
-			t.Errorf("oldSpans[%d]: expected diffOpEqual, got %d", i, s.op)
+		if s.Op != OpEqual {
+			t.Errorf("oldSpans[%d]: expected OpEqual, got %d", i, s.Op)
 		}
 	}
 	for i, s := range new {
-		if s.op != diffOpEqual {
-			t.Errorf("newSpans[%d]: expected diffOpEqual, got %d", i, s.op)
+		if s.Op != OpEqual {
+			t.Errorf("newSpans[%d]: expected OpEqual, got %d", i, s.Op)
 		}
 	}
 }
 
 func TestComputeWordDiff_VariableRename(t *testing.T) {
-	oldSpans, newSpans := computeWordDiff("x := foo + bar", "x := baz + bar")
+	oldSpans, newSpans := ComputeWordDiff("x := foo + bar", "x := baz + bar")
 
-	if !containsSpan(oldSpans, "foo", diffOpDelete) {
+	if !containsSpan(oldSpans, "foo", OpDelete) {
 		t.Fatal("expected oldSpans to contain 'foo' as delete")
 	}
-	if !containsSpan(newSpans, "baz", diffOpInsert) {
+	if !containsSpan(newSpans, "baz", OpInsert) {
 		t.Fatal("expected newSpans to contain 'baz' as insert")
 	}
 }
 
 func TestComputeWordDiff_InsertedWord(t *testing.T) {
-	_, newSpans := computeWordDiff("return value", "return new value")
+	_, newSpans := ComputeWordDiff("return value", "return new value")
 
-	if !containsSpan(newSpans, "new", diffOpInsert) {
+	if !containsSpan(newSpans, "new", OpInsert) {
 		t.Fatal("expected newSpans to contain 'new' as insert")
 	}
 }
 
 func TestComputeWordDiff_DeletedWord(t *testing.T) {
-	oldSpans, _ := computeWordDiff("return old value", "return value")
+	oldSpans, _ := ComputeWordDiff("return old value", "return value")
 
-	if !containsSpan(oldSpans, "old", diffOpDelete) {
+	if !containsSpan(oldSpans, "old", OpDelete) {
 		t.Fatal("expected oldSpans to contain 'old' as delete")
 	}
 }
 
 func TestComputeWordDiff_WhitespaceChange(t *testing.T) {
-	oldSpans, newSpans := computeWordDiff("a  b", "a b")
+	oldSpans, newSpans := ComputeWordDiff("a  b", "a b")
 
 	oldJoined := joinSpans(oldSpans)
 	newJoined := joinSpans(newSpans)
@@ -60,12 +60,12 @@ func TestComputeWordDiff_WhitespaceChange(t *testing.T) {
 
 	hasChange := false
 	for _, s := range oldSpans {
-		if s.op == diffOpDelete {
+		if s.Op == OpDelete {
 			hasChange = true
 		}
 	}
 	for _, s := range newSpans {
-		if s.op == diffOpInsert {
+		if s.Op == OpInsert {
 			hasChange = true
 		}
 	}
@@ -75,7 +75,7 @@ func TestComputeWordDiff_WhitespaceChange(t *testing.T) {
 }
 
 func TestComputeWordDiff_EmptyOld(t *testing.T) {
-	oldSpans, newSpans := computeWordDiff("", "hello world")
+	oldSpans, newSpans := ComputeWordDiff("", "hello world")
 
 	if len(oldSpans) != 0 {
 		t.Fatalf("expected 0 oldSpans, got %d", len(oldSpans))
@@ -84,14 +84,14 @@ func TestComputeWordDiff_EmptyOld(t *testing.T) {
 		t.Fatal("expected non-empty newSpans")
 	}
 	for _, s := range newSpans {
-		if s.op != diffOpInsert {
-			t.Errorf("expected all newSpans to be insert, got %d", s.op)
+		if s.Op != OpInsert {
+			t.Errorf("expected all newSpans to be insert, got %d", s.Op)
 		}
 	}
 }
 
 func TestComputeWordDiff_EmptyNew(t *testing.T) {
-	oldSpans, newSpans := computeWordDiff("hello world", "")
+	oldSpans, newSpans := ComputeWordDiff("hello world", "")
 
 	if len(newSpans) != 0 {
 		t.Fatalf("expected 0 newSpans, got %d", len(newSpans))
@@ -100,14 +100,14 @@ func TestComputeWordDiff_EmptyNew(t *testing.T) {
 		t.Fatal("expected non-empty oldSpans")
 	}
 	for _, s := range oldSpans {
-		if s.op != diffOpDelete {
-			t.Errorf("expected all oldSpans to be delete, got %d", s.op)
+		if s.Op != OpDelete {
+			t.Errorf("expected all oldSpans to be delete, got %d", s.Op)
 		}
 	}
 }
 
 func TestComputeWordDiff_IndentChange(t *testing.T) {
-	oldSpans, newSpans := computeWordDiff("\tfoo", "\t\tfoo")
+	oldSpans, newSpans := ComputeWordDiff("\tfoo", "\t\tfoo")
 
 	oldJoined := joinSpans(oldSpans)
 	newJoined := joinSpans(newSpans)
@@ -134,14 +134,14 @@ func TestComputeWordDiff_RoundTrip(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			oldSpans, newSpans := computeWordDiff(tt.oldLine, tt.newLine)
+			oldSpans, newSpans := ComputeWordDiff(tt.oldLine, tt.newLine)
 
-			oldReconstructed := joinSpansFiltered(oldSpans, diffOpInsert)
+			oldReconstructed := joinSpansFiltered(oldSpans, OpInsert)
 			if oldReconstructed != tt.oldLine {
 				t.Errorf("old round-trip: expected %q, got %q", tt.oldLine, oldReconstructed)
 			}
 
-			newReconstructed := joinSpansFiltered(newSpans, diffOpDelete)
+			newReconstructed := joinSpansFiltered(newSpans, OpDelete)
 			if newReconstructed != tt.newLine {
 				t.Errorf("new round-trip: expected %q, got %q", tt.newLine, newReconstructed)
 			}
@@ -150,60 +150,60 @@ func TestComputeWordDiff_RoundTrip(t *testing.T) {
 }
 
 func TestTokenize_Basic(t *testing.T) {
-	got := tokenize("hello world")
+	got := Tokenize("hello world")
 	want := []string{"hello", " ", "world"}
 	assertTokens(t, got, want)
 }
 
 func TestTokenize_MultipleSpaces(t *testing.T) {
-	got := tokenize("a  b")
+	got := Tokenize("a  b")
 	want := []string{"a", "  ", "b"}
 	assertTokens(t, got, want)
 }
 
 func TestTokenize_LeadingWhitespace(t *testing.T) {
-	got := tokenize("  hello")
+	got := Tokenize("  hello")
 	want := []string{"  ", "hello"}
 	assertTokens(t, got, want)
 }
 
 func TestTokenize_Empty(t *testing.T) {
-	got := tokenize("")
+	got := Tokenize("")
 	if len(got) != 0 {
 		t.Fatalf("expected empty slice, got %v", got)
 	}
 }
 
 func TestTokenize_TabsAndSpaces(t *testing.T) {
-	got := tokenize("\thello world")
+	got := Tokenize("\thello world")
 	want := []string{"\t", "hello", " ", "world"}
 	assertTokens(t, got, want)
 }
 
 // --- helpers ---
 
-func containsSpan(spans []wordSpan, text string, op diffOp) bool {
+func containsSpan(spans []WordSpan, text string, op Op) bool {
 	for _, s := range spans {
-		if strings.Contains(s.text, text) && s.op == op {
+		if strings.Contains(s.Text, text) && s.Op == op {
 			return true
 		}
 	}
 	return false
 }
 
-func joinSpans(spans []wordSpan) string {
+func joinSpans(spans []WordSpan) string {
 	var b strings.Builder
 	for _, s := range spans {
-		b.WriteString(s.text)
+		b.WriteString(s.Text)
 	}
 	return b.String()
 }
 
-func joinSpansFiltered(spans []wordSpan, excludeOp diffOp) string {
+func joinSpansFiltered(spans []WordSpan, excludeOp Op) string {
 	var b strings.Builder
 	for _, s := range spans {
-		if s.op != excludeOp {
-			b.WriteString(s.text)
+		if s.Op != excludeOp {
+			b.WriteString(s.Text)
 		}
 	}
 	return b.String()
