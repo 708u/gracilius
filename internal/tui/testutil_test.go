@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/708u/gracilius/internal/comment"
+	"github.com/708u/gracilius/internal/diff"
+	"github.com/708u/gracilius/internal/tui/render"
 )
 
 // mockCommentRepository is a no-op CommentRepository for tests.
@@ -109,7 +111,7 @@ func newTestModel(t *testing.T) *Model {
 		sidebarVisible:  true,
 		keys:            newKeyMap(),
 		iconMode:        iconSymbol,
-		openFile:        newOpenFileOverlay(iconSymbol, darkTheme),
+		openFile:        newOpenFileOverlay(iconSymbol, render.Dark),
 		width:           120,
 		height:          40,
 		gitModeState:    make([]gitPanelState, len(gitDiffModes)),
@@ -130,7 +132,7 @@ func newTestModelWithDiff(t *testing.T, oldLines, newLines []string) *Model {
 		commentInput: newTextarea(),
 		vp:           newViewport(),
 	}
-	dt.diffViewData = buildDiffData(oldLines, newLines)
+	dt.diffViewData = diff.Build(oldLines, newLines)
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = 0
 	m.focusPane = paneEditor
@@ -150,7 +152,7 @@ func newTestModelWithFile(t *testing.T, content string) *Model {
 	ft := newFileTab()
 	ft.filePath = filePath
 	ft.lines = strings.Split(content, "\n")
-	ft.highlightedLines = highlightFile(filePath, content, m.theme)
+	ft.highlightedLines = render.HighlightFile(filePath, content, m.theme)
 
 	m.tabs = append(m.tabs, ft)
 	m.activeTab = 0

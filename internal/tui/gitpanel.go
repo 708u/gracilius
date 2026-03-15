@@ -10,7 +10,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/708u/gracilius/internal/comment"
+	"github.com/708u/gracilius/internal/diff"
 	"github.com/708u/gracilius/internal/git"
+	"github.com/708u/gracilius/internal/tui/render"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -284,14 +286,14 @@ func (m *Model) openGitDiffEntry() {
 
 	if len(oldContent) > 0 {
 		oldSource := strings.Join(oldContent, "\n")
-		dt.diffOldHighlights = highlightFile(entry.absPath, oldSource, m.theme)
+		dt.diffOldHighlights = render.HighlightFile(entry.absPath, oldSource, m.theme)
 		dt.diffOldSource = oldSource
 	}
 	if len(newContent) > 0 {
-		dt.diffNewHighlights = highlightFile(entry.absPath, strings.Join(newContent, "\n"), m.theme)
+		dt.diffNewHighlights = render.HighlightFile(entry.absPath, strings.Join(newContent, "\n"), m.theme)
 	}
 
-	dt.diffViewData = buildDiffData(oldContent, newContent)
+	dt.diffViewData = diff.Build(oldContent, newContent)
 	dt.initDiffContent(m.theme, lo.editorWidth, lo.contentHeight)
 
 	// Load persisted diff comments.
@@ -327,17 +329,17 @@ func (m *Model) renderGitPanel(width, height int) []string {
 	lines := make([]string, 0, height)
 
 	if !gs.loaded {
-		lines = append(lines, padRight("  Loading...", width))
+		lines = append(lines, render.PadRight("  Loading...", width))
 		for len(lines) < height {
-			lines = append(lines, padRight("", width))
+			lines = append(lines, render.PadRight("", width))
 		}
 		return lines
 	}
 
 	if len(gs.entries) == 0 {
-		lines = append(lines, padRight("  No changed files", width))
+		lines = append(lines, render.PadRight("  No changed files", width))
 		for len(lines) < height {
-			lines = append(lines, padRight("", width))
+			lines = append(lines, render.PadRight("", width))
 		}
 		return lines
 	}
@@ -347,14 +349,14 @@ func (m *Model) renderGitPanel(width, height int) []string {
 
 		if row.isHeader {
 			headerLine := styleCategoryHeader.Render(row.label)
-			headerLine = padRight(headerLine, width)
+			headerLine = render.PadRight(headerLine, width)
 			lines = append(lines, headerLine)
 			continue
 		}
 
 		if row.isDirHeader {
 			dirLine := styleDirHeader.Render(row.label)
-			dirLine = padRight(dirLine, width)
+			dirLine = render.PadRight(dirLine, width)
 			lines = append(lines, dirLine)
 			continue
 		}
@@ -366,7 +368,7 @@ func (m *Model) renderGitPanel(width, height int) []string {
 		statusIcon := style.Render(e.status.String())
 		line := "      " + statusIcon + " " + e.baseName
 		displayLine := ansi.Truncate(line, width, "...")
-		displayLine = padRight(displayLine, width)
+		displayLine = render.PadRight(displayLine, width)
 
 		if isCursor {
 			displayLine = styleTreeCursor(m.theme).Render(displayLine)
@@ -376,7 +378,7 @@ func (m *Model) renderGitPanel(width, height int) []string {
 	}
 
 	for len(lines) < height {
-		lines = append(lines, padRight("", width))
+		lines = append(lines, render.PadRight("", width))
 	}
 
 	return lines

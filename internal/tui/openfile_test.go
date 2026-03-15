@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"charm.land/bubbles/v2/list"
+	"github.com/708u/gracilius/internal/tui/render"
 )
 
 func TestScanAllFiles(t *testing.T) {
@@ -84,7 +85,7 @@ func TestScanAllFiles_ExcludesHidden(t *testing.T) {
 // newTestOverlay creates an openFileOverlay with the given file items
 // pre-populated (bypassing filesystem scanning).
 func newTestOverlay(items []fileItem) openFileOverlay {
-	s := newOpenFileOverlay(iconSymbol, darkTheme)
+	s := newOpenFileOverlay(iconSymbol, render.Dark)
 	s.allItems = items
 	s.targets = make([]string, len(items))
 	for i, fi := range items {
@@ -292,7 +293,7 @@ func TestHandleClick_OnListItem(t *testing.T) {
 }
 
 func TestSelectedPath_Empty(t *testing.T) {
-	s := newOpenFileOverlay(iconSymbol, darkTheme)
+	s := newOpenFileOverlay(iconSymbol, render.Dark)
 	if p := s.selectedPath(); p != "" {
 		t.Errorf("expected empty, got %q", p)
 	}

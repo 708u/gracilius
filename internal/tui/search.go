@@ -10,6 +10,8 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/708u/gracilius/internal/diff"
+	"github.com/708u/gracilius/internal/tui/render"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -22,7 +24,7 @@ type searchMatch struct {
 
 // diffSearchMatch represents a single match in a diff tab.
 type diffSearchMatch struct {
-	rowIdx    int // index into diffData.rows
+	rowIdx    int // index into diff.Data.Rows
 	isOld     bool
 	startChar int // rune offset (inclusive)
 	endChar   int // rune offset (exclusive)
@@ -114,7 +116,7 @@ func computeSearchMatches(lines []string, query string) []searchMatch {
 }
 
 // computeDiffSearchMatches finds matches in both old and new sides of diff rows.
-func computeDiffSearchMatches(data *diffData, query string) []diffSearchMatch {
+func computeDiffSearchMatches(data *diff.Data, query string) []diffSearchMatch {
 	if query == "" || data == nil {
 		return nil
 	}
@@ -123,16 +125,16 @@ func computeDiffSearchMatches(data *diffData, query string) []diffSearchMatch {
 	queryLen := len(queryRunes)
 
 	var matches []diffSearchMatch
-	for i, row := range data.rows {
-		if row.oldLineNum > 0 {
-			for _, j := range findSubstringPositions(normalizeForSearch(row.oldText, caseSensitive), queryRunes) {
+	for i, row := range data.Rows {
+		if row.OldLineNum > 0 {
+			for _, j := range findSubstringPositions(normalizeForSearch(row.OldText, caseSensitive), queryRunes) {
 				matches = append(matches, diffSearchMatch{
 					rowIdx: i, isOld: true, startChar: j, endChar: j + queryLen,
 				})
 			}
 		}
-		if row.newLineNum > 0 {
-			for _, j := range findSubstringPositions(normalizeForSearch(row.newText, caseSensitive), queryRunes) {
+		if row.NewLineNum > 0 {
+			for _, j := range findSubstringPositions(normalizeForSearch(row.NewText, caseSensitive), queryRunes) {
 				matches = append(matches, diffSearchMatch{
 					rowIdx: i, isOld: false, startChar: j, endChar: j + queryLen,
 				})
@@ -345,7 +347,7 @@ func searchOverlayInputWidth(boxW int) int {
 // and returns its lines for overlaying on the editor.
 func (m *Model) renderSearchOverlay(editorWidth int) []string {
 	total := m.searchMatchCount()
-	borderFg := lipgloss.Color(m.theme.tabActiveBorder)
+	borderFg := lipgloss.Color(m.theme.TabActiveBorder)
 	borderStyle := lipgloss.NewStyle().Foreground(borderFg)
 
 	// Compute fixed box width (outer, including borders).
@@ -421,17 +423,17 @@ func (m *Model) searchCursorScreenPos(lo layout, boxW int) cursorPosition {
 	// See: https://github.com/charmbracelet/bubbles/issues/906
 	val := m.search.input.Value()
 	pos := m.search.input.Position()
-	cursorCol := min(displayWidthRange(val, 0, pos), searchOverlayInputWidth(boxW))
+	cursorCol := min(render.DisplayWidthRange(val, 0, pos), searchOverlayInputWidth(boxW))
 	x := startX + 1 + 1 + cursorCol
 	return cursorPosition{x: x, y: y}
 }
 
 // searchHighlightsForLine returns highlight ranges for search matches on a given line.
-func (m *Model) searchHighlightsForLine(t *tab, line int, matchBg, currentBg string) []highlightRange {
+func (m *Model) searchHighlightsForLine(t *tab, line int, matchBg, currentBg string) []render.HighlightRange {
 	if len(t.searchMatches) == 0 {
 		return nil
 	}
-	var ranges []highlightRange
+	var ranges []render.HighlightRange
 	for i, match := range t.searchMatches {
 		if match.line != line {
 			continue
@@ -440,27 +442,13 @@ func (m *Model) searchHighlightsForLine(t *tab, line int, matchBg, currentBg str
 		if i == m.search.currentMatch {
 			bg = currentBg
 		}
-		ranges = append(ranges, highlightRange{
-			start: match.startChar,
-			end:   match.endChar,
-			bgSeq: bg,
+		ranges = append(ranges, render.HighlightRange{
+			Start: match.startChar,
+			End:   match.endChar,
+			BgSeq: bg,
 		})
 	}
 	return ranges
-}
-
-// clampHighlightsToSegment adjusts highlight ranges to be relative to a
-// wrapped segment starting at wrapOff with segLen runes.
-func clampHighlightsToSegment(highlights []highlightRange, wrapOff, segLen int) []highlightRange {
-	var clamped []highlightRange
-	for _, h := range highlights {
-		s := max(0, h.start-wrapOff)
-		e := min(segLen, h.end-wrapOff)
-		if s < e {
-			clamped = append(clamped, highlightRange{start: s, end: e, bgSeq: h.bgSeq})
-		}
-	}
-	return clamped
 }
 
 // jumpToFirstMatchFromCursor finds the nearest match at or after the saved cursor position.

@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/708u/gracilius/internal/comment"
+	"github.com/708u/gracilius/internal/tui/render"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -66,8 +67,8 @@ var (
 			BorderStyle(separatorBorder)
 )
 
-func styleTreeCursor(theme themeConfig) lipgloss.Style {
-	return lipgloss.NewStyle().Background(lipgloss.Color(theme.listSelectionBg))
+func styleTreeCursor(theme render.Theme) lipgloss.Style {
+	return lipgloss.NewStyle().Background(lipgloss.Color(theme.ListSelectionBg))
 }
 
 // newView returns a tea.View with the base terminal settings.
@@ -233,7 +234,7 @@ func (m *Model) cursorScreenPos(lo layout) cursorPosition {
 
 	return cursorPosition{
 		x: lo.editorStartX + lo.lineNumWidth +
-			displayWidthRange(
+			render.DisplayWidthRange(
 				t.lines[t.cursorLine],
 				m.lastMapping[visualRow].wrapOffset,
 				t.cursorChar,
@@ -291,11 +292,11 @@ func (m *Model) renderTabBar(offset int) string {
 	}
 
 	styleActive := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(m.theme.tabActiveFg))
+		Foreground(lipgloss.Color(m.theme.TabActiveFg))
 	styleInactive := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(m.theme.tabInactiveFg))
+		Foreground(lipgloss.Color(m.theme.TabInactiveFg))
 	styleBorder := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(m.theme.tabActiveBorder))
+		Foreground(lipgloss.Color(m.theme.TabActiveBorder))
 
 	padding := strings.Repeat(" ", offset)
 
@@ -459,14 +460,14 @@ func (m *Model) renderTree(width, height int) []string {
 
 		line := indent + arrow + icon.prefix() + entry.name
 		displayLine := ansi.Truncate(line, width, "...")
-		displayLine = padRight(displayLine, width)
+		displayLine = render.PadRight(displayLine, width)
 
 		switch {
 		case isCursor:
 			displayLine = styleTreeCursor(m.theme).Render(displayLine)
 		case isActiveFile:
 			displayLine = lipgloss.NewStyle().
-				Background(lipgloss.Color(m.theme.activeFileBg)).
+				Background(lipgloss.Color(m.theme.ActiveFileBg)).
 				Render(displayLine)
 		}
 
@@ -476,7 +477,7 @@ func (m *Model) renderTree(width, height int) []string {
 	}
 
 	for len(lines) < height {
-		lines = append(lines, padRight("", width))
+		lines = append(lines, render.PadRight("", width))
 	}
 
 	return lines
@@ -500,7 +501,7 @@ func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 		diffLines = append(diffLines, t.diffCachedLines[off:end]...)
 	}
 	for len(diffLines) < height {
-		diffLines = append(diffLines, padRight("", width))
+		diffLines = append(diffLines, render.PadRight("", width))
 	}
 
 	// Apply cursor/selection gutter highlights to visible rows.
@@ -521,7 +522,7 @@ func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 func (m *Model) overlayDiffTextarea(t *tab, diffLines []string, viewOff, width, height int) {
 	// Find the diff row where the input ends.
 	insertRowIdx := -1
-	for ri, row := range t.diffViewData.rows {
+	for ri, row := range t.diffViewData.Rows {
 		ln := diffRowLineNumForSide(row, t.diffInputSide)
 		if ln == t.inputEnd && diffRowAvailableSide(row, t.diffInputSide) == t.diffInputSide {
 			insertRowIdx = ri
@@ -581,7 +582,7 @@ func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, w
 	}
 
 	ctx := newDiffSideCtx(t.diffViewData, m.theme, width)
-	highlightBg := m.theme.selectionBgSeq()
+	highlightBg := m.theme.SelectionBgSeq()
 
 	startRow, endRow := t.diffCursor, t.diffCursor
 	if t.diffSelecting {
@@ -591,7 +592,7 @@ func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, w
 	viewEnd := viewOff + len(diffLines)
 
 	// Only iterate cursor/selection rows instead of all rows.
-	for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.rows); rowIdx++ {
+	for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.Rows); rowIdx++ {
 		rowVisStart := t.diffRowVisualStarts[rowIdx]
 		rowVisEnd := len(t.diffCachedLines)
 		if rowIdx+1 < len(t.diffRowVisualStarts) {
@@ -603,7 +604,7 @@ func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, w
 			continue
 		}
 
-		row := t.diffViewData.rows[rowIdx]
+		row := t.diffViewData.Rows[rowIdx]
 		activeSide := diffRowAvailableSide(row, t.diffSide)
 		oldCtx, newCtx := ctx, ctx
 		if activeSide == diffSideOld {
@@ -641,21 +642,21 @@ func (m *Model) renderEditor(lo layout) []string {
 
 	if !hasTab || len(t.lines) == 0 {
 		emptyMsg := emptyStateMsg
-		lines = append(lines, padRight(emptyMsg, width))
+		lines = append(lines, render.PadRight(emptyMsg, width))
 		for len(lines) < height {
-			lines = append(lines, padRight("", width))
+			lines = append(lines, render.PadRight("", width))
 		}
 		m.lastMapping = nil
 		return lines
 	}
 
 	startLine, startChar, endLine, endChar := t.normalizedSelection()
-	selBgSeq := m.theme.selectionBgSeq()
+	selBgSeq := m.theme.SelectionBgSeq()
 	hasSearchMatches := len(t.searchMatches) > 0
 	var searchMatchBg, searchCurrentBg string
 	if hasSearchMatches {
-		searchMatchBg = m.theme.searchMatchBgSeq()
-		searchCurrentBg = m.theme.searchCurrentBgSeq()
+		searchMatchBg = m.theme.SearchMatchBgSeq()
+		searchCurrentBg = m.theme.SearchCurrentBgSeq()
 	}
 	offset := t.vp.YOffset()
 	commentBodyWidth := width - lnw - commentBlockMargin
@@ -678,23 +679,23 @@ func (m *Model) renderEditor(lo layout) []string {
 		if isSelected {
 			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
 			if sc < ec {
-				lineHighlights = append(lineHighlights, highlightRange{start: sc, end: ec, bgSeq: selBgSeq})
+				lineHighlights = append(lineHighlights, render.HighlightRange{Start: sc, End: ec, BgSeq: selBgSeq})
 			}
 		}
 		hasHighlights := len(lineHighlights) > 0
 
-		bp := wrapBreakpoints(lineContent, textWidth)
+		bp := render.WrapBreakpoints(lineContent, textWidth)
 		if bp != nil {
 			// Per-segment rendering: split runs at wrap breakpoints,
 			// then apply highlights per segment independently.
-			var runs []styledRun
+			var runs []render.StyledRun
 			if hl := t.getHighlightedLine(i); hl != nil {
-				runs = hl.runs
+				runs = hl.Runs
 			} else {
-				runs = []styledRun{{Text: lineContent}}
+				runs = []render.StyledRun{{Text: lineContent}}
 			}
 
-			segRunsList := splitRunsAtBreakpoints(runs, bp)
+			segRunsList := render.SplitRunsAtBreakpoints(runs, bp)
 			for si, segRuns := range segRunsList {
 				if len(lines) >= height {
 					break
@@ -714,17 +715,17 @@ func (m *Model) renderEditor(lo layout) []string {
 				var segSB strings.Builder
 				if hasHighlights {
 					// Clamp highlights to this segment.
-					segHL := clampHighlightsToSegment(lineHighlights, wrapOff, segLen)
+					segHL := render.ClampHighlightsToSegment(lineHighlights, wrapOff, segLen)
 					if len(segHL) > 0 {
-						renderStyledLineWithHighlights(&segSB, segRuns, segHL)
+						render.RenderStyledLineWithHighlights(&segSB, segRuns, segHL)
 					} else {
 						for _, r := range segRuns {
-							writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
+							render.WriteStyledText(&segSB, r.ANSI, render.ExpandTabs(r.Text))
 						}
 					}
 				} else {
 					for _, r := range segRuns {
-						writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
+						render.WriteStyledText(&segSB, r.ANSI, render.ExpandTabs(r.Text))
 					}
 				}
 
@@ -732,9 +733,9 @@ func (m *Model) renderEditor(lo layout) []string {
 				if si > 0 {
 					gutterCtx.Soft = true
 					lnPad := t.vp.LeftGutterFunc(gutterCtx)
-					lines = append(lines, padRight(lnPad+seg+ansiReset, width))
+					lines = append(lines, render.PadRight(lnPad+seg+render.AnsiReset, width))
 				} else {
-					lines = append(lines, padRight(lineNumStr+seg+ansiReset, width))
+					lines = append(lines, render.PadRight(lineNumStr+seg+render.AnsiReset, width))
 				}
 				mapping = append(mapping, visualEntry{
 					logicalLine: i,
@@ -746,23 +747,23 @@ func (m *Model) renderEditor(lo layout) []string {
 			var contentSB strings.Builder
 
 			if hasHighlights {
-				var runs []styledRun
+				var runs []render.StyledRun
 				if hl := t.getHighlightedLine(i); hl != nil {
-					runs = hl.runs
+					runs = hl.Runs
 				} else {
-					runs = []styledRun{{Text: lineContent}}
+					runs = []render.StyledRun{{Text: lineContent}}
 				}
-				renderStyledLineWithHighlights(&contentSB, runs, lineHighlights)
+				render.RenderStyledLineWithHighlights(&contentSB, runs, lineHighlights)
 			} else {
 				if hl := t.getHighlightedLine(i); hl != nil {
-					contentSB.WriteString(hl.rendered)
+					contentSB.WriteString(hl.Rendered)
 				} else {
-					contentSB.WriteString(expandTabs(lineContent))
+					contentSB.WriteString(render.ExpandTabs(lineContent))
 				}
 			}
 
 			content := contentSB.String()
-			lines = append(lines, padRight(lineNumStr+content+ansiReset, width))
+			lines = append(lines, render.PadRight(lineNumStr+content+render.AnsiReset, width))
 			mapping = append(mapping, visualEntry{logicalLine: i})
 		}
 
@@ -802,7 +803,7 @@ func (m *Model) renderEditor(lo layout) []string {
 	}
 
 	for len(lines) < height {
-		lines = append(lines, padRight("", width))
+		lines = append(lines, render.PadRight("", width))
 	}
 
 	m.lastMapping = mapping
@@ -846,7 +847,7 @@ func renderBlock(text, label string, width int, borderStyle, bodyStyle lipgloss.
 	for line := range strings.SplitSeq(text, "\n") {
 		content := "\u2502 " + bodyStyle.Render(line)
 		content = ansi.Truncate(content, width-1, "")
-		content = padRight(content, width-1)
+		content = render.PadRight(content, width-1)
 		rows = append(rows, borderStyle.Render(content+"\u2502"))
 	}
 

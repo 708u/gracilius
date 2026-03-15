@@ -3,6 +3,7 @@ package tui
 import (
 	"charm.land/lipgloss/v2"
 	"github.com/708u/gracilius/internal/git"
+	"github.com/708u/gracilius/internal/tui/render"
 )
 
 // fileCategory classifies a changed file entry.
@@ -44,9 +45,9 @@ func (r gitVisualRow) isFileRow() bool {
 var stylePanelHeader = lipgloss.NewStyle().Bold(true)
 
 // renderPanelHeader renders a 1-line header for the left pane panel.
-func renderPanelHeader(label string, width int, theme themeConfig) string {
-	return padRight(stylePanelHeader.
-		Foreground(lipgloss.Color(theme.tabActiveFg)).
+func renderPanelHeader(label string, width int, theme render.Theme) string {
+	return render.PadRight(stylePanelHeader.
+		Foreground(lipgloss.Color(theme.TabActiveFg)).
 		Render(label), width)
 }
 
@@ -55,18 +56,18 @@ func renderChangedFiles(entries []changedFileEntry, width, height int) []string 
 	lines := make([]string, 0, height)
 
 	if len(entries) == 0 {
-		lines = append(lines, padRight("  No changed files", width))
+		lines = append(lines, render.PadRight("  No changed files", width))
 	} else {
 		for i := range entries {
 			if len(lines) >= height {
 				break
 			}
-			lines = append(lines, padRight("  "+entries[i].status.String()+" "+entries[i].name, width))
+			lines = append(lines, render.PadRight("  "+entries[i].status.String()+" "+entries[i].name, width))
 		}
 	}
 
 	for len(lines) < height {
-		lines = append(lines, padRight("", width))
+		lines = append(lines, render.PadRight("", width))
 	}
 
 	return lines

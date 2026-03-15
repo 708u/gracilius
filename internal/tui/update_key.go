@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/708u/gracilius/internal/comment"
+	"github.com/708u/gracilius/internal/diff"
 	"github.com/google/uuid"
 )
 
@@ -275,7 +276,7 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.Down):
-		if t.diffViewData != nil && t.diffCursor < len(t.diffViewData.rows)-1 {
+		if t.diffViewData != nil && t.diffCursor < len(t.diffViewData.Rows)-1 {
 			t.diffCursor++
 			t.snapDiffSide()
 			t.syncDiffAnchor()
@@ -283,8 +284,8 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.GoBottom):
-		if t.diffViewData != nil && len(t.diffViewData.rows) > 0 {
-			t.diffCursor = len(t.diffViewData.rows) - 1
+		if t.diffViewData != nil && len(t.diffViewData.Rows) > 0 {
+			t.diffCursor = len(t.diffViewData.Rows) - 1
 			t.snapDiffSide()
 			t.syncDiffAnchor()
 			m.notifySelectionChanged()
@@ -355,18 +356,18 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 		if t.diffViewData != nil {
 			t.inputMode = true
 			t.diffInputSide = diffRowAvailableSide(
-				t.diffViewData.rows[t.diffCursor], t.diffSide)
+				t.diffViewData.Rows[t.diffCursor], t.diffSide)
 
 			if t.diffSelecting {
 				startRow, endRow := t.diffNormalizedSelection()
 				t.inputStart = diffRowLineNumForSide(
-					t.diffViewData.rows[startRow], t.diffInputSide)
+					t.diffViewData.Rows[startRow], t.diffInputSide)
 				t.inputEnd = diffRowLineNumForSide(
-					t.diffViewData.rows[endRow], t.diffInputSide)
+					t.diffViewData.Rows[endRow], t.diffInputSide)
 				t.diffSelecting = false
 			} else {
 				ln := diffRowLineNumForSide(
-					t.diffViewData.rows[t.diffCursor], t.diffInputSide)
+					t.diffViewData.Rows[t.diffCursor], t.diffInputSide)
 				t.inputStart = ln
 				t.inputEnd = ln
 			}
@@ -397,11 +398,11 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 
 // setDiffSide switches the diff side on rows that have both sides.
 func (m *Model) setDiffSide(t *tab, side diffSide) {
-	if t.diffViewData == nil || t.diffCursor >= len(t.diffViewData.rows) {
+	if t.diffViewData == nil || t.diffCursor >= len(t.diffViewData.Rows) {
 		return
 	}
-	row := t.diffViewData.rows[t.diffCursor]
-	if row.rowType == diffRowUnchanged || row.rowType == diffRowModified {
+	row := t.diffViewData.Rows[t.diffCursor]
+	if row.Type == diff.RowUnchanged || row.Type == diff.RowModified {
 		t.diffSide = side
 		m.notifySelectionChanged()
 	}
@@ -413,7 +414,7 @@ func (m *Model) diffJumpBlankLine(t *tab, dir int) {
 	if t.diffViewData == nil {
 		return
 	}
-	rows := t.diffViewData.rows
+	rows := t.diffViewData.Rows
 	cur := t.diffCursor
 	last := len(rows) - 1
 
@@ -463,7 +464,7 @@ func (m *Model) diffJumpChange(t *tab, dir int) {
 	if t.diffViewData == nil {
 		return
 	}
-	rows := t.diffViewData.rows
+	rows := t.diffViewData.Rows
 	if len(rows) == 0 {
 		return
 	}
@@ -471,7 +472,7 @@ func (m *Model) diffJumpChange(t *tab, dir int) {
 	last := len(rows) - 1
 
 	isChanged := func(i int) bool {
-		return rows[i].rowType != diffRowUnchanged
+		return rows[i].Type != diff.RowUnchanged
 	}
 	matchesSide := func(i int) bool {
 		return diffRowAvailableSide(rows[i], t.diffSide) == t.diffSide
@@ -532,11 +533,11 @@ func (m *Model) diffJumpChange(t *tab, dir int) {
 // landing on the first (dir>0) or last (dir<0) row that matches the
 // current diffSide. Blocks with no matching rows are skipped.
 func (m *Model) diffJumpToNextBlock(t *tab, from, dir int) {
-	rows := t.diffViewData.rows
+	rows := t.diffViewData.Rows
 	last := len(rows) - 1
 
 	isChanged := func(i int) bool {
-		return rows[i].rowType != diffRowUnchanged
+		return rows[i].Type != diff.RowUnchanged
 	}
 	matchesSide := func(i int) bool {
 		return diffRowAvailableSide(rows[i], t.diffSide) == t.diffSide

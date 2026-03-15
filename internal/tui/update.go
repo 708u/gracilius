@@ -8,6 +8,7 @@ import (
 
 	"charm.land/bubbles/v2/help"
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/tui/render"
 )
 
 const (
@@ -133,26 +134,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		if m.isDark {
-			m.theme = darkTheme
+			m.theme = render.Dark
 		} else {
-			m.theme = lightTheme
+			m.theme = render.Light
 		}
 		m.help.Styles = help.DefaultStyles(m.isDark)
 		m.openFile.updateTheme(m.theme)
 		for _, tab := range m.tabs {
 			if tab.filePath != "" && len(tab.lines) > 0 {
-				tab.highlightedLines = highlightFile(
+				tab.highlightedLines = render.HighlightFile(
 					tab.filePath, strings.Join(tab.lines, "\n"), m.theme,
 				)
 			}
 			if tab.diffViewData != nil && tab.filePath != "" {
 				if tab.diffOldSource != "" {
-					tab.diffOldHighlights = highlightFile(
+					tab.diffOldHighlights = render.HighlightFile(
 						tab.filePath, tab.diffOldSource, m.theme,
 					)
 				}
 				if len(tab.lines) > 0 {
-					tab.diffNewHighlights = highlightFile(
+					tab.diffNewHighlights = render.HighlightFile(
 						tab.filePath, strings.Join(tab.lines, "\n"), m.theme,
 					)
 				}
@@ -233,7 +234,7 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 			targetChar = i
 			break
 		}
-		w += runeWidth(runes[i])
+		w += render.RuneWidth(runes[i])
 	}
 	return targetLine, targetChar
 }
