@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/fileutil"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -29,7 +30,7 @@ func (m *Model) watchFile() tea.Cmd {
 						log.Printf("Error reading file: %v", err)
 						continue
 					}
-					return fileChangedMsg{path: event.Name, lines: splitLines(content)}
+					return fileChangedMsg{path: event.Name, lines: fileutil.SplitLines(content)}
 				}
 			case err, ok := <-w.Errors:
 				if !ok {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/fileutil"
 )
 
 // handleFileChanged processes file change notifications.
@@ -135,14 +136,14 @@ func (m *Model) handleGitSync(msg gitSyncMsg) (tea.Model, tea.Cmd) {
 
 // handleOpenDiff opens a new diff tab.
 func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
-	newLines := splitLines([]byte(msg.Contents))
+	newLines := fileutil.SplitLines([]byte(msg.Contents))
 	dt := newDiffTab(msg.FilePath, newLines, msg.Accept, msg.Reject)
 	dt.syncContent(newLines)
 	dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents, m.theme)
 
 	var oldLines []string
 	if oldContent, err := os.ReadFile(msg.FilePath); err == nil {
-		oldLines = splitLines(oldContent)
+		oldLines = fileutil.SplitLines(oldContent)
 	}
 
 	if len(oldLines) > 0 {
