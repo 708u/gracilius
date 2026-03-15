@@ -159,7 +159,7 @@ func (m *Model) handleGitChangedFiles(msg gitChangedFilesMsg) (tea.Model, tea.Cm
 		gs.cursor = max(0, len(gs.entries)-1)
 	}
 
-	// 初回 branch mode ロード時に最初のファイルを自動で開く
+	// Auto-open the first file on initial branch mode load.
 	if !m.initialDiffAutoOpened && msg.mode == gitModeBranch {
 		m.autoOpenFirstDiff()
 	}
