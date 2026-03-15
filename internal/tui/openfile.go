@@ -349,8 +349,9 @@ func (s *openFileOverlay) cursorPos(width, height int) cursorPosition {
 	val := s.input.Value()
 	pos := s.input.Position()
 	cursorCol := displayWidthRange(val, 0, pos)
+	promptW := ansi.StringWidth(s.input.Prompt)
 	return cursorPosition{
-		x: g.startX + overlayBorderW/2 + overlayPaddingW/2 + cursorCol,
+		x: g.startX + overlayBorderW/2 + overlayPaddingW/2 + promptW + cursorCol,
 		y: g.startY + overlayBorderH/2,
 	}
 }
