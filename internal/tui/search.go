@@ -329,6 +329,18 @@ const (
 	searchOverlayCounterW     = 8 // fixed width reserved for counter
 )
 
+// searchOverlayInnerWidth returns the inner content width of the search
+// overlay box (outer width minus 2 border chars and 2 padding spaces).
+func searchOverlayInnerWidth(boxW int) int {
+	return max(boxW-4, 1)
+}
+
+// searchOverlayInputWidth returns the text input width inside the search
+// overlay box of the given outer width.
+func searchOverlayInputWidth(boxW int) int {
+	return max(searchOverlayInnerWidth(boxW)-searchOverlayCounterW, 1)
+}
+
 // renderSearchOverlay renders the search bar as a bordered box (3 lines)
 // and returns its lines for overlaying on the editor.
 func (m *Model) renderSearchOverlay(editorWidth int) []string {
@@ -339,11 +351,7 @@ func (m *Model) renderSearchOverlay(editorWidth int) []string {
 	// Compute fixed box width (outer, including borders).
 	boxW := editorWidth * searchOverlayWidthPercent / 100
 	boxW = min(max(min(boxW, searchOverlayMaxWidth), searchOverlayMinWidth), editorWidth)
-	// Inner content width: box - 2 borders - 2 padding spaces.
-	innerW := max(boxW-4, 1)
-
-	// Input gets left portion, counter gets right portion (fixed).
-	inputW := max(innerW-searchOverlayCounterW, 1)
+	inputW := searchOverlayInputWidth(boxW)
 
 	// Render input.
 	m.search.input.SetWidth(inputW)
@@ -380,7 +388,8 @@ func (m *Model) renderSearchOverlay(editorWidth int) []string {
 	}
 	contentLine := inputView + counterRendered
 
-	// Ensure contentLine is exactly innerW (truncate if over, pad if under).
+	// Ensure contentLine is exactly the inner width (truncate if over, pad if under).
+	innerW := searchOverlayInnerWidth(boxW)
 	contentVisualW := ansi.StringWidth(contentLine)
 	if contentVisualW > innerW {
 		contentLine = ansi.Truncate(contentLine, innerW, "")
@@ -400,16 +409,20 @@ func (m *Model) renderSearchOverlay(editorWidth int) []string {
 // at the top-right of the editor area. lo and boxW must be pre-computed by
 // the caller to avoid redundant work.
 func (m *Model) searchCursorScreenPos(lo layout, boxW int) cursorPosition {
-	c := m.search.input.Cursor()
-	if c == nil {
+	if !m.search.input.Focused() {
 		return cursorPosition{}
 	}
 	// Overlay is right-aligned within the editor area.
 	startX := lo.editorStartX + lo.editorWidth - boxW
 	// Content is on the second line (after top border).
 	y := contentStartY + 1
-	// Cursor offset: border (1) + padding (1) + cursor.X.
-	x := startX + 1 + 1 + c.X
+	// Compute display width instead of using Cursor().X, which returns
+	// a rune index and is incorrect for wide characters (CJK).
+	// See: https://github.com/charmbracelet/bubbles/issues/906
+	val := m.search.input.Value()
+	pos := m.search.input.Position()
+	cursorCol := min(displayWidthRange(val, 0, pos), searchOverlayInputWidth(boxW))
+	x := startX + 1 + 1 + cursorCol
 	return cursorPosition{x: x, y: y}
 }
 

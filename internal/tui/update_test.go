@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestHandleOpenDiff(t *testing.T) {
@@ -457,7 +458,7 @@ func TestTabIndexAtX(t *testing.T) {
 	lo := m.computeLayout()
 	// Tab 0 label: " main.go " (9 runes), starts at editorStartX.
 	label0 := tabLabel(t1)
-	w0 := len([]rune(label0))
+	w0 := ansi.StringWidth(label0)
 
 	// Click on first tab start.
 	if got := m.tabIndexAtX(lo.editorStartX); got != 0 {
@@ -481,7 +482,7 @@ func TestTabIndexAtX(t *testing.T) {
 
 	// Click after all tabs.
 	label1 := tabLabel(t2)
-	w1 := len([]rune(label1))
+	w1 := ansi.StringWidth(label1)
 	afterAll := secondStart + w1
 	if got := m.tabIndexAtX(afterAll); got != -1 {
 		t.Errorf("after all tabs: expected -1, got %d", got)
@@ -502,7 +503,7 @@ func TestMouseClick_TabBar(t *testing.T) {
 
 	lo := m.computeLayout()
 	label0 := tabLabel(t1)
-	w0 := len([]rune(label0))
+	w0 := ansi.StringWidth(label0)
 	secondTabX := lo.editorStartX + w0 + 1
 
 	// Click on second tab (Y = headerHeight, the label row).
