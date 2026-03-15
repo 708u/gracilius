@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/708u/gracilius/internal/fileutil"
+	"github.com/708u/gracilius/internal/tui/render"
 )
 
 // sniffBinary reads the first bytes of a file to detect binary content.
@@ -56,7 +57,7 @@ func (m *Model) loadFileIntoTab(t *tab, filePath string) error {
 
 	t.lines = fileutil.SplitLines(content)
 	t.syncContent(t.lines)
-	t.highlightedLines = highlightFile(absPath, string(content), m.theme)
+	t.highlightedLines = render.HighlightFile(absPath, string(content), m.theme)
 
 	// Load persisted comments for this file.
 	stored, err := m.commentRepo.List(absPath, false)

@@ -87,3 +87,45 @@ func CountWraps(line string, textWidth int) int {
 	}
 	return count
 }
+
+// SplitRunsAtBreakpoints divides StyledRuns at the given rune-index
+// breakpoints, returning one []StyledRun per visual wrap segment.
+// bp must be sorted in ascending order (as returned by WrapBreakpoints).
+func SplitRunsAtBreakpoints(runs []StyledRun, bp []int) [][]StyledRun {
+	segments := make([][]StyledRun, 0, len(bp)+1)
+	var current []StyledRun
+	pos := 0
+	bpIdx := 0
+
+	for _, run := range runs {
+		runes := []rune(run.Text)
+		runEnd := pos + len(runes)
+		consumed := 0
+
+		for bpIdx < len(bp) && bp[bpIdx] >= pos && bp[bpIdx] < runEnd {
+			splitAt := bp[bpIdx] - pos
+			if splitAt > consumed {
+				current = append(current, StyledRun{
+					Text: string(runes[consumed:splitAt]),
+					ANSI: run.ANSI,
+				})
+			}
+			segments = append(segments, current)
+			current = nil
+			consumed = splitAt
+			bpIdx++
+		}
+
+		if consumed < len(runes) {
+			current = append(current, StyledRun{
+				Text: string(runes[consumed:]),
+				ANSI: run.ANSI,
+			})
+		}
+
+		pos = runEnd
+	}
+
+	segments = append(segments, current)
+	return segments
+}

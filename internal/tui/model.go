@@ -6,6 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/help"
 	"github.com/708u/gracilius/internal/comment"
+	"github.com/708u/gracilius/internal/tui/render"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -178,7 +179,7 @@ type Model struct {
 
 	// theme
 	isDark bool
-	theme  themeConfig
+	theme  render.Theme
 
 	// keyboard enhancement (Kitty protocol)
 	enhancedKeyboard bool
@@ -318,9 +319,9 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 		keys:           newKeyMap(),
 		help:           help.New(),
 		iconMode:       im,
-		openFile:       newOpenFileOverlay(im, darkTheme),
+		openFile:       newOpenFileOverlay(im, render.Dark),
 		isDark:         true,
-		theme:          darkTheme,
+		theme:          render.Dark,
 		commentRepo:    store,
 		commentWatcher: commentWatcher,
 		gitDirWatcher:  gitDirWatcher,

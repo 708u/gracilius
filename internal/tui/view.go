@@ -67,8 +67,8 @@ var (
 			BorderStyle(separatorBorder)
 )
 
-func styleTreeCursor(theme themeConfig) lipgloss.Style {
-	return lipgloss.NewStyle().Background(lipgloss.Color(theme.listSelectionBg))
+func styleTreeCursor(theme render.Theme) lipgloss.Style {
+	return lipgloss.NewStyle().Background(lipgloss.Color(theme.ListSelectionBg))
 }
 
 // newView returns a tea.View with the base terminal settings.
@@ -292,11 +292,11 @@ func (m *Model) renderTabBar(offset int) string {
 	}
 
 	styleActive := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(m.theme.tabActiveFg))
+		Foreground(lipgloss.Color(m.theme.TabActiveFg))
 	styleInactive := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(m.theme.tabInactiveFg))
+		Foreground(lipgloss.Color(m.theme.TabInactiveFg))
 	styleBorder := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(m.theme.tabActiveBorder))
+		Foreground(lipgloss.Color(m.theme.TabActiveBorder))
 
 	padding := strings.Repeat(" ", offset)
 
@@ -467,7 +467,7 @@ func (m *Model) renderTree(width, height int) []string {
 			displayLine = styleTreeCursor(m.theme).Render(displayLine)
 		case isActiveFile:
 			displayLine = lipgloss.NewStyle().
-				Background(lipgloss.Color(m.theme.activeFileBg)).
+				Background(lipgloss.Color(m.theme.ActiveFileBg)).
 				Render(displayLine)
 		}
 
@@ -582,7 +582,7 @@ func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, w
 	}
 
 	ctx := newDiffSideCtx(t.diffViewData, m.theme, width)
-	highlightBg := m.theme.selectionBgSeq()
+	highlightBg := m.theme.SelectionBgSeq()
 
 	startRow, endRow := t.diffCursor, t.diffCursor
 	if t.diffSelecting {
@@ -651,12 +651,12 @@ func (m *Model) renderEditor(lo layout) []string {
 	}
 
 	startLine, startChar, endLine, endChar := t.normalizedSelection()
-	selBgSeq := m.theme.selectionBgSeq()
+	selBgSeq := m.theme.SelectionBgSeq()
 	hasSearchMatches := len(t.searchMatches) > 0
 	var searchMatchBg, searchCurrentBg string
 	if hasSearchMatches {
-		searchMatchBg = m.theme.searchMatchBgSeq()
-		searchCurrentBg = m.theme.searchCurrentBgSeq()
+		searchMatchBg = m.theme.SearchMatchBgSeq()
+		searchCurrentBg = m.theme.SearchCurrentBgSeq()
 	}
 	offset := t.vp.YOffset()
 	commentBodyWidth := width - lnw - commentBlockMargin
@@ -679,7 +679,7 @@ func (m *Model) renderEditor(lo layout) []string {
 		if isSelected {
 			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
 			if sc < ec {
-				lineHighlights = append(lineHighlights, highlightRange{start: sc, end: ec, bgSeq: selBgSeq})
+				lineHighlights = append(lineHighlights, render.HighlightRange{Start: sc, End: ec, BgSeq: selBgSeq})
 			}
 		}
 		hasHighlights := len(lineHighlights) > 0
@@ -688,14 +688,14 @@ func (m *Model) renderEditor(lo layout) []string {
 		if bp != nil {
 			// Per-segment rendering: split runs at wrap breakpoints,
 			// then apply highlights per segment independently.
-			var runs []styledRun
+			var runs []render.StyledRun
 			if hl := t.getHighlightedLine(i); hl != nil {
-				runs = hl.runs
+				runs = hl.Runs
 			} else {
-				runs = []styledRun{{Text: lineContent}}
+				runs = []render.StyledRun{{Text: lineContent}}
 			}
 
-			segRunsList := splitRunsAtBreakpoints(runs, bp)
+			segRunsList := render.SplitRunsAtBreakpoints(runs, bp)
 			for si, segRuns := range segRunsList {
 				if len(lines) >= height {
 					break
@@ -715,17 +715,17 @@ func (m *Model) renderEditor(lo layout) []string {
 				var segSB strings.Builder
 				if hasHighlights {
 					// Clamp highlights to this segment.
-					segHL := clampHighlightsToSegment(lineHighlights, wrapOff, segLen)
+					segHL := render.ClampHighlightsToSegment(lineHighlights, wrapOff, segLen)
 					if len(segHL) > 0 {
-						renderStyledLineWithHighlights(&segSB, segRuns, segHL)
+						render.RenderStyledLineWithHighlights(&segSB, segRuns, segHL)
 					} else {
 						for _, r := range segRuns {
-							writeStyledText(&segSB, r.ANSI, render.ExpandTabs(r.Text))
+							render.WriteStyledText(&segSB, r.ANSI, render.ExpandTabs(r.Text))
 						}
 					}
 				} else {
 					for _, r := range segRuns {
-						writeStyledText(&segSB, r.ANSI, render.ExpandTabs(r.Text))
+						render.WriteStyledText(&segSB, r.ANSI, render.ExpandTabs(r.Text))
 					}
 				}
 
@@ -733,9 +733,9 @@ func (m *Model) renderEditor(lo layout) []string {
 				if si > 0 {
 					gutterCtx.Soft = true
 					lnPad := t.vp.LeftGutterFunc(gutterCtx)
-					lines = append(lines, render.PadRight(lnPad+seg+ansiReset, width))
+					lines = append(lines, render.PadRight(lnPad+seg+render.AnsiReset, width))
 				} else {
-					lines = append(lines, render.PadRight(lineNumStr+seg+ansiReset, width))
+					lines = append(lines, render.PadRight(lineNumStr+seg+render.AnsiReset, width))
 				}
 				mapping = append(mapping, visualEntry{
 					logicalLine: i,
@@ -747,23 +747,23 @@ func (m *Model) renderEditor(lo layout) []string {
 			var contentSB strings.Builder
 
 			if hasHighlights {
-				var runs []styledRun
+				var runs []render.StyledRun
 				if hl := t.getHighlightedLine(i); hl != nil {
-					runs = hl.runs
+					runs = hl.Runs
 				} else {
-					runs = []styledRun{{Text: lineContent}}
+					runs = []render.StyledRun{{Text: lineContent}}
 				}
-				renderStyledLineWithHighlights(&contentSB, runs, lineHighlights)
+				render.RenderStyledLineWithHighlights(&contentSB, runs, lineHighlights)
 			} else {
 				if hl := t.getHighlightedLine(i); hl != nil {
-					contentSB.WriteString(hl.rendered)
+					contentSB.WriteString(hl.Rendered)
 				} else {
 					contentSB.WriteString(render.ExpandTabs(lineContent))
 				}
 			}
 
 			content := contentSB.String()
-			lines = append(lines, render.PadRight(lineNumStr+content+ansiReset, width))
+			lines = append(lines, render.PadRight(lineNumStr+content+render.AnsiReset, width))
 			mapping = append(mapping, visualEntry{logicalLine: i})
 		}
 

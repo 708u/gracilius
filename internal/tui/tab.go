@@ -29,7 +29,7 @@ type tab struct {
 
 	filePath         string
 	lines            []string
-	highlightedLines []highlightedLine
+	highlightedLines []render.HighlightedLine
 	cursorLine       int
 	cursorChar       int
 	anchorLine       int
@@ -50,8 +50,8 @@ type tab struct {
 	gitDiffLabel      string      // tab label prefix (e.g. "[working]", "[vs main]")
 
 	// diff syntax highlights (old/new sides)
-	diffOldHighlights []highlightedLine
-	diffNewHighlights []highlightedLine
+	diffOldHighlights []render.HighlightedLine
+	diffNewHighlights []render.HighlightedLine
 	diffOldSource     string // old-side source text for re-highlighting on theme change
 
 	// diff cursor/selection
@@ -377,7 +377,7 @@ func (t *tab) syncContent(lines []string) {
 
 // renderDiffContent pre-renders diff lines and updates viewport content.
 // Returns the hunk visual offsets for initial scroll positioning.
-func (t *tab) renderDiffContent(theme themeConfig, width int) []int {
+func (t *tab) renderDiffContent(theme render.Theme, width int) []int {
 	result := renderAllDiffLines(t.diffViewData, theme, width, t.diffOldHighlights, t.diffNewHighlights, t.diffSearchMatches)
 	sideWidth := (width - diffSeparatorWidth) / 2
 	result = t.interleaveCommentBlocks(result, sideWidth, width)
@@ -385,12 +385,12 @@ func (t *tab) renderDiffContent(theme themeConfig, width int) []int {
 	t.diffRowVisualStarts = result.rowVisualStarts
 	t.vp.SetContentLines(result.lines)
 	t.diffCacheWidth = width
-	t.diffCacheTheme = theme.name
+	t.diffCacheTheme = theme.Name
 	return result.hunkVisualOffs
 }
 
 // initDiffContent pre-renders diff lines and jumps to the first hunk.
-func (t *tab) initDiffContent(theme themeConfig, width, height int) {
+func (t *tab) initDiffContent(theme render.Theme, width, height int) {
 	if width <= diffSeparatorWidth {
 		return
 	}
@@ -433,9 +433,9 @@ func (t *tab) diffVisualToLogical(visualOff int) (logicalRow, subOff int) {
 
 // ensureDiffContent refreshes the diff render cache if width/theme/search changed.
 // Anchors the viewport to the same logical diff row across re-renders.
-func (t *tab) ensureDiffContent(theme themeConfig, width int, searchGen int) {
+func (t *tab) ensureDiffContent(theme render.Theme, width int, searchGen int) {
 	if width <= diffSeparatorWidth ||
-		(t.diffCacheWidth == width && t.diffCacheTheme == theme.name && t.searchGen == searchGen) {
+		(t.diffCacheWidth == width && t.diffCacheTheme == theme.Name && t.searchGen == searchGen) {
 		return
 	}
 	t.searchGen = searchGen
@@ -570,7 +570,7 @@ func (t *tab) lineLen(line int) int {
 }
 
 // getHighlightedLine returns a pointer to the highlighted line at lineIdx.
-func (t *tab) getHighlightedLine(lineIdx int) *highlightedLine {
+func (t *tab) getHighlightedLine(lineIdx int) *render.HighlightedLine {
 	if t.highlightedLines != nil && lineIdx >= 0 && lineIdx < len(t.highlightedLines) {
 		return &t.highlightedLines[lineIdx]
 	}

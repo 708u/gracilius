@@ -11,12 +11,12 @@ import (
 )
 
 // renderDiff is a test helper that pre-renders diff lines via viewport.
-func renderDiff(data *diff.Data, theme themeConfig, width, height, offset int) []string {
+func renderDiff(data *diff.Data, theme render.Theme, width, height, offset int) []string {
 	return renderDiffHL(data, theme, width, height, offset, nil, nil)
 }
 
 // renderDiffHL is a test helper that pre-renders diff lines with optional syntax highlights.
-func renderDiffHL(data *diff.Data, theme themeConfig, width, height, offset int, oldHL, newHL []highlightedLine) []string {
+func renderDiffHL(data *diff.Data, theme render.Theme, width, height, offset int, oldHL, newHL []render.HighlightedLine) []string {
 	result := renderAllDiffLines(data, theme, width, oldHL, newHL, nil)
 	// Simulate viewport slicing.
 	start := min(offset, len(result.lines))
@@ -36,7 +36,7 @@ func TestRenderSideBySide_LineCount(t *testing.T) {
 
 	heights := []int{5, 10, 20}
 	for _, h := range heights {
-		lines := renderDiff(data, darkTheme, 80, h, 0)
+		lines := renderDiff(data, render.Dark, 80, h, 0)
 		if len(lines) != h {
 			t.Errorf("height=%d: expected %d lines, got %d", h, h, len(lines))
 		}
@@ -46,7 +46,7 @@ func TestRenderSideBySide_LineCount(t *testing.T) {
 func TestRenderSideBySide_EmptyDiff(t *testing.T) {
 	data := diff.Build(nil, nil)
 
-	lines := renderDiff(data, darkTheme, 80, 10, 0)
+	lines := renderDiff(data, render.Dark, 80, 10, 0)
 	if len(lines) != 10 {
 		t.Fatalf("expected 10 lines, got %d", len(lines))
 	}
@@ -58,7 +58,7 @@ func TestRenderSideBySide_ColumnWidths(t *testing.T) {
 	data := diff.Build(old, new)
 
 	width := 80
-	lines := renderDiff(data, darkTheme, width, 5, 0)
+	lines := renderDiff(data, render.Dark, width, 5, 0)
 	for i, line := range lines {
 		w := ansi.StringWidth(line)
 		if w != width {
@@ -72,7 +72,7 @@ func TestRenderSideBySide_Separator(t *testing.T) {
 	new := []string{"aaa", "BBB"}
 	data := diff.Build(old, new)
 
-	lines := renderDiff(data, darkTheme, 80, 5, 0)
+	lines := renderDiff(data, render.Dark, 80, 5, 0)
 	for i, line := range lines[:len(data.Rows)] {
 		stripped := ansi.Strip(line)
 		if !strings.Contains(stripped, "\u2502") {
@@ -86,7 +86,7 @@ func TestRenderSideBySide_ScrollOffset(t *testing.T) {
 	new := []string{"aaa", "bbb", "ccc", "ddd", "eee"}
 	data := diff.Build(old, new)
 
-	lines := renderDiff(data, darkTheme, 80, 5, 2)
+	lines := renderDiff(data, render.Dark, 80, 5, 2)
 	stripped := ansi.Strip(lines[0])
 	if !strings.Contains(stripped, "3") {
 		t.Errorf("expected line number 3 in first row, got %q", stripped)
@@ -98,7 +98,7 @@ func TestRenderSideBySide_LineNumbers(t *testing.T) {
 	new := []string{"aaa", "BBB", "ccc"}
 	data := diff.Build(old, new)
 
-	lines := renderDiff(data, darkTheme, 80, 5, 0)
+	lines := renderDiff(data, render.Dark, 80, 5, 0)
 	for i, row := range data.Rows {
 		stripped := ansi.Strip(lines[i])
 		oldNum := strings.SplitN(stripped, "\u2502", 2)[0]
@@ -114,7 +114,7 @@ func TestRenderSideBySide_LineNumbers(t *testing.T) {
 func TestRenderSideBySide_FillerLine(t *testing.T) {
 	data := diff.Build(nil, []string{"aaa", "bbb"})
 
-	lines := renderDiff(data, darkTheme, 80, 5, 0)
+	lines := renderDiff(data, render.Dark, 80, 5, 0)
 	for i := range data.Rows {
 		stripped := ansi.Strip(lines[i])
 		parts := strings.SplitN(stripped, "\u2502", 2)
@@ -150,8 +150,8 @@ func TestDiffGutterWidth(t *testing.T) {
 }
 
 func TestDiffColorsFor(t *testing.T) {
-	dark := diffColorsFor(darkTheme)
-	light := diffColorsFor(lightTheme)
+	dark := diffColorsFor(render.Dark)
+	light := diffColorsFor(render.Light)
 
 	if dark.addBg == light.addBg {
 		t.Error("dark and light addBg should differ")
@@ -178,11 +178,11 @@ func TestRenderSideBySide_WithSyntaxHighlight(t *testing.T) {
 	new := []string{"func foo() {", "  return 2", "}"}
 	data := diff.Build(old, new)
 
-	oldHL := highlightFile("test.go", strings.Join(old, "\n"), darkTheme)
-	newHL := highlightFile("test.go", strings.Join(new, "\n"), darkTheme)
+	oldHL := render.HighlightFile("test.go", strings.Join(old, "\n"), render.Dark)
+	newHL := render.HighlightFile("test.go", strings.Join(new, "\n"), render.Dark)
 
 	width := 80
-	lines := renderDiffHL(data, darkTheme, width, 5, 0, oldHL, newHL)
+	lines := renderDiffHL(data, render.Dark, width, 5, 0, oldHL, newHL)
 
 	// All lines should have correct width.
 	for i, line := range lines {
@@ -206,11 +206,11 @@ func TestRenderSideBySide_WordDiffWithSyntax(t *testing.T) {
 	new := []string{"x := 20"}
 	data := diff.Build(old, new)
 
-	oldHL := highlightFile("test.go", strings.Join(old, "\n"), darkTheme)
-	newHL := highlightFile("test.go", strings.Join(new, "\n"), darkTheme)
+	oldHL := render.HighlightFile("test.go", strings.Join(old, "\n"), render.Dark)
+	newHL := render.HighlightFile("test.go", strings.Join(new, "\n"), render.Dark)
 
 	width := 80
-	lines := renderDiffHL(data, darkTheme, width, 3, 0, oldHL, newHL)
+	lines := renderDiffHL(data, render.Dark, width, 3, 0, oldHL, newHL)
 
 	// Modified row should render at correct width.
 	for i, line := range lines {
@@ -233,12 +233,12 @@ func TestRenderSideBySide_SoftWrapWithSyntax(t *testing.T) {
 	new := []string{longLine}
 	data := diff.Build(old, new)
 
-	oldHL := highlightFile("test.go", longLine, darkTheme)
-	newHL := highlightFile("test.go", longLine, darkTheme)
+	oldHL := render.HighlightFile("test.go", longLine, render.Dark)
+	newHL := render.HighlightFile("test.go", longLine, render.Dark)
 
 	// Use a narrow width to force soft-wrapping.
 	width := 60
-	result := renderAllDiffLines(data, darkTheme, width, oldHL, newHL, nil)
+	result := renderAllDiffLines(data, render.Dark, width, oldHL, newHL, nil)
 
 	// Should produce more visual lines than data rows due to wrapping.
 	if len(result.lines) <= len(data.Rows) {
@@ -260,7 +260,7 @@ func TestRenderAllDiffLines_RowVisualStarts(t *testing.T) {
 	new := []string{"aaa", "BBB", "ccc"}
 	data := diff.Build(old, new)
 
-	result := renderAllDiffLines(data, darkTheme, 80, nil, nil, nil)
+	result := renderAllDiffLines(data, render.Dark, 80, nil, nil, nil)
 
 	if len(result.rowVisualStarts) != len(data.Rows) {
 		t.Fatalf("rowVisualStarts length = %d, want %d", len(result.rowVisualStarts), len(data.Rows))
@@ -282,7 +282,7 @@ func TestRenderAllDiffLines_RowVisualStarts_SoftWrap(t *testing.T) {
 	data := diff.Build(old, new)
 
 	// Narrow width to force soft-wrapping on the long line.
-	result := renderAllDiffLines(data, darkTheme, 40, nil, nil, nil)
+	result := renderAllDiffLines(data, render.Dark, 40, nil, nil, nil)
 
 	if len(result.rowVisualStarts) != len(data.Rows) {
 		t.Fatalf("rowVisualStarts length = %d, want %d", len(result.rowVisualStarts), len(data.Rows))
@@ -355,9 +355,9 @@ func TestEnsureDiffContent_PreservesLogicalPosition(t *testing.T) {
 
 	// Initial render at wide width.
 	wideWidth := 120
-	tb.renderDiffContent(darkTheme, wideWidth)
+	tb.renderDiffContent(render.Dark, wideWidth)
 	tb.diffCacheWidth = wideWidth
-	tb.diffCacheTheme = darkTheme.name
+	tb.diffCacheTheme = render.Dark.Name
 
 	// Find the visual offset for the "end" row (last logical row).
 	lastRow := len(data.Rows) - 1
@@ -366,7 +366,7 @@ func TestEnsureDiffContent_PreservesLogicalPosition(t *testing.T) {
 
 	// Re-render at narrow width.
 	narrowWidth := 40
-	tb.ensureDiffContent(darkTheme, narrowWidth, 0)
+	tb.ensureDiffContent(render.Dark, narrowWidth, 0)
 
 	// After re-render, the viewport should still point at the same logical row.
 	narrowVisualOff := tb.diffRowVisualStarts[lastRow]
@@ -382,12 +382,12 @@ func TestRenderSideBySide_SoftWrapWithWordDiff(t *testing.T) {
 	new := []string{"func processData(inputValue int, changedParam string) error {"}
 	data := diff.Build(old, new)
 
-	oldHL := highlightFile("test.go", strings.Join(old, "\n"), darkTheme)
-	newHL := highlightFile("test.go", strings.Join(new, "\n"), darkTheme)
+	oldHL := render.HighlightFile("test.go", strings.Join(old, "\n"), render.Dark)
+	newHL := render.HighlightFile("test.go", strings.Join(new, "\n"), render.Dark)
 
 	// Narrow width to force soft-wrapping on the modified row.
 	width := 50
-	result := renderAllDiffLines(data, darkTheme, width, oldHL, newHL, nil)
+	result := renderAllDiffLines(data, render.Dark, width, oldHL, newHL, nil)
 
 	// Should produce more visual lines than data rows due to wrapping.
 	if len(result.lines) <= len(data.Rows) {
@@ -405,7 +405,7 @@ func TestRenderSideBySide_SoftWrapWithWordDiff(t *testing.T) {
 
 	// Word-diff background color should be present in at least one visual line.
 	// The modified row uses wordDelBg (old side) and wordAddBg (new side).
-	colors := diffColorsFor(darkTheme)
+	colors := diffColorsFor(render.Dark)
 	foundWordBg := false
 	for _, line := range result.lines {
 		if strings.Contains(line, colors.wordDelBg) || strings.Contains(line, colors.wordAddBg) {
@@ -425,7 +425,7 @@ func TestRenderSideBySide_SoftWrapWordDiffNoSyntax(t *testing.T) {
 	data := diff.Build(old, new)
 
 	width := 50
-	result := renderAllDiffLines(data, darkTheme, width, nil, nil, nil)
+	result := renderAllDiffLines(data, render.Dark, width, nil, nil, nil)
 
 	if len(result.lines) <= len(data.Rows) {
 		t.Fatalf("expected soft-wrap, got %d lines for %d rows",
@@ -439,7 +439,7 @@ func TestRenderSideBySide_SoftWrapWordDiffNoSyntax(t *testing.T) {
 		}
 	}
 
-	colors := diffColorsFor(darkTheme)
+	colors := diffColorsFor(render.Dark)
 	foundWordBg := false
 	for _, line := range result.lines {
 		if strings.Contains(line, colors.wordDelBg) || strings.Contains(line, colors.wordAddBg) {
@@ -459,8 +459,8 @@ func TestRenderSideBySide_NilSyntaxFallback(t *testing.T) {
 
 	// Render with and without syntax highlights; both should produce same width.
 	width := 80
-	withoutHL := renderDiff(data, darkTheme, width, 5, 0)
-	withHL := renderDiffHL(data, darkTheme, width, 5, 0, nil, nil)
+	withoutHL := renderDiff(data, render.Dark, width, 5, 0)
+	withHL := renderDiffHL(data, render.Dark, width, 5, 0, nil, nil)
 
 	for i := range withoutHL {
 		w1 := ansi.StringWidth(withoutHL[i])
