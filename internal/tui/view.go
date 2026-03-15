@@ -266,8 +266,19 @@ func (m *Model) commentCursorScreenPos(lo layout) cursorPosition {
 		return cursorPosition{}
 	}
 
+	xOffset := lo.lineNumWidth + blockBorderLeft
+	if t.diffViewData != nil {
+		// Diff view: textarea is inside a side panel.
+		sideWidth := (lo.editorWidth - diffSeparatorWidth) / 2
+		if t.diffInputSide == diffSideOld {
+			xOffset = blockBorderLeft
+		} else {
+			xOffset = sideWidth + diffSeparatorWidth + blockBorderLeft
+		}
+	}
+
 	return cursorPosition{
-		x: lo.editorStartX + lo.lineNumWidth + blockBorderLeft + c.X,
+		x: lo.editorStartX + xOffset + c.X,
 		y: contentStartY + blockStart + blockBorderTop + c.Y,
 	}
 }
@@ -474,6 +485,7 @@ func (m *Model) renderTree(width, height int) []string {
 // renderDiffEditor generates the editor pane lines for a diff tab.
 // The viewport owns scrolling; we slice cached rendered lines directly.
 // Cursor and selected rows are re-rendered with gutter highlights.
+// Active textarea (inputMode) is overlaid after viewport slicing.
 func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 	width := lo.editorWidth
 	height := lo.contentHeight
@@ -496,7 +508,69 @@ func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 		m.applyDiffGutterHighlights(t, diffLines, off, width)
 	}
 
+	// Overlay active textarea for diff comment input.
+	if t.inputMode && t.diffViewData != nil {
+		m.overlayDiffTextarea(t, diffLines, off, width, height)
+	}
+
 	return diffLines
+}
+
+// overlayDiffTextarea inserts the comment textarea block into diffLines
+// at the visual position corresponding to the input's ending diff row.
+func (m *Model) overlayDiffTextarea(t *tab, diffLines []string, viewOff, width, height int) {
+	// Find the diff row where the input ends.
+	insertRowIdx := -1
+	for ri, row := range t.diffViewData.rows {
+		ln := diffRowLineNumForSide(row, t.diffInputSide)
+		if ln == t.inputEnd && diffRowAvailableSide(row, t.diffInputSide) == t.diffInputSide {
+			insertRowIdx = ri
+			break
+		}
+	}
+	if insertRowIdx < 0 || insertRowIdx >= len(t.diffRowVisualStarts) {
+		return
+	}
+
+	// Calculate visual line position after this row's lines.
+	rowVisEnd := len(t.diffCachedLines)
+	if insertRowIdx+1 < len(t.diffRowVisualStarts) {
+		rowVisEnd = t.diffRowVisualStarts[insertRowIdx+1]
+	}
+
+	// Also account for any comment blocks already interleaved after this row.
+	// (They are between the code lines and the next row's visual start.)
+	insertVisLine := rowVisEnd - viewOff
+	if insertVisLine < 0 || insertVisLine > height {
+		return
+	}
+
+	label := fmt.Sprintf("comment (%s)", t.diffInputSide)
+	sideWidth := (width - diffSeparatorWidth) / 2
+	blockBodyWidth := sideWidth - commentBlockMargin
+	blockRows := renderBlock(
+		t.commentInput.View(), label, blockBodyWidth, styleInput, styleBodyWhite)
+	composedLines := renderDiffCommentLines(blockRows, t.diffInputSide, sideWidth, width)
+
+	// In-place splice: shift tail down and insert block rows.
+	// diffLines is exactly height long; excess lines fall off the bottom.
+	blockCount := min(len(composedLines), height-insertVisLine)
+	if blockCount <= 0 {
+		return
+	}
+
+	// Shift tail lines right by blockCount (copy handles overlap correctly
+	// when dst > src, copying from end).
+	copy(diffLines[insertVisLine+blockCount:], diffLines[insertVisLine:height-blockCount])
+
+	mapping := make([]visualEntry, blockCount)
+	for i := range blockCount {
+		diffLines[insertVisLine+i] = composedLines[i]
+		mapping[i] = visualEntry{kind: lineKindInput}
+	}
+
+	// Record mapping for cursor positioning.
+	m.lastMapping = mapping
 }
 
 // applyDiffGutterHighlights re-renders diff rows that need cursor or selection
@@ -743,6 +817,14 @@ func formatCommentLabel(c *comment.Entry) string {
 	return fmt.Sprintf("comment (L%d-%d)", c.StartLine+1, c.EndLine+1)
 }
 
+// formatDiffCommentLabel returns the label for a diff comment block header.
+func formatDiffCommentLabel(c *comment.Entry, side diffSide) string {
+	if c.StartLine == c.EndLine {
+		return fmt.Sprintf("comment (%s)", side)
+	}
+	return fmt.Sprintf("comment (%s, L%d-%d)", side, c.StartLine+1, c.EndLine+1)
+}
+
 // renderBlock renders text inside a bordered block with a label header.
 // Each body line is right-padded to width. bodyStyle is applied to body text.
 func renderBlock(text, label string, width int, borderStyle, bodyStyle lipgloss.Style) []string {
@@ -754,12 +836,16 @@ func renderBlock(text, label string, width int, borderStyle, bodyStyle lipgloss.
 	remaining := width - len([]rune(topLabel)) - 1
 	if remaining > 0 {
 		topLabel += strings.Repeat("\u2500", remaining)
+	} else {
+		// Label too long: truncate to fit within width.
+		topLabel = string([]rune(topLabel)[:max(width-1, 1)])
 	}
 	topLabel += "\u256e"
 	rows = append(rows, borderStyle.Render(topLabel))
 
 	for line := range strings.SplitSeq(text, "\n") {
 		content := "\u2502 " + bodyStyle.Render(line)
+		content = ansi.Truncate(content, width-1, "")
 		content = padRight(content, width-1)
 		rows = append(rows, borderStyle.Render(content+"\u2502"))
 	}
