@@ -195,6 +195,8 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 		if len(sec.indices) == 0 {
 			continue
 		}
+
+		// Category header.
 		rows = append(rows, gitVisualRow{
 			isHeader: true,
 			label:    fmt.Sprintf("  %s (%d)", sec.label, len(sec.indices)),
