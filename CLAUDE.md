@@ -53,48 +53,103 @@ Claude Code acts as the client.
 
 ```txt
 cmd/gra/
-  main.go          Entry point, wiring, callback registration
+  main.go            Entry point, wiring,
+                     callback registration
 
 internal/
   config/
-    config.go      DataDir() for data directory path
+    config.go        DataDir() for data directory path
+  comment/
+    repository.go    Comment persistence (JSON file)
+  diff/
+    model.go         Row, Hunk, Data, Build,
+                     DetectHunks
+    worddiff.go      Word-level diff (Tokenize,
+                     ComputeWordDiff)
+  fileutil/
+    fileutil.go      IsBinary, SplitLines
+  git/
+    diff.go          StatusReader, BranchDiff,
+                     ChangedFile
+    exec.go          gitCmd, RepoRoot
+    ignore.go        CheckIgnored
   tui/
-    model.go       MCPServer interface, Model struct,
-                   message types, NewModel
-    update.go      Init(), Update(), helpers
-    view.go        View(), renderTree, renderEditor,
-                   renderLineWith*
-    filetree.go    fileEntry, buildFileTree, scanDir,
-                   expandDir, collapseDir,
-                   WatchDirRecursive
-    diff.go        diffLine, computeLineDiff
-    display.go     displayWidth, isWideRune,
-                   truncateString, padRight, expandTabs
-    notify.go      notifySelectionChanged,
-                   notifyClearSelection, notifyComment
-    watch.go       watchFile, watchDir
-    fileio.go      loadFile, isBinary
+    model.go         MCPServer interface, Model,
+                     NewModel
+    update.go        Init(), Update()
+    update_key.go    Keyboard event handling
+    update_mouse.go  Mouse event handling
+    update_msg.go    Async message handling
+    view.go          View(), renderTree, renderEditor
+    diffrender.go    Diff view rendering helpers
+    filetree.go      fileEntry, buildFileTree,
+                     scanDir, WatchDirRecursive
+    fileio.go        loadFile
+    gitpanel.go      Git changes panel
+    gitmode.go       Git diff comparison modes
+    notify.go        notifySelectionChanged,
+                     notifyClearSelection,
+                     notifyComment
+    openfile.go      Open file overlay
+    panel.go         Panel layout management
+    search.go        In-file search
+    tab.go           Tab state, comments
+    watch.go         watchFile, watchDir
+    welcome.go       Welcome screen
+    keys.go          Key bindings
+    layout.go        Layout calculations
+    icons.go         File type icons
+    render/
+      display.go     PadRight, ExpandTabs,
+                     RuneWidth, WrapBreakpoints
+      highlight.go   Syntax highlighting (chroma),
+                     StyledRun, HighlightedLine
+      selection.go   HighlightRange,
+                     ClampHighlightsToSegment
+      style.go       ANSI styled text writers
+      theme.go       Theme definition
   protocol/
-    jsonrpc.go     JSON-RPC 2.0 type definitions
-    handler.go     MCP method handler
+    jsonrpc.go       JSON-RPC 2.0 base types
+    types.go         MCP types, callbacks,
+                     MCPResult
+    handler.go       MCP method dispatcher
+    tools.go         Tool handlers
+                     (tools/list, tools/call)
+    responder.go     DiffResponder
+                     (blocking open/close)
   server/
-    server.go      WebSocket server, client management
-    lockfile.go    Lock file management
+    server.go        WebSocket server,
+                     client management
+    lockfile.go      Lock file management
+    token.go         Auth token persistence
 ```
 
 ### Dependency Graph
 
 ```txt
-cmd/gra → internal/config   (DataDir)
-cmd/gra → internal/tui      (Model, message types)
-cmd/gra → internal/server   (Server creation, callbacks)
-       internal/server  → internal/config
-       internal/server  → internal/protocol
-       internal/comment → internal/config
+cmd/gra → internal/config
+cmd/gra → internal/comment
+cmd/gra → internal/git
+cmd/gra → internal/tui
+cmd/gra → internal/server
+
+internal/fileutil  → (nothing)
+internal/diff      → (go-diff)
+internal/comment   → internal/config
+internal/git       → internal/fileutil
+internal/server    → internal/config
+internal/server    → internal/protocol
+internal/tui/render → (chroma, termenv,
+                      go-runewidth, x/ansi)
+internal/tui       → internal/tui/render
+internal/tui       → internal/diff
+internal/tui       → internal/comment
+internal/tui       → internal/git
+internal/tui       → internal/fileutil
 ```
 
-`tui` has zero dependencies on other internal packages.
-There is no direct dependency between `tui` and `server`.
+There is no direct dependency between
+`tui` and `server`.
 
 ### cmd/gra/main.go
 
@@ -182,10 +237,12 @@ Lock file:
 | --- | --- |
 | `charmbracelet/bubbletea` | TUI framework |
 | `charmbracelet/lipgloss` | TUI styling |
-| `gorilla/websocket` | WebSocket communication |
+| `gorilla/websocket` | WebSocket server |
 | `fsnotify/fsnotify` | File change watching |
 | `google/uuid` | Auth token generation |
-| `sergi/go-diff` | Line-level diff computation |
+| `sergi/go-diff` | Diff computation |
+| `alecthomas/chroma` | Syntax highlighting |
+| `mattn/go-runewidth` | Display width calc |
 
 ## User Instructions
 
