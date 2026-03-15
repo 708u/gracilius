@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/708u/gracilius/internal/fileutil"
 )
 
 // FileStatus represents a git file status.
@@ -270,10 +272,10 @@ func readWorkFile(root, relPath string) ([]string, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("read file %s: %w", relPath, err)
 	}
-	if isBinaryContent(data) {
+	if fileutil.IsBinary(data) {
 		return nil, true, nil
 	}
-	return splitLines(data), false, nil
+	return fileutil.SplitLines(data), false, nil
 }
 
 // readCommitBlob reads a file from a specific commit ref.
@@ -282,10 +284,10 @@ func readCommitBlob(dir, ref, path string) ([]string, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("git show %s:%s: %w", ref, path, err)
 	}
-	if isBinaryContent(data) {
+	if fileutil.IsBinary(data) {
 		return nil, true, nil
 	}
-	return splitLines(data), false, nil
+	return fileutil.SplitLines(data), false, nil
 }
 
 // readGitBlob reads a file from the index (staging area).
@@ -294,10 +296,10 @@ func readGitBlob(dir, path string) ([]string, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("git show :%s: %w", path, err)
 	}
-	if isBinaryContent(data) {
+	if fileutil.IsBinary(data) {
 		return nil, true, nil
 	}
-	return splitLines(data), false, nil
+	return fileutil.SplitLines(data), false, nil
 }
 
 // readHEADBlob reads a file from HEAD.
@@ -311,27 +313,8 @@ func readHEADBlob(dir, path string) ([]string, bool, error) {
 		}
 		return nil, false, fmt.Errorf("git show HEAD:%s: %w", path, err)
 	}
-	if isBinaryContent(data) {
+	if fileutil.IsBinary(data) {
 		return nil, true, nil
 	}
-	return splitLines(data), false, nil
-}
-
-func isBinaryContent(data []byte) bool {
-	checkSize := min(len(data), 8192)
-	for i := range checkSize {
-		if data[i] == 0 {
-			return true
-		}
-	}
-	return false
-}
-
-func splitLines(data []byte) []string {
-	s := string(data)
-	if s == "" {
-		return []string{}
-	}
-	s = strings.TrimSuffix(s, "\n")
-	return strings.Split(s, "\n")
+	return fileutil.SplitLines(data), false, nil
 }
