@@ -355,13 +355,13 @@ func (m *Model) renderFooter() string {
 			case t.diffViewData != nil && t.diffSelecting:
 				startRow, endRow := t.diffNormalizedSelection()
 				n := endRow - startRow + 1
-				fmt.Fprintf(&sb, "Selection: %d rows", n)
+				fmt.Fprintf(&sb, "Selection: %d rows (%s)", n, t.diffSide)
 				if m.statusMsg != "" {
 					fmt.Fprintf(&sb, "  %s", m.statusMsg)
 				}
 			case t.diffViewData != nil:
 				lineNum := t.diffCursorLineNum() + 1
-				fmt.Fprintf(&sb, "Line %d", lineNum)
+				fmt.Fprintf(&sb, "Line %d (%s)", lineNum, t.diffSide)
 			case t.selecting:
 				sLine, sChar, eLine, eChar := t.normalizedSelection()
 				fmt.Fprintf(&sb, "Selection: %d:%d - %d:%d",
@@ -519,9 +519,14 @@ func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, w
 		}
 
 		row := t.diffViewData.rows[rowIdx]
-		hlCtx := ctx
-		hlCtx.gutterHighlight = highlightBg
-		reRendered := renderSingleDiffRow(row, t.diffOldHighlights, t.diffNewHighlights, hlCtx, width, nil, nil)
+		activeSide := diffRowAvailableSide(row, t.diffSide)
+		oldCtx, newCtx := ctx, ctx
+		if activeSide == diffSideOld {
+			oldCtx.gutterHighlight = highlightBg
+		} else {
+			newCtx.gutterHighlight = highlightBg
+		}
+		reRendered := renderSingleDiffRow(row, t.diffOldHighlights, t.diffNewHighlights, oldCtx, newCtx, width, nil, nil)
 
 		for j, line := range reRendered {
 			visIdx := rowVisStart + j - viewOff

@@ -592,3 +592,209 @@ func TestContextKeyMap_NoDiffReviewOnFileTab(t *testing.T) {
 		t.Fatal("RejectDiff should be disabled for file tab")
 	}
 }
+
+func TestDiffSide_DefaultIsNew(t *testing.T) {
+	m := newTestModelWithDiff(t,
+		[]string{"same", "old"},
+		[]string{"same", "new"},
+	)
+	tab := m.tabs[0]
+	if tab.diffSide != diffSideNew {
+		t.Errorf("expected default diffSide=diffSideNew, got %d", tab.diffSide)
+	}
+}
+
+func TestDiffSide_HLSwitchesSide(t *testing.T) {
+	// unchanged row: both sides available → h/l should switch.
+	m := newTestModelWithDiff(t,
+		[]string{"same line"},
+		[]string{"same line"},
+	)
+	tab := m.tabs[0]
+	// Cursor starts on the unchanged row.
+	tab.diffCursor = 0
+	tab.diffSide = diffSideNew
+
+	// Press h → old side.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if tab.diffSide != diffSideOld {
+		t.Errorf("expected diffSideOld after h, got %d", tab.diffSide)
+	}
+
+	// Press l → new side.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if tab.diffSide != diffSideNew {
+		t.Errorf("expected diffSideNew after l, got %d", tab.diffSide)
+	}
+}
+
+func TestDiffSide_AutoSnapDeleted(t *testing.T) {
+	// old has "deleted", new does not → deleted row must snap to old.
+	m := newTestModelWithDiff(t,
+		[]string{"same", "deleted"},
+		[]string{"same"},
+	)
+	tab := m.tabs[0]
+	tab.diffSide = diffSideNew
+
+	// Find the deleted row.
+	deletedIdx := -1
+	for i, row := range tab.diffViewData.rows {
+		if row.rowType == diffRowDeleted {
+			deletedIdx = i
+			break
+		}
+	}
+	if deletedIdx < 0 {
+		t.Fatal("expected a deleted row in diff data")
+	}
+
+	// Move cursor to the deleted row.
+	tab.diffCursor = deletedIdx
+	tab.snapDiffSide()
+
+	if tab.diffSide != diffSideOld {
+		t.Errorf("expected auto-snap to diffSideOld on deleted row, got %d", tab.diffSide)
+	}
+}
+
+func TestDiffSide_AutoSnapAdded(t *testing.T) {
+	// new has "added", old does not → added row must snap to new.
+	m := newTestModelWithDiff(t,
+		[]string{"same"},
+		[]string{"same", "added"},
+	)
+	tab := m.tabs[0]
+	tab.diffSide = diffSideOld
+
+	// Find the added row.
+	addedIdx := -1
+	for i, row := range tab.diffViewData.rows {
+		if row.rowType == diffRowAdded {
+			addedIdx = i
+			break
+		}
+	}
+	if addedIdx < 0 {
+		t.Fatal("expected an added row in diff data")
+	}
+
+	tab.diffCursor = addedIdx
+	tab.snapDiffSide()
+
+	if tab.diffSide != diffSideNew {
+		t.Errorf("expected auto-snap to diffSideNew on added row, got %d", tab.diffSide)
+	}
+}
+
+func TestDiffSide_NoSwitchOnDeletedRow(t *testing.T) {
+	// On a deleted row, pressing l (right) should be ignored.
+	m := newTestModelWithDiff(t,
+		[]string{"same", "deleted"},
+		[]string{"same"},
+	)
+	tab := m.tabs[0]
+
+	deletedIdx := -1
+	for i, row := range tab.diffViewData.rows {
+		if row.rowType == diffRowDeleted {
+			deletedIdx = i
+			break
+		}
+	}
+	if deletedIdx < 0 {
+		t.Fatal("expected a deleted row in diff data")
+	}
+
+	tab.diffCursor = deletedIdx
+	tab.diffSide = diffSideOld
+
+	// Press l → should not switch because deleted row has no new side.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if tab.diffSide != diffSideOld {
+		t.Errorf("expected diffSideOld unchanged on deleted row after l, got %d", tab.diffSide)
+	}
+}
+
+func TestDiffSide_MouseClick_OldSide(t *testing.T) {
+	m := newTestModelWithDiff(t,
+		[]string{"same line"},
+		[]string{"same line"},
+	)
+	tab := m.tabs[0]
+	tab.diffSide = diffSideNew
+
+	lo := m.computeLayout()
+
+	// Click on left half of editor (old side).
+	m.Update(tea.MouseClickMsg{
+		X:      lo.editorStartX + 1,
+		Y:      contentStartY,
+		Button: tea.MouseLeft,
+	})
+
+	if tab.diffSide != diffSideOld {
+		t.Errorf("expected diffSideOld after clicking left side, got %d", tab.diffSide)
+	}
+}
+
+func TestDiffSide_MouseClick_NewSide(t *testing.T) {
+	m := newTestModelWithDiff(t,
+		[]string{"same line"},
+		[]string{"same line"},
+	)
+	tab := m.tabs[0]
+	tab.diffSide = diffSideOld
+
+	lo := m.computeLayout()
+
+	// Click on right half of editor (new side).
+	sideWidth := (lo.editorWidth - diffSeparatorWidth) / 2
+	m.Update(tea.MouseClickMsg{
+		X:      lo.editorStartX + sideWidth + diffSeparatorWidth + 1,
+		Y:      contentStartY,
+		Button: tea.MouseLeft,
+	})
+
+	if tab.diffSide != diffSideNew {
+		t.Errorf("expected diffSideNew after clicking right side, got %d", tab.diffSide)
+	}
+}
+
+func TestDiffSide_SelectionTextMatchesSide(t *testing.T) {
+	// Modified row: old="hello", new="world"
+	m := newTestModelWithDiff(t,
+		[]string{"hello"},
+		[]string{"world"},
+	)
+	tab := m.tabs[0]
+
+	// Find the modified row.
+	modIdx := -1
+	for i, row := range tab.diffViewData.rows {
+		if row.rowType == diffRowModified {
+			modIdx = i
+			break
+		}
+	}
+	if modIdx < 0 {
+		t.Fatal("expected a modified row in diff data")
+	}
+
+	tab.diffCursor = modIdx
+	tab.diffAnchor = modIdx
+
+	// Old side.
+	tab.diffSide = diffSideOld
+	oldText := tab.diffSelectedText()
+	if oldText != "hello" {
+		t.Errorf("expected 'hello' for old side, got %q", oldText)
+	}
+
+	// New side.
+	tab.diffSide = diffSideNew
+	newText := tab.diffSelectedText()
+	if newText != "world" {
+		t.Errorf("expected 'world' for new side, got %q", newText)
+	}
+}

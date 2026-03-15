@@ -57,6 +57,7 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.treeCursor = 0
 			case hasTab && t.diffViewData != nil:
 				t.diffCursor = 0
+				t.snapDiffSide()
 				t.syncDiffAnchor()
 				m.notifySelectionChanged()
 			case hasTab && len(t.lines) > 0:
@@ -207,6 +208,7 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	case key.Matches(msg, m.keys.Up):
 		if t.diffViewData != nil && t.diffCursor > 0 {
 			t.diffCursor--
+			t.snapDiffSide()
 			t.syncDiffAnchor()
 			m.notifySelectionChanged()
 		}
@@ -214,6 +216,7 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	case key.Matches(msg, m.keys.Down):
 		if t.diffViewData != nil && t.diffCursor < len(t.diffViewData.rows)-1 {
 			t.diffCursor++
+			t.snapDiffSide()
 			t.syncDiffAnchor()
 			m.notifySelectionChanged()
 		}
@@ -221,6 +224,7 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	case key.Matches(msg, m.keys.GoBottom):
 		if t.diffViewData != nil && len(t.diffViewData.rows) > 0 {
 			t.diffCursor = len(t.diffViewData.rows) - 1
+			t.snapDiffSide()
 			t.syncDiffAnchor()
 			m.notifySelectionChanged()
 		}
@@ -277,16 +281,34 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 			return m, nil, true
 		}
 
+	// Left/Right: switch diff side on unchanged/modified rows.
+	case key.Matches(msg, m.keys.Left):
+		m.setDiffSide(t, diffSideOld)
+		return m, nil, true
+	case key.Matches(msg, m.keys.Right):
+		m.setDiffSide(t, diffSideNew)
+		return m, nil, true
+
 	// No-op: suppress file-tab actions that should not fire on diff tabs.
 	// Search keys (/, n, N, Enter, Shift+Enter) are intentionally NOT
 	// listed here so they fall through to handleKeyNormal.
-	case key.Matches(msg, m.keys.Left),
-		key.Matches(msg, m.keys.Right),
-		key.Matches(msg, m.keys.Comment):
+	case key.Matches(msg, m.keys.Comment):
 		return m, nil, true
 	}
 
 	return m, nil, false
+}
+
+// setDiffSide switches the diff side on rows that have both sides.
+func (m *Model) setDiffSide(t *tab, side diffSide) {
+	if t.diffViewData == nil || t.diffCursor >= len(t.diffViewData.rows) {
+		return
+	}
+	row := t.diffViewData.rows[t.diffCursor]
+	if row.rowType == diffRowUnchanged || row.rowType == diffRowModified {
+		t.diffSide = side
+		m.notifySelectionChanged()
+	}
 }
 
 // diffJumpBlankLine moves the diff cursor to the next/previous blank-line
@@ -307,7 +329,8 @@ func (m *Model) diffJumpBlankLine(t *tab, dir int) {
 	}
 
 	isBlank := func(i int) bool {
-		return isBlankLine(diffRowText(rows[i]))
+		side := diffRowAvailableSide(rows[i], t.diffSide)
+		return isBlankLine(diffRowTextForSide(rows[i], side))
 	}
 
 	line := cur
@@ -323,6 +346,7 @@ func (m *Model) diffJumpBlankLine(t *tab, dir int) {
 
 	if line != cur {
 		t.diffCursor = line
+		t.snapDiffSide()
 		t.syncDiffAnchor()
 		m.notifySelectionChanged()
 	}
@@ -390,6 +414,7 @@ func (m *Model) diffJumpChange(t *tab, dir int) {
 		}
 	}
 
+	t.snapDiffSide()
 	t.syncDiffAnchor()
 	m.notifySelectionChanged()
 }
@@ -427,6 +452,7 @@ func (m *Model) diffJumpToNextBlock(t *tab, from, dir int) {
 	}
 
 	t.diffCursor = line
+	t.snapDiffSide()
 	t.syncDiffAnchor()
 	m.notifySelectionChanged()
 }
