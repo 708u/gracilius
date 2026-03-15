@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/708u/gracilius/internal/diff"
 	"github.com/708u/gracilius/internal/fileutil"
+	"github.com/708u/gracilius/internal/tui/render"
 )
 
 // handleFileChanged processes file change notifications.
@@ -18,7 +19,7 @@ func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
 		t.kind == fileTab && t.filePath == msg.path {
 		t.lines = msg.lines
 		t.syncContent(msg.lines)
-		t.highlightedLines = highlightFile(
+		t.highlightedLines = render.HighlightFile(
 			t.filePath, strings.Join(msg.lines, "\n"), m.theme,
 		)
 		if t.cursorLine >= len(t.lines) {
@@ -39,7 +40,7 @@ func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
 			continue
 		}
 		t.diffOldSource = oldSource
-		t.diffOldHighlights = highlightFile(t.filePath, oldSource, m.theme)
+		t.diffOldHighlights = render.HighlightFile(t.filePath, oldSource, m.theme)
 		t.diffViewData = diff.Build(msg.lines, t.lines)
 		if t.vp.Width() > diffSeparatorWidth {
 			off := t.vp.YOffset()
@@ -140,7 +141,7 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 	newLines := fileutil.SplitLines([]byte(msg.Contents))
 	dt := newDiffTab(msg.FilePath, newLines, msg.Accept, msg.Reject)
 	dt.syncContent(newLines)
-	dt.highlightedLines = highlightFile(msg.FilePath, msg.Contents, m.theme)
+	dt.highlightedLines = render.HighlightFile(msg.FilePath, msg.Contents, m.theme)
 
 	var oldLines []string
 	if oldContent, err := os.ReadFile(msg.FilePath); err == nil {
@@ -149,10 +150,10 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 
 	if len(oldLines) > 0 {
 		oldSource := strings.Join(oldLines, "\n")
-		dt.diffOldHighlights = highlightFile(msg.FilePath, oldSource, m.theme)
+		dt.diffOldHighlights = render.HighlightFile(msg.FilePath, oldSource, m.theme)
 		dt.diffOldSource = oldSource
 	}
-	dt.diffNewHighlights = highlightFile(msg.FilePath, msg.Contents, m.theme)
+	dt.diffNewHighlights = render.HighlightFile(msg.FilePath, msg.Contents, m.theme)
 
 	dt.diffViewData = diff.Build(oldLines, newLines)
 	lo := m.computeLayout()

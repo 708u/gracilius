@@ -92,17 +92,17 @@ type openFileOverlay struct {
 	allItems []fileItem // all scanned files (unfiltered)
 	targets  []string   // cached paths for fuzzy matching
 	iconMode iconMode
-	theme    themeConfig
+	theme    render.Theme
 }
 
-func newOpenFileOverlay(mode iconMode, theme themeConfig) openFileOverlay {
+func newOpenFileOverlay(mode iconMode, theme render.Theme) openFileOverlay {
 	delegate := &openFileDelegate{
 		iconMode: mode,
 		matchStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.openFileMatchFg)).
+			Foreground(lipgloss.Color(theme.OpenFileMatchFg)).
 			Bold(true),
 		selBgStyle: lipgloss.NewStyle().
-			Background(lipgloss.Color(theme.openFileSelectionBg)),
+			Background(lipgloss.Color(theme.OpenFileSelectionBg)),
 	}
 
 	l := list.New(nil, delegate, 0, 0)
@@ -123,15 +123,15 @@ func newOpenFileOverlay(mode iconMode, theme themeConfig) openFileOverlay {
 }
 
 // updateTheme updates the overlay's theme and rebuilds the delegate styles.
-func (s *openFileOverlay) updateTheme(theme themeConfig) {
+func (s *openFileOverlay) updateTheme(theme render.Theme) {
 	s.theme = theme
 	d := &openFileDelegate{
 		iconMode: s.iconMode,
 		matchStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.openFileMatchFg)).
+			Foreground(lipgloss.Color(theme.OpenFileMatchFg)).
 			Bold(true),
 		selBgStyle: lipgloss.NewStyle().
-			Background(lipgloss.Color(theme.openFileSelectionBg)),
+			Background(lipgloss.Color(theme.OpenFileSelectionBg)),
 	}
 	s.list.SetDelegate(d)
 }
@@ -371,7 +371,7 @@ func (s *openFileOverlay) overlay(bg string, width, height int) string {
 
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(s.theme.tabActiveBorder)).
+		BorderForeground(lipgloss.Color(s.theme.TabActiveBorder)).
 		Padding(0, 1).
 		Width(g.innerW + overlayBorderW + overlayPaddingW).
 		Height(g.innerH).
@@ -385,7 +385,7 @@ func (s *openFileOverlay) overlay(bg string, width, height int) string {
 func dimBackground(bg string) string {
 	lines := strings.Split(bg, "\n")
 	for i, line := range lines {
-		lines[i] = ansiFaint + line + ansiReset
+		lines[i] = render.AnsiFaint + line + render.AnsiReset
 	}
 	return strings.Join(lines, "\n")
 }

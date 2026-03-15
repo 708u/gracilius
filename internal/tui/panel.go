@@ -45,9 +45,9 @@ func (r gitVisualRow) isFileRow() bool {
 var stylePanelHeader = lipgloss.NewStyle().Bold(true)
 
 // renderPanelHeader renders a 1-line header for the left pane panel.
-func renderPanelHeader(label string, width int, theme themeConfig) string {
+func renderPanelHeader(label string, width int, theme render.Theme) string {
 	return render.PadRight(stylePanelHeader.
-		Foreground(lipgloss.Color(theme.tabActiveFg)).
+		Foreground(lipgloss.Color(theme.TabActiveFg)).
 		Render(label), width)
 }
 

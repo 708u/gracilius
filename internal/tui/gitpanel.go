@@ -275,11 +275,11 @@ func (m *Model) openGitDiffEntry() {
 
 	if len(oldContent) > 0 {
 		oldSource := strings.Join(oldContent, "\n")
-		dt.diffOldHighlights = highlightFile(entry.absPath, oldSource, m.theme)
+		dt.diffOldHighlights = render.HighlightFile(entry.absPath, oldSource, m.theme)
 		dt.diffOldSource = oldSource
 	}
 	if len(newContent) > 0 {
-		dt.diffNewHighlights = highlightFile(entry.absPath, strings.Join(newContent, "\n"), m.theme)
+		dt.diffNewHighlights = render.HighlightFile(entry.absPath, strings.Join(newContent, "\n"), m.theme)
 	}
 
 	dt.diffViewData = diff.Build(oldContent, newContent)
