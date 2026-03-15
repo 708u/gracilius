@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -17,6 +18,8 @@ func toEntries(dir string, files []git.ChangedFile, cat fileCategory) []changedF
 	for i, f := range files {
 		entries[i] = changedFileEntry{
 			name:       f.Path,
+			baseName:   filepath.Base(f.Path),
+			dirName:    filepath.Dir(f.Path),
 			status:     f.Status,
 			absPath:    filepath.Join(dir, f.Path),
 			oldContent: f.OldContent,
@@ -28,57 +31,133 @@ func toEntries(dir string, files []git.ChangedFile, cat fileCategory) []changedF
 	return entries
 }
 
-// loadGitChanges returns a tea.Cmd that fetches git changed files.
-func (m *Model) loadGitChanges() tea.Cmd {
+// loadGitChangesForMode returns a tea.Cmd that fetches git changed files
+// for the given diff mode.
+func (m *Model) loadGitChangesForMode(mode gitDiffMode) tea.Cmd {
 	dir := m.rootDir
-	return func() tea.Msg {
-		reader, err := git.NewStatusReader(dir)
-		if err != nil {
-			return gitChangedFilesMsg{err: err}
+	switch mode {
+	case gitModeBranch:
+		baseRef := m.gitMergeBase
+		return func() tea.Msg {
+			files, err := git.BranchDiff(dir, baseRef)
+			if err != nil {
+				return gitChangedFilesMsg{mode: mode, err: err}
+			}
+			entries := toEntries(dir, files, categoryUnstaged)
+			return gitChangedFilesMsg{mode: mode, entries: entries}
 		}
-
-		var entries []changedFileEntry
-
-		staged, err := reader.StagedFiles()
-		if err != nil {
-			return gitChangedFilesMsg{err: err}
+	default: // gitModeWorking
+		return func() tea.Msg {
+			reader, err := git.NewStatusReader(dir)
+			if err != nil {
+				return gitChangedFilesMsg{mode: mode, err: err}
+			}
+			return loadWorkingChanges(reader, dir, mode)
 		}
-		entries = append(entries, toEntries(dir, staged, categoryStaged)...)
-
-		unstaged, err := reader.ChangedFiles()
-		if err != nil {
-			return gitChangedFilesMsg{err: err}
-		}
-		entries = append(entries, toEntries(dir, unstaged, categoryUnstaged)...)
-
-		untracked, err := reader.UntrackedFiles()
-		if err != nil {
-			return gitChangedFilesMsg{err: err}
-		}
-		entries = append(entries, toEntries(dir, untracked, categoryUntracked)...)
-
-		return gitChangedFilesMsg{entries: entries}
 	}
+}
+
+// loadWorkingChanges fetches staged, unstaged, and untracked files
+// in parallel using the given StatusReader.
+func loadWorkingChanges(reader *git.StatusReader, dir string, mode gitDiffMode) gitChangedFilesMsg {
+	type catResult struct {
+		files []git.ChangedFile
+		cat   fileCategory
+		err   error
+	}
+
+	results := make([]catResult, 3)
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		f, e := reader.StagedFiles()
+		results[0] = catResult{f, categoryStaged, e}
+	}()
+	go func() {
+		defer wg.Done()
+		f, e := reader.ChangedFiles()
+		results[1] = catResult{f, categoryUnstaged, e}
+	}()
+	go func() {
+		defer wg.Done()
+		f, e := reader.UntrackedFiles()
+		results[2] = catResult{f, categoryUntracked, e}
+	}()
+	wg.Wait()
+
+	var entries []changedFileEntry
+	for _, r := range results {
+		if r.err != nil {
+			return gitChangedFilesMsg{mode: mode, err: r.err}
+		}
+		entries = append(entries, toEntries(dir, r.files, r.cat)...)
+	}
+	return gitChangedFilesMsg{mode: mode, entries: entries}
+}
+
+// initGitBranchInfoAsync returns a tea.Cmd that resolves the default branch
+// and merge-base in the background.
+func (m *Model) initGitBranchInfoAsync() tea.Cmd {
+	dir := m.rootDir
+	cached := m.gitDefaultBranch
+	return func() tea.Msg {
+		branch := cached
+		if branch == "" {
+			var err error
+			branch, err = git.DefaultBranch(dir)
+			if err != nil {
+				return gitBranchInfoMsg{err: "No base branch found"}
+			}
+		}
+		base, err := git.MergeBase(dir, branch)
+		if err != nil {
+			return gitBranchInfoMsg{
+				defaultBranch: branch,
+				err:           fmt.Sprintf("No merge-base with %s", branch),
+			}
+		}
+		return gitBranchInfoMsg{mergeBase: base, defaultBranch: branch}
+	}
+}
+
+// handleGitBranchInfo processes the async branch info result.
+func (m *Model) handleGitBranchInfo(msg gitBranchInfoMsg) (tea.Model, tea.Cmd) {
+	if msg.defaultBranch != "" {
+		m.gitDefaultBranch = msg.defaultBranch
+	}
+	if msg.err != "" {
+		m.statusMsg = msg.err
+		return m, statusTickCmd()
+	}
+	m.gitMergeBase = msg.mergeBase
+	cmd := m.loadGitChangesForMode(gitModeBranch)
+	return m, cmd
 }
 
 // handleGitChangedFiles processes the result of loading git changed files.
 func (m *Model) handleGitChangedFiles(msg gitChangedFilesMsg) (tea.Model, tea.Cmd) {
+	gs := &m.gitModeState[msg.mode]
 	if msg.err != nil {
 		m.statusMsg = fmt.Sprintf("git diff: %v", msg.err)
-		m.gitLoaded = true
+		gs.loaded = true
+		m.gitAnyLoaded = true
 		return m, statusTickCmd()
 	}
-	m.gitChangedFiles = msg.entries
-	m.gitVisualRows, m.gitEntryToVisualIdx = buildGitVisualRows(msg.entries)
-	m.gitLoaded = true
-	if m.gitCursor >= len(m.gitChangedFiles) {
-		m.gitCursor = max(0, len(m.gitChangedFiles)-1)
+	gs.entries = msg.entries
+	gs.visualRows, gs.entryToVisualIdx = buildGitVisualRows(msg.entries)
+	gs.loaded = true
+	gs.stale = false
+	m.gitAnyLoaded = true
+	if gs.cursor >= len(gs.entries) {
+		gs.cursor = max(0, len(gs.entries)-1)
 	}
 	return m, nil
 }
 
 // buildGitVisualRows builds a flat list of visual rows
-// with category headers inserted between sections.
+// with category headers and directory grouping.
+// Hierarchy: Category > Directory > File.
 // Also returns a reverse map from entryIdx to visual row index.
 func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int) {
 	type section struct {
@@ -93,28 +172,58 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 	}
 
 	// Single pass: collect entry indices per category.
-	for i, e := range entries {
+	for i := range entries {
 		for j := range sections {
-			if sections[j].cat == e.category {
+			if sections[j].cat == entries[i].category {
 				sections[j].indices = append(sections[j].indices, i)
 				break
 			}
 		}
 	}
 
+	type dirGroup struct {
+		dir     string
+		indices []int
+	}
+
 	var rows []gitVisualRow
 	reverseMap := make(map[int]int)
+	var dirs []dirGroup
+	dirIdx := map[string]int{} // dir -> index in dirs slice
+
 	for _, sec := range sections {
 		if len(sec.indices) == 0 {
 			continue
 		}
+
+		// Category header.
 		rows = append(rows, gitVisualRow{
 			isHeader: true,
 			label:    fmt.Sprintf("  %s (%d)", sec.label, len(sec.indices)),
 		})
+
+		// Group entries by directory, preserving order of first appearance.
+		dirs = dirs[:0]
+		clear(dirIdx)
 		for _, idx := range sec.indices {
-			reverseMap[idx] = len(rows)
-			rows = append(rows, gitVisualRow{entryIdx: idx})
+			d := entries[idx].dirName
+			if i, ok := dirIdx[d]; ok {
+				dirs[i].indices = append(dirs[i].indices, idx)
+			} else {
+				dirIdx[d] = len(dirs)
+				dirs = append(dirs, dirGroup{dir: d, indices: []int{idx}})
+			}
+		}
+
+		for _, dg := range dirs {
+			rows = append(rows, gitVisualRow{
+				isDirHeader: true,
+				label:       "    " + dg.dir + "/",
+			})
+			for _, idx := range dg.indices {
+				reverseMap[idx] = len(rows)
+				rows = append(rows, gitVisualRow{entryIdx: idx})
+			}
 		}
 	}
 	return rows, reverseMap
@@ -122,10 +231,11 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 
 // openGitDiffEntry opens a diff tab for the selected git changed file.
 func (m *Model) openGitDiffEntry() {
-	if m.gitCursor < 0 || m.gitCursor >= len(m.gitChangedFiles) {
+	gs := m.gitState()
+	if gs.cursor < 0 || gs.cursor >= len(gs.entries) {
 		return
 	}
-	entry := m.gitChangedFiles[m.gitCursor]
+	entry := gs.entries[gs.cursor]
 
 	if entry.binary {
 		m.statusMsg = fmt.Sprintf("Binary file: %s", entry.name)
@@ -149,11 +259,14 @@ func (m *Model) openGitDiffEntry() {
 
 	lo := m.computeLayout()
 	dt := &tab{
-		kind:         diffTab,
-		filePath:     entry.absPath,
-		lines:        newContent,
-		commentInput: newTextarea(),
-		vp:           newViewport(),
+		kind:              diffTab,
+		filePath:          entry.absPath,
+		lines:             newContent,
+		commentInput:      newTextarea(),
+		vp:                newViewport(),
+		gitDiffModeTag:    m.gitDiffMode,
+		hasGitDiffModeTag: true,
+		gitDiffLabel:      m.gitDiffMode.tabPrefix(m.gitDefaultBranch),
 	}
 	dt.vp.SetWidth(lo.editorWidth)
 	dt.vp.SetHeight(lo.contentHeight)
@@ -186,11 +299,15 @@ var gitStatusStyles = map[git.FileStatus]lipgloss.Style{
 // styleCategoryHeader is the style for category header lines.
 var styleCategoryHeader = lipgloss.NewStyle().Bold(true)
 
+// styleDirHeader is the style for directory header lines.
+var styleDirHeader = lipgloss.NewStyle().Faint(true)
+
 // renderGitPanel renders the git changed files list.
 func (m *Model) renderGitPanel(width, height int) []string {
+	gs := m.gitState()
 	lines := make([]string, 0, height)
 
-	if !m.gitLoaded {
+	if !gs.loaded {
 		lines = append(lines, padRight("  Loading...", width))
 		for len(lines) < height {
 			lines = append(lines, padRight("", width))
@@ -198,7 +315,7 @@ func (m *Model) renderGitPanel(width, height int) []string {
 		return lines
 	}
 
-	if len(m.gitChangedFiles) == 0 {
+	if len(gs.entries) == 0 {
 		lines = append(lines, padRight("  No changed files", width))
 		for len(lines) < height {
 			lines = append(lines, padRight("", width))
@@ -206,8 +323,8 @@ func (m *Model) renderGitPanel(width, height int) []string {
 		return lines
 	}
 
-	for i := m.gitScrollOffset; i < len(m.gitVisualRows) && len(lines) < height; i++ {
-		row := m.gitVisualRows[i]
+	for i := gs.scrollOffset; i < len(gs.visualRows) && len(lines) < height; i++ {
+		row := gs.visualRows[i]
 
 		if row.isHeader {
 			headerLine := styleCategoryHeader.Render(row.label)
@@ -216,12 +333,19 @@ func (m *Model) renderGitPanel(width, height int) []string {
 			continue
 		}
 
-		e := m.gitChangedFiles[row.entryIdx]
-		isCursor := row.entryIdx == m.gitCursor && m.focusPane == paneTree
+		if row.isDirHeader {
+			dirLine := styleDirHeader.Render(row.label)
+			dirLine = padRight(dirLine, width)
+			lines = append(lines, dirLine)
+			continue
+		}
+
+		e := gs.entries[row.entryIdx]
+		isCursor := row.entryIdx == gs.cursor && m.focusPane == paneTree
 
 		style := gitStatusStyles[e.status]
 		statusIcon := style.Render(e.status.String())
-		line := "    " + statusIcon + " " + e.name
+		line := "      " + statusIcon + " " + e.baseName
 		displayLine := ansi.Truncate(line, width, "...")
 		displayLine = padRight(displayLine, width)
 
@@ -241,42 +365,45 @@ func (m *Model) renderGitPanel(width, height int) []string {
 
 // gitCursorUp moves the git cursor up one entry.
 func (m *Model) gitCursorUp() {
-	if m.gitCursor <= 0 {
+	gs := m.gitState()
+	if gs.cursor <= 0 {
 		return
 	}
-	m.gitCursor--
+	gs.cursor--
 }
 
 // gitCursorDown moves the git cursor down one entry.
 func (m *Model) gitCursorDown() {
-	if m.gitCursor >= len(m.gitChangedFiles)-1 {
+	gs := m.gitState()
+	if gs.cursor >= len(gs.entries)-1 {
 		return
 	}
-	m.gitCursor++
+	gs.cursor++
 }
 
 // gitCursorVisualIdx returns the visual row index for the current gitCursor.
 func (m *Model) gitCursorVisualIdx() int {
-	if idx, ok := m.gitEntryToVisualIdx[m.gitCursor]; ok {
+	gs := m.gitState()
+	if idx, ok := gs.entryToVisualIdx[gs.cursor]; ok {
 		return idx
 	}
 	return 0
 }
 
-// firstGitEntryIdx returns the entryIdx of the first non-header row.
+// firstGitEntryIdx returns the entryIdx of the first file row.
 func firstGitEntryIdx(rows []gitVisualRow) int {
 	for _, row := range rows {
-		if !row.isHeader {
+		if row.isFileRow() {
 			return row.entryIdx
 		}
 	}
 	return 0
 }
 
-// lastGitEntryIdx returns the entryIdx of the last non-header row.
+// lastGitEntryIdx returns the entryIdx of the last file row.
 func lastGitEntryIdx(rows []gitVisualRow) int {
 	for i := len(rows) - 1; i >= 0; i-- {
-		if !rows[i].isHeader {
+		if rows[i].isFileRow() {
 			return rows[i].entryIdx
 		}
 	}

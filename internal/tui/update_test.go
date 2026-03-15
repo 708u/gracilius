@@ -174,10 +174,12 @@ func TestMouseClick_TreeEntry(t *testing.T) {
 		{path: "file1.go", name: "file1.go", isDir: false, depth: 0},
 	}
 
-	// Click on second tree entry (y = contentStartY + 1).
+	// Click on second tree entry: panelBodyY + 1
+	// panelBodyY = contentStartY + 1 (panel header takes 1 row)
+	panelBodyY := contentStartY + 1
 	m.Update(tea.MouseClickMsg{
 		X:      5,
-		Y:      contentStartY + 1,
+		Y:      panelBodyY + 1,
 		Button: tea.MouseLeft,
 	})
 

@@ -55,25 +55,26 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 
 	borderX := lo.treeWidth
 	isBorderArea := m.sidebarVisible && msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= contentStartY
-
 	if isBorderArea && msg.Button == tea.MouseLeft {
 		m.resizingPane = true
 		return m, nil
 	}
 
-	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= contentStartY && msg.Button == tea.MouseLeft {
+	panelBodyY := contentStartY + 1 // +1 for panel header line
+	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= panelBodyY && msg.Button == tea.MouseLeft {
 		switch m.activePanel {
 		case panelGitDiff:
-			rowIdx := msg.Y - contentStartY + m.gitScrollOffset
-			if rowIdx >= 0 && rowIdx < len(m.gitVisualRows) {
-				row := m.gitVisualRows[rowIdx]
-				if !row.isHeader {
-					m.gitCursor = row.entryIdx
+			gs := m.gitState()
+			rowIdx := msg.Y - panelBodyY + gs.scrollOffset
+			if rowIdx >= 0 && rowIdx < len(gs.visualRows) {
+				row := gs.visualRows[rowIdx]
+				if row.isFileRow() {
+					gs.cursor = row.entryIdx
 					m.openGitDiffEntry()
 				}
 			}
 		default:
-			treeIdx := msg.Y - contentStartY + m.treeScrollOffset
+			treeIdx := msg.Y - panelBodyY + m.treeScrollOffset
 			if treeIdx >= 0 && treeIdx < len(m.fileTree) {
 				m.treeCursor = treeIdx
 				m.toggleTreeEntry(treeIdx)
@@ -235,9 +236,10 @@ func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 		bodyHeight := lo.contentHeight - 1 // -1 for panel header
 		switch m.activePanel {
 		case panelGitDiff:
-			m.gitScrollOffset = max(0, m.gitScrollOffset+delta)
-			maxOff := max(len(m.gitVisualRows)-bodyHeight, 0)
-			m.gitScrollOffset = min(m.gitScrollOffset, maxOff)
+			gs := m.gitState()
+			gs.scrollOffset = max(0, gs.scrollOffset+delta)
+			maxOff := max(len(gs.visualRows)-bodyHeight, 0)
+			gs.scrollOffset = min(gs.scrollOffset, maxOff)
 		default:
 			m.treeScrollOffset = max(0, m.treeScrollOffset+delta)
 			maxOff := max(len(m.fileTree)-bodyHeight, 0)

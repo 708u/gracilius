@@ -19,9 +19,12 @@ func tabLabel(t *tab) string {
 		name = filepath.Base(t.filePath)
 	}
 	if t.kind == diffTab {
-		if t.diff != nil {
+		switch {
+		case t.diff != nil:
 			name = "[review] " + name
-		} else {
+		case t.hasGitDiffModeTag:
+			name = t.gitDiffLabel + " " + name
+		default:
 			name = "[diff] " + name
 		}
 	}
@@ -72,6 +75,7 @@ func newView(content string) tea.View {
 	var v tea.View
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
+	v.ReportFocus = true
 	v.SetContent(content)
 	return v
 }
@@ -376,8 +380,9 @@ func (m *Model) renderFooter() string {
 				sb.WriteString(emptyStateMsg)
 			}
 		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
-			if m.gitCursor < len(m.gitChangedFiles) {
-				sb.WriteString(m.gitChangedFiles[m.gitCursor].name)
+			gs := m.gitState()
+			if gs.cursor < len(gs.entries) {
+				sb.WriteString(gs.entries[gs.cursor].name)
 			}
 		case m.treeCursor < len(m.fileTree):
 			entry := m.fileTree[m.treeCursor]
@@ -390,7 +395,13 @@ func (m *Model) renderFooter() string {
 
 // renderLeftPane generates the left pane lines with a header and panel body.
 func (m *Model) renderLeftPane(width, height int) []string {
-	header := renderPanelHeader(m.activePanel.label(), width, m.theme)
+	var header string
+	if m.activePanel == panelGitDiff {
+		label := m.activePanel.label() + " \u276e" + m.gitDiffMode.label(m.gitDefaultBranch) + "\u276f"
+		header = renderPanelHeader(label, width, m.theme)
+	} else {
+		header = renderPanelHeader(m.activePanel.label(), width, m.theme)
+	}
 	bodyHeight := height - 1
 
 	var body []string

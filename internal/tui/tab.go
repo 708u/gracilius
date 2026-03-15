@@ -41,8 +41,11 @@ type tab struct {
 	inputStart   int
 	inputEnd     int
 
-	diff         *diffState // non-nil for diff review tabs
-	diffViewData *diffData  // side-by-side diff data (nil for file tabs)
+	diff              *diffState  // non-nil for diff review tabs
+	diffViewData      *diffData   // side-by-side diff data (nil for file tabs)
+	gitDiffModeTag    gitDiffMode // diff mode for git diff tabs
+	hasGitDiffModeTag bool        // true if opened from git panel
+	gitDiffLabel      string      // tab label prefix (e.g. "[working]", "[vs main]")
 
 	// diff syntax highlights (old/new sides)
 	diffOldHighlights []highlightedLine

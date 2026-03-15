@@ -24,7 +24,7 @@ type statusClearMsg struct{}
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.watchFile(), m.watchDir(), m.watchComments(), m.watchGitIndex(), tea.RequestBackgroundColor)
+	return tea.Batch(m.watchFile(), m.watchDir(), m.watchComments(), m.watchGitDir(), tea.RequestBackgroundColor)
 }
 
 type direction int
@@ -94,7 +94,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.openFile.active {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.MouseClickMsg,
-			tea.WindowSizeMsg,
+			tea.WindowSizeMsg, tea.FocusMsg,
 			fileChangedMsg, treeChangedMsg, commentsChangedMsg,
 			OpenDiffMsg, CloseDiffMsg,
 			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
@@ -109,7 +109,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.search.active {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.MouseClickMsg,
-			tea.WindowSizeMsg,
+			tea.WindowSizeMsg, tea.FocusMsg,
 			fileChangedMsg, treeChangedMsg, commentsChangedMsg,
 			OpenDiffMsg, CloseDiffMsg,
 			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
@@ -122,6 +122,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.FocusMsg:
+		m.server.ResendSelection()
+		return m, nil
 	case tea.KeyboardEnhancementsMsg:
 		m.enhancedKeyboard = msg.SupportsKeyDisambiguation()
 		return m, nil
@@ -162,8 +165,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleCommentsChanged()
 	case gitChangedFilesMsg:
 		return m.handleGitChangedFiles(msg)
-	case gitIndexChangedMsg:
-		return m.handleGitIndexChanged()
+	case gitBranchInfoMsg:
+		return m.handleGitBranchInfo(msg)
+	case gitDirChangedMsg:
+		return m.handleGitDirChanged(msg)
 	case gitSyncMsg:
 		return m.handleGitSync(msg)
 	case OpenDiffMsg:

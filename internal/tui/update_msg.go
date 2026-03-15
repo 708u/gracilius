@@ -80,17 +80,19 @@ func (m *Model) handleTreeChanged() (tea.Model, tea.Cmd) {
 		m.treeCursor = max(0, len(m.fileTree)-1)
 	}
 	cmds := []tea.Cmd{m.watchDir()}
-	if m.gitLoaded {
+	if m.gitAnyLoaded {
 		cmds = append(cmds, m.scheduleGitSync())
 	}
 	return m, tea.Batch(cmds...)
 }
 
-// handleGitIndexChanged reloads git changes when .git/index changes
-// (e.g. after commit, add, reset).
-func (m *Model) handleGitIndexChanged() (tea.Model, tea.Cmd) {
-	cmds := []tea.Cmd{m.watchGitIndex()}
-	if m.gitLoaded {
+// handleGitDirChanged reloads git changes when .git/index or .git/HEAD changes.
+func (m *Model) handleGitDirChanged(msg gitDirChangedMsg) (tea.Model, tea.Cmd) {
+	cmds := []tea.Cmd{m.watchGitDir()}
+	if msg.headChanged {
+		m.gitMergeBase = ""
+	}
+	if m.gitAnyLoaded {
 		cmds = append(cmds, m.scheduleGitSync())
 	}
 	return m, tea.Batch(cmds...)
@@ -107,11 +109,27 @@ func (m *Model) scheduleGitSync() tea.Cmd {
 }
 
 // handleGitSync executes the git reload if the generation still matches.
+// Reloads the active mode; marks other loaded modes as stale.
 func (m *Model) handleGitSync(msg gitSyncMsg) (tea.Model, tea.Cmd) {
 	if msg.gen != m.gitSyncGen {
 		return m, nil
 	}
-	cmd := m.loadGitChanges()
+	// Mark all loaded modes as stale.
+	for i := range m.gitModeState {
+		if m.gitModeState[i].loaded {
+			m.gitModeState[i].stale = true
+		}
+	}
+	// Reload only the active mode.
+	active := m.gitDiffMode
+	gs := m.gitState()
+	gs.stale = false
+	var cmd tea.Cmd
+	if active == gitModeBranch && m.gitMergeBase == "" {
+		cmd = m.initGitBranchInfoAsync()
+	} else {
+		cmd = m.loadGitChangesForMode(active)
+	}
 	return m, cmd
 }
 
@@ -206,8 +224,9 @@ func (m *Model) adjustScroll() {
 		h := lo.contentHeight - 1 // -1 for panel header
 		switch m.activePanel {
 		case panelGitDiff:
+			gs := m.gitState()
 			visualIdx := m.gitCursorVisualIdx()
-			m.gitScrollOffset = clampScroll(m.gitScrollOffset, visualIdx, len(m.gitVisualRows), h)
+			gs.scrollOffset = clampScroll(gs.scrollOffset, visualIdx, len(gs.visualRows), h)
 		default:
 			m.treeScrollOffset = clampScroll(m.treeScrollOffset, m.treeCursor, len(m.fileTree), h)
 		}

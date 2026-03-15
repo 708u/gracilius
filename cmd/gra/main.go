@@ -169,23 +169,20 @@ func (c *ViewCmd) Run() error {
 		return fmt.Errorf("failed to watch comment directory: %w", err)
 	}
 
-	// Git index watcher
-	gitIndexWatcher, err := fsnotify.NewWatcher()
+	// Git directory watcher (.git/index, .git/HEAD)
+	gitDirWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return fmt.Errorf("failed to create git index watcher: %w", err)
+		return fmt.Errorf("failed to create git dir watcher: %w", err)
 	}
-	defer func() { _ = gitIndexWatcher.Close() }()
+	defer func() { _ = gitDirWatcher.Close() }()
 
 	if gitDir, gdErr := resolveGitDir(absRootDir); gdErr == nil {
-		indexPath := filepath.Join(gitDir, "index")
-		if _, statErr := os.Stat(indexPath); statErr == nil {
-			if err := gitIndexWatcher.Add(gitDir); err != nil {
-				log.Printf("Failed to watch git directory: %v", err)
-			}
+		if err := gitDirWatcher.Add(gitDir); err != nil {
+			log.Printf("Failed to watch git directory: %v", err)
 		}
 	}
 
-	m, err := tui.NewModel(srv, store, c.Path, watcher, dirWatcher, commentWatcher, gitIndexWatcher, excludeFunc)
+	m, err := tui.NewModel(srv, store, c.Path, watcher, dirWatcher, commentWatcher, gitDirWatcher, excludeFunc)
 	if err != nil {
 		return fmt.Errorf("failed to create TUI model: %w", err)
 	}
