@@ -61,19 +61,20 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= contentStartY && msg.Button == tea.MouseLeft {
+	panelBodyY := contentStartY + 1 // +1 for panel header row
+	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= panelBodyY && msg.Button == tea.MouseLeft {
 		switch m.activePanel {
 		case panelGitDiff:
-			rowIdx := msg.Y - contentStartY + m.gitScrollOffset
+			rowIdx := msg.Y - panelBodyY + m.gitScrollOffset
 			if rowIdx >= 0 && rowIdx < len(m.gitVisualRows) {
 				row := m.gitVisualRows[rowIdx]
-				if !row.isHeader {
+				if row.isFileRow() {
 					m.gitCursor = row.entryIdx
 					m.openGitDiffEntry()
 				}
 			}
 		default:
-			treeIdx := msg.Y - contentStartY + m.treeScrollOffset
+			treeIdx := msg.Y - panelBodyY + m.treeScrollOffset
 			if treeIdx >= 0 && treeIdx < len(m.fileTree) {
 				m.treeCursor = treeIdx
 				m.toggleTreeEntry(treeIdx)

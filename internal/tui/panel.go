@@ -23,13 +23,21 @@ type changedFileEntry struct {
 	newContent []string
 	binary     bool
 	category   fileCategory
+	baseName   string // filepath.Base(name)
+	dirName    string // filepath.Dir(name)
 }
 
 // gitVisualRow represents a visual row in the git panel.
 type gitVisualRow struct {
-	isHeader bool
-	label    string // header text (header rows only)
-	entryIdx int    // index into gitChangedFiles (file rows only)
+	isHeader    bool
+	isDirHeader bool
+	label       string // header text (header/dir header rows only)
+	entryIdx    int    // index into gitChangedFiles (file rows only)
+}
+
+// isFileRow returns true if this row represents a file entry.
+func (r gitVisualRow) isFileRow() bool {
+	return !r.isHeader && !r.isDirHeader
 }
 
 // stylePanelHeader is the style for panel header labels.
@@ -49,11 +57,11 @@ func renderChangedFiles(entries []changedFileEntry, width, height int) []string 
 	if len(entries) == 0 {
 		lines = append(lines, padRight("  No changed files", width))
 	} else {
-		for _, e := range entries {
+		for i := range entries {
 			if len(lines) >= height {
 				break
 			}
-			lines = append(lines, padRight("  "+e.status.String()+" "+e.name, width))
+			lines = append(lines, padRight("  "+entries[i].status.String()+" "+entries[i].name, width))
 		}
 	}
 
