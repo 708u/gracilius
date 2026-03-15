@@ -94,10 +94,7 @@ func (m *Model) View() tea.View {
 	t, hasTab := m.activeTabState()
 
 	// header
-	header := fmt.Sprintf("gracilius - Port %d", m.server.Port())
-	if hasTab && t.filePath != "" {
-		header += fmt.Sprintf(" | %s", t.filePath)
-	}
+	header := m.renderHeader(t)
 	// content
 	lo := m.computeLayout()
 
@@ -282,6 +279,45 @@ func (m *Model) commentCursorScreenPos(lo layout) cursorPosition {
 		x: lo.editorStartX + xOffset + c.X,
 		y: contentStartY + blockStart + blockBorderTop + c.Y,
 	}
+}
+
+// renderHeader generates the header line.
+// For diff tabs it shows diff stats (+N -N ~N); otherwise an empty line.
+func (m *Model) renderHeader(t *tab) string {
+	if t == nil || t.diffViewData == nil {
+		return ""
+	}
+
+	s := t.diffViewData.Summary
+	if s.Additions == 0 && s.Deletions == 0 && s.Modified == 0 {
+		return ""
+	}
+
+	isDark := m.theme.Name == "github-dark"
+	var addHex, delHex, modHex string
+	if isDark {
+		addHex, delHex, modHex = "#3fb950", "#f85149", "#d29922"
+	} else {
+		addHex, delHex, modHex = "#1a7f37", "#cf222e", "#9a6700"
+	}
+
+	coloredStat := func(hex, prefix string, count int) string {
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(hex)).
+			Render(fmt.Sprintf("%s%d", prefix, count))
+	}
+
+	parts := make([]string, 0, 3)
+	if s.Additions > 0 {
+		parts = append(parts, coloredStat(addHex, "+", s.Additions))
+	}
+	if s.Deletions > 0 {
+		parts = append(parts, coloredStat(delHex, "-", s.Deletions))
+	}
+	if s.Modified > 0 {
+		parts = append(parts, coloredStat(modHex, "~", s.Modified))
+	}
+
+	return strings.Join(parts, " ")
 }
 
 // renderTabBar generates the tab bar (2 lines: labels + underline).
