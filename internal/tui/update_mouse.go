@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // tabIndexAtX returns the tab index at screen X coordinate, or -1 if none.
@@ -15,7 +16,7 @@ func (m *Model) tabIndexAtX(x int) int {
 			pos += tabSeparatorWidth
 		}
 		label := tabLabel(t)
-		w := len([]rune(label))
+		w := ansi.StringWidth(label)
 		if x >= pos && x < pos+w {
 			return i
 		}

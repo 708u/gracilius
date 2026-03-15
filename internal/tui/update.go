@@ -209,15 +209,22 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 		targetLine = 0
 	}
 
-	targetChar := max(editorX, 0)
+	col := max(editorX, 0)
+	wrapOffset := 0
 	if editorY >= 0 && editorY < len(m.lastMapping) {
-		targetChar += m.lastMapping[editorY].wrapOffset
+		wrapOffset = m.lastMapping[editorY].wrapOffset
 	}
-	if targetLine < len(t.lines) {
-		runeLen := len([]rune(t.lines[targetLine]))
-		if targetChar > runeLen {
-			targetChar = runeLen
+	// Convert display column to rune offset within the visible segment.
+	// Walk runes directly to avoid intermediate string allocation.
+	runes := []rune(t.lines[targetLine])
+	w := 0
+	targetChar := len(runes)
+	for i := wrapOffset; i < len(runes); i++ {
+		if w >= col {
+			targetChar = i
+			break
 		}
+		w += runeWidth(runes[i])
 	}
 	return targetLine, targetChar
 }
