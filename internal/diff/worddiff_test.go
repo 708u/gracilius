@@ -180,6 +180,135 @@ func TestTokenize_TabsAndSpaces(t *testing.T) {
 	assertTokens(t, got, want)
 }
 
+func TestComputeWordDiff_EmptyStrings(t *testing.T) {
+	oldSpans, newSpans := ComputeWordDiff("", "")
+
+	if len(oldSpans) != 0 {
+		t.Errorf("expected 0 oldSpans, got %d", len(oldSpans))
+	}
+	if len(newSpans) != 0 {
+		t.Errorf("expected 0 newSpans, got %d", len(newSpans))
+	}
+}
+
+func TestComputeWordDiff_IdenticalStrings(t *testing.T) {
+	tests := []string{
+		"hello world",
+		"single",
+		"  spaced  out  ",
+		"\ttabbed",
+	}
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			oldSpans, newSpans := ComputeWordDiff(input, input)
+
+			for i, s := range oldSpans {
+				if s.Op != OpEqual {
+					t.Errorf("oldSpans[%d]: expected OpEqual, got %d", i, s.Op)
+				}
+			}
+			for i, s := range newSpans {
+				if s.Op != OpEqual {
+					t.Errorf("newSpans[%d]: expected OpEqual, got %d", i, s.Op)
+				}
+			}
+
+			oldJoined := joinSpans(oldSpans)
+			newJoined := joinSpans(newSpans)
+			if oldJoined != input {
+				t.Errorf("old round-trip: expected %q, got %q", input, oldJoined)
+			}
+			if newJoined != input {
+				t.Errorf("new round-trip: expected %q, got %q", input, newJoined)
+			}
+		})
+	}
+}
+
+func TestComputeWordDiff_WhitespaceOnly(t *testing.T) {
+	oldSpans, newSpans := ComputeWordDiff("  ", "\t")
+
+	oldJoined := joinSpans(oldSpans)
+	newJoined := joinSpans(newSpans)
+	if oldJoined != "  " {
+		t.Errorf("old round-trip: expected %q, got %q", "  ", oldJoined)
+	}
+	if newJoined != "\t" {
+		t.Errorf("new round-trip: expected %q, got %q", "\t", newJoined)
+	}
+
+	// There should be a change since the whitespace differs.
+	hasDelete := false
+	for _, s := range oldSpans {
+		if s.Op == OpDelete {
+			hasDelete = true
+		}
+	}
+	hasInsert := false
+	for _, s := range newSpans {
+		if s.Op == OpInsert {
+			hasInsert = true
+		}
+	}
+	if !hasDelete {
+		t.Error("expected old side to have a delete span")
+	}
+	if !hasInsert {
+		t.Error("expected new side to have an insert span")
+	}
+}
+
+func TestComputeWordDiff_CJK(t *testing.T) {
+	oldSpans, newSpans := ComputeWordDiff("hello world", "hello world")
+
+	oldJoined := joinSpans(oldSpans)
+	newJoined := joinSpans(newSpans)
+	if oldJoined != "hello world" {
+		t.Errorf("old round-trip: expected %q, got %q", "hello world", oldJoined)
+	}
+	if newJoined != "hello world" {
+		t.Errorf("new round-trip: expected %q, got %q", "hello world", newJoined)
+	}
+
+	// Diff between CJK content.
+	oldSpans2, newSpans2 := ComputeWordDiff("func", "func")
+	oldJoined2 := joinSpansFiltered(oldSpans2, OpInsert)
+	newJoined2 := joinSpansFiltered(newSpans2, OpDelete)
+	if oldJoined2 != "func" {
+		t.Errorf("CJK diff old round-trip: expected %q, got %q",
+			"func", oldJoined2)
+	}
+	if newJoined2 != "func" {
+		t.Errorf("CJK diff new round-trip: expected %q, got %q",
+			"func", newJoined2)
+	}
+}
+
+func TestTokenize_SingleWord(t *testing.T) {
+	got := Tokenize("hello")
+	want := []string{"hello"}
+	assertTokens(t, got, want)
+}
+
+func TestTokenize_OnlySpaces(t *testing.T) {
+	got := Tokenize("   ")
+	want := []string{"   "}
+	assertTokens(t, got, want)
+}
+
+func TestTokenize_MixedWhitespace(t *testing.T) {
+	// Tabs and spaces are both whitespace, so adjacent
+	// tabs and spaces form a single whitespace token.
+	got := Tokenize("\t foo")
+	want := []string{"\t ", "foo"}
+	assertTokens(t, got, want)
+
+	// Non-whitespace separates whitespace tokens.
+	got2 := Tokenize("\ta b")
+	want2 := []string{"\t", "a", " ", "b"}
+	assertTokens(t, got2, want2)
+}
+
 // --- helpers ---
 
 func containsSpan(spans []WordSpan, text string, op Op) bool {
