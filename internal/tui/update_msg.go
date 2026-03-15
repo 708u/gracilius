@@ -82,7 +82,7 @@ func (m *Model) handleDiffCommentsChanged() (tea.Model, tea.Cmd) {
 		if t.filePath == "" || t.kind != diffTab {
 			continue
 		}
-		stored, err := m.diffCommentRepo.List(t.diffContext, t.filePath, false)
+		stored, err := m.diffCommentRepo.List(t.diffScope, t.filePath, false)
 		if err != nil {
 			log.Printf("Failed to reload diff comments for %s: %v", t.filePath, err)
 			continue
@@ -166,7 +166,7 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 	if err != nil {
 		log.Printf("Failed to generate session UUID: %v", err)
 	}
-	dt.diffContext = comment.DiffContext{Kind: "review", SessionID: sessionID.String()}
+	dt.diffScope = comment.DiffScope{Kind: "review", SessionID: sessionID.String()}
 	dt.syncContent(newLines)
 	dt.highlightedLines = render.HighlightFile(msg.FilePath, msg.Contents, m.theme)
 

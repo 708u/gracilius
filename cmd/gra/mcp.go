@@ -15,18 +15,18 @@ type listCommentsInput struct {
 	IncludeResolved bool   `json:"includeResolved,omitempty" jsonschema:"include resolved comments"`
 }
 
-type diffContextInput struct {
+type diffScopeInput struct {
 	Kind      string `json:"kind" jsonschema:"diff context kind: working, branch, or review"`
 	Base      string `json:"base,omitempty" jsonschema:"base branch name (for branch kind)"`
 	SessionID string `json:"sessionId,omitempty" jsonschema:"session UUID (for review kind)"`
 }
 
-func (d diffContextInput) toContext() comment.DiffContext {
-	return comment.DiffContext{Kind: d.Kind, Base: d.Base, SessionID: d.SessionID}
+func (d diffScopeInput) toScope() comment.DiffScope {
+	return comment.DiffScope{Kind: d.Kind, Base: d.Base, SessionID: d.SessionID}
 }
 
 type listDiffCommentsInput struct {
-	diffContextInput
+	diffScopeInput
 	FilePath        string `json:"filePath,omitempty" jsonschema:"filter by file path"`
 	IncludeResolved bool   `json:"includeResolved,omitempty" jsonschema:"include resolved comments"`
 }
@@ -36,7 +36,7 @@ type commentIDInput struct {
 }
 
 type diffCommentIDInput struct {
-	diffContextInput
+	diffScopeInput
 	ID string `json:"id" jsonschema:"comment ID"`
 }
 
@@ -85,7 +85,7 @@ func (c *McpCmd) Run() error {
 		Name:        "list_diff_comments",
 		Description: "List diff review comments from gracilius TUI for a specific diff context",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input listDiffCommentsInput) (*mcp.CallToolResult, any, error) {
-		comments, err := diffStore.List(input.toContext(), input.FilePath, input.IncludeResolved)
+		comments, err := diffStore.List(input.toScope(), input.FilePath, input.IncludeResolved)
 		if err != nil {
 			return nil, nil, fmt.Errorf("list diff comments: %w", err)
 		}
@@ -132,7 +132,7 @@ func (c *McpCmd) Run() error {
 		Name:        "delete_diff_comment",
 		Description: "Delete a diff review comment",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input diffCommentIDInput) (*mcp.CallToolResult, any, error) {
-		if err := diffStore.Delete(input.toContext(), input.ID); err != nil {
+		if err := diffStore.Delete(input.toScope(), input.ID); err != nil {
 			return nil, nil, fmt.Errorf("delete diff comment: %w", err)
 		}
 		return &mcp.CallToolResult{

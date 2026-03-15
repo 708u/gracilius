@@ -245,8 +245,8 @@ func (m *Model) closeTab(idx int) {
 	if t.kind == diffTab && t.diff != nil {
 		t.rejectAndClear()
 		// Clean up review context file on accept/reject.
-		if t.diffContext.Kind == "review" {
-			_ = m.diffCommentRepo.DeleteContext(t.diffContext)
+		if t.diffScope.Kind == "review" {
+			_ = m.diffCommentRepo.DeleteScope(t.diffScope)
 		}
 	}
 	filePath := t.filePath

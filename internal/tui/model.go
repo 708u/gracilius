@@ -67,12 +67,12 @@ type CommentRepository interface {
 // DiffCommentRepository is the interface for diff comment persistence.
 // comment.DiffRepository satisfies this implicitly.
 type DiffCommentRepository interface {
-	List(ctx comment.DiffContext, filePath string, includeResolved bool) ([]comment.Entry, error)
-	Add(ctx comment.DiffContext, c comment.Entry) error
-	Replace(ctx comment.DiffContext, oldID string, c comment.Entry) error
-	Delete(ctx comment.DiffContext, id string) error
-	DeleteByFile(ctx comment.DiffContext, filePath string) error
-	DeleteContext(ctx comment.DiffContext) error
+	List(sc comment.DiffScope, filePath string, includeResolved bool) ([]comment.Entry, error)
+	Add(sc comment.DiffScope, c comment.Entry) error
+	Replace(sc comment.DiffScope, oldID string, c comment.Entry) error
+	Delete(sc comment.DiffScope, id string) error
+	DeleteByFile(sc comment.DiffScope, filePath string) error
+	DeleteScope(sc comment.DiffScope) error
 	DiffDir() string
 }
 

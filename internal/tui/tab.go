@@ -69,7 +69,7 @@ type tab struct {
 	diffSide      diffSide // old/new side the cursor is on
 
 	// diff comment context for persistence
-	diffContext   comment.DiffContext
+	diffScope     comment.DiffScope
 	diffInputSide diffSide // side during input mode
 
 	// diff render cache (invalidated on width/theme change)

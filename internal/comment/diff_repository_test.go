@@ -15,32 +15,32 @@ func newTestDiffRepo(t *testing.T) *DiffRepository {
 	return NewDiffRepository(repo)
 }
 
-var workingCtx = DiffContext{Kind: "working"}
-var branchCtx = DiffContext{Kind: "branch", Base: "main"}
-var reviewCtx = DiffContext{Kind: "review", SessionID: "abc-123"}
+var workingCtx = DiffScope{Kind: "working"}
+var branchCtx = DiffScope{Kind: "branch", Base: "main"}
+var reviewCtx = DiffScope{Kind: "review", SessionID: "abc-123"}
 
-// --------------- DiffContext.Key ---------------
+// --------------- DiffScope.Key ---------------
 
-func TestDiffContext_Key_Working(t *testing.T) {
+func TestDiffScope_Key_Working(t *testing.T) {
 	if got := workingCtx.Key(); got != "working" {
 		t.Fatalf("expected 'working', got %q", got)
 	}
 }
 
-func TestDiffContext_Key_Branch(t *testing.T) {
+func TestDiffScope_Key_Branch(t *testing.T) {
 	if got := branchCtx.Key(); got != "branch-main" {
 		t.Fatalf("expected 'branch-main', got %q", got)
 	}
 }
 
-func TestDiffContext_Key_BranchNoBase(t *testing.T) {
-	ctx := DiffContext{Kind: "branch"}
-	if got := ctx.Key(); got != "branch-main" {
+func TestDiffScope_Key_BranchNoBase(t *testing.T) {
+	sc := DiffScope{Kind: "branch"}
+	if got := sc.Key(); got != "branch-main" {
 		t.Fatalf("expected 'branch-main', got %q", got)
 	}
 }
 
-func TestDiffContext_Key_Review(t *testing.T) {
+func TestDiffScope_Key_Review(t *testing.T) {
 	if got := reviewCtx.Key(); got != "review-abc-123" {
 		t.Fatalf("expected 'review-abc-123', got %q", got)
 	}
@@ -157,14 +157,14 @@ func TestDiffRepo_DeleteByFile(t *testing.T) {
 	}
 }
 
-// --------------- DeleteContext ---------------
+// --------------- DeleteScope ---------------
 
-func TestDiffRepo_DeleteContext(t *testing.T) {
+func TestDiffRepo_DeleteScope(t *testing.T) {
 	repo := newTestDiffRepo(t)
 	_ = repo.Add(reviewCtx, makeEntry("d1", "/a.go", 1, 1, "review"))
 
-	if err := repo.DeleteContext(reviewCtx); err != nil {
-		t.Fatalf("DeleteContext: %v", err)
+	if err := repo.DeleteScope(reviewCtx); err != nil {
+		t.Fatalf("DeleteScope: %v", err)
 	}
 
 	got, _ := repo.List(reviewCtx, "", true)
@@ -257,8 +257,8 @@ func TestDiffRepo_FileStructure(t *testing.T) {
 	if cf.Version != 1 {
 		t.Fatalf("expected version 1, got %d", cf.Version)
 	}
-	if cf.Context.Kind != "working" {
-		t.Fatalf("expected kind 'working', got %q", cf.Context.Kind)
+	if cf.Scope.Kind != "working" {
+		t.Fatalf("expected kind 'working', got %q", cf.Scope.Kind)
 	}
 	if cf.RootDir != "/test/project" {
 		t.Fatalf("expected rootDir '/test/project', got %q", cf.RootDir)

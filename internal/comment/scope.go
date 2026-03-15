@@ -1,7 +1,7 @@
 package comment
 
-// DiffContext identifies a diff comparison context for comment grouping.
-type DiffContext struct {
+// DiffScope identifies a diff comparison scope for comment grouping.
+type DiffScope struct {
 	Kind      string `json:"kind"`                // "working", "branch", "review"
 	Base      string `json:"base,omitempty"`      // base branch name (for "branch")
 	SessionID string `json:"sessionId,omitempty"` // session UUID (for "review")
@@ -9,14 +9,14 @@ type DiffContext struct {
 
 // DiffCommentsFile is the top-level structure for a diff comments JSON file.
 type DiffCommentsFile struct {
-	RootDir  string      `json:"rootDir"`
-	Version  int         `json:"version"`
-	Context  DiffContext `json:"context"`
-	Comments []Entry     `json:"comments"`
+	RootDir  string    `json:"rootDir"`
+	Version  int       `json:"version"`
+	Scope    DiffScope `json:"scope"`
+	Comments []Entry   `json:"comments"`
 }
 
-// Key returns the file name stem for this context.
-func (c DiffContext) Key() string {
+// Key returns the file name stem for this scope.
+func (c DiffScope) Key() string {
 	switch c.Kind {
 	case "branch":
 		if c.Base != "" {

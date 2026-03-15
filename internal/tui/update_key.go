@@ -32,7 +32,7 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.clearAllPending = false
 		if key.Matches(msg, m.keys.Confirm) {
 			if hasTab && t.kind == diffTab {
-				if err := m.diffCommentRepo.DeleteByFile(t.diffContext, t.filePath); err != nil {
+				if err := m.diffCommentRepo.DeleteByFile(t.diffScope, t.filePath); err != nil {
 					log.Printf("Failed to clear diff comments from store: %v", err)
 				}
 				t.comments = nil
@@ -185,7 +185,7 @@ func (m *Model) submitDiffComment(t *tab) {
 
 	if val == "" && idx >= 0 {
 		oldID := t.comments[idx].ID
-		if err := m.diffCommentRepo.Delete(t.diffContext, oldID); err != nil {
+		if err := m.diffCommentRepo.Delete(t.diffScope, oldID); err != nil {
 			log.Printf("Failed to delete diff comment: %v", err)
 		}
 		t.comments = append(t.comments[:idx], t.comments[idx+1:]...)
@@ -213,12 +213,12 @@ func (m *Model) submitDiffComment(t *tab) {
 	}
 	if idx >= 0 {
 		oldID := t.comments[idx].ID
-		if err := m.diffCommentRepo.Replace(t.diffContext, oldID, sc); err != nil {
+		if err := m.diffCommentRepo.Replace(t.diffScope, oldID, sc); err != nil {
 			log.Printf("Failed to update diff comment: %v", err)
 		}
 		t.comments[idx] = sc
 	} else {
-		if err := m.diffCommentRepo.Add(t.diffContext, sc); err != nil {
+		if err := m.diffCommentRepo.Add(t.diffScope, sc); err != nil {
 			log.Printf("Failed to persist diff comment: %v", err)
 		}
 		t.comments = append(t.comments, sc)
