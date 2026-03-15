@@ -48,9 +48,9 @@ type Data struct {
 	MaxLineNum int // largest line number across all rows
 }
 
-// SplitDiffLines splits a Diff's text into individual lines,
+// splitDiffLines splits a Diff's text into individual lines,
 // trimming the trailing empty element from DiffCharsToLines output.
-func SplitDiffLines(text string) []string {
+func splitDiffLines(text string) []string {
 	lines := strings.Split(text, "\n")
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
@@ -77,7 +77,7 @@ func Build(oldLines, newLines []string) *Data {
 	for i < len(diffs) {
 		switch diffs[i].Type {
 		case diffmatchpatch.DiffEqual:
-			for _, line := range SplitDiffLines(diffs[i].Text) {
+			for _, line := range splitDiffLines(diffs[i].Text) {
 				rows = append(rows, Row{
 					OldLineNum: oldNum,
 					NewLineNum: newNum,
@@ -91,13 +91,13 @@ func Build(oldLines, newLines []string) *Data {
 			i++
 
 		case diffmatchpatch.DiffDelete:
-			delLines := SplitDiffLines(diffs[i].Text)
+			delLines := splitDiffLines(diffs[i].Text)
 			i++
 
 			// Collect consecutive inserts that follow.
 			var insLines []string
 			if i < len(diffs) && diffs[i].Type == diffmatchpatch.DiffInsert {
-				insLines = SplitDiffLines(diffs[i].Text)
+				insLines = splitDiffLines(diffs[i].Text)
 				i++
 			}
 
@@ -140,7 +140,7 @@ func Build(oldLines, newLines []string) *Data {
 
 		case diffmatchpatch.DiffInsert:
 			// Standalone inserts (not preceded by deletes).
-			for _, line := range SplitDiffLines(diffs[i].Text) {
+			for _, line := range splitDiffLines(diffs[i].Text) {
 				rows = append(rows, Row{
 					OldLineNum: 0,
 					NewLineNum: newNum,
