@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/708u/gracilius/internal/diff"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -22,7 +23,7 @@ type searchMatch struct {
 
 // diffSearchMatch represents a single match in a diff tab.
 type diffSearchMatch struct {
-	rowIdx    int // index into diffData.rows
+	rowIdx    int // index into diff.Data.Rows
 	isOld     bool
 	startChar int // rune offset (inclusive)
 	endChar   int // rune offset (exclusive)
@@ -114,7 +115,7 @@ func computeSearchMatches(lines []string, query string) []searchMatch {
 }
 
 // computeDiffSearchMatches finds matches in both old and new sides of diff rows.
-func computeDiffSearchMatches(data *diffData, query string) []diffSearchMatch {
+func computeDiffSearchMatches(data *diff.Data, query string) []diffSearchMatch {
 	if query == "" || data == nil {
 		return nil
 	}
@@ -123,16 +124,16 @@ func computeDiffSearchMatches(data *diffData, query string) []diffSearchMatch {
 	queryLen := len(queryRunes)
 
 	var matches []diffSearchMatch
-	for i, row := range data.rows {
-		if row.oldLineNum > 0 {
-			for _, j := range findSubstringPositions(normalizeForSearch(row.oldText, caseSensitive), queryRunes) {
+	for i, row := range data.Rows {
+		if row.OldLineNum > 0 {
+			for _, j := range findSubstringPositions(normalizeForSearch(row.OldText, caseSensitive), queryRunes) {
 				matches = append(matches, diffSearchMatch{
 					rowIdx: i, isOld: true, startChar: j, endChar: j + queryLen,
 				})
 			}
 		}
-		if row.newLineNum > 0 {
-			for _, j := range findSubstringPositions(normalizeForSearch(row.newText, caseSensitive), queryRunes) {
+		if row.NewLineNum > 0 {
+			for _, j := range findSubstringPositions(normalizeForSearch(row.NewText, caseSensitive), queryRunes) {
 				matches = append(matches, diffSearchMatch{
 					rowIdx: i, isOld: false, startChar: j, endChar: j + queryLen,
 				})

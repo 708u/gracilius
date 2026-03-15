@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/708u/gracilius/internal/comment"
+	"github.com/708u/gracilius/internal/diff"
 )
 
 // mockCommentRepository is a no-op CommentRepository for tests.
@@ -76,7 +77,7 @@ func newTestModelWithDiff(t *testing.T, oldLines, newLines []string) *Model {
 		commentInput: newTextarea(),
 		vp:           newViewport(),
 	}
-	dt.diffViewData = buildDiffData(oldLines, newLines)
+	dt.diffViewData = diff.Build(oldLines, newLines)
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = 0
 	m.focusPane = paneEditor

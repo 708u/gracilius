@@ -1,6 +1,10 @@
 package tui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/708u/gracilius/internal/diff"
+)
 
 func TestComputeSearchMatches(t *testing.T) {
 	lines := []string{
@@ -67,11 +71,11 @@ func TestComputeSearchMatches(t *testing.T) {
 }
 
 func TestComputeDiffSearchMatches(t *testing.T) {
-	data := &diffData{
-		rows: []diffRow{
-			{oldLineNum: 1, newLineNum: 1, oldText: "hello world", newText: "hello world", rowType: diffRowUnchanged},
-			{oldLineNum: 2, newLineNum: 0, oldText: "old line", rowType: diffRowDeleted},
-			{oldLineNum: 0, newLineNum: 2, newText: "new line hello", rowType: diffRowAdded},
+	data := &diff.Data{
+		Rows: []diff.Row{
+			{OldLineNum: 1, NewLineNum: 1, OldText: "hello world", NewText: "hello world", Type: diff.RowUnchanged},
+			{OldLineNum: 2, NewLineNum: 0, OldText: "old line", Type: diff.RowDeleted},
+			{OldLineNum: 0, NewLineNum: 2, NewText: "new line hello", Type: diff.RowAdded},
 		},
 	}
 

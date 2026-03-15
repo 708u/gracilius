@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/diff"
 	"github.com/708u/gracilius/internal/fileutil"
 )
 
@@ -39,7 +40,7 @@ func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
 		}
 		t.diffOldSource = oldSource
 		t.diffOldHighlights = highlightFile(t.filePath, oldSource, m.theme)
-		t.diffViewData = buildDiffData(msg.lines, t.lines)
+		t.diffViewData = diff.Build(msg.lines, t.lines)
 		if t.vp.Width() > diffSeparatorWidth {
 			off := t.vp.YOffset()
 			t.renderDiffContent(m.theme, t.vp.Width())
@@ -153,7 +154,7 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 	}
 	dt.diffNewHighlights = highlightFile(msg.FilePath, msg.Contents, m.theme)
 
-	dt.diffViewData = buildDiffData(oldLines, newLines)
+	dt.diffViewData = diff.Build(oldLines, newLines)
 	lo := m.computeLayout()
 	dt.vp.SetWidth(lo.editorWidth)
 	dt.vp.SetHeight(lo.contentHeight)
