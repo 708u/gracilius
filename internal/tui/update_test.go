@@ -289,6 +289,51 @@ func TestCloseDiffTabs_CallsOnReject(t *testing.T) {
 	}
 }
 
+func TestCloseDiffTabs_PreservesLocalDiffTabs(t *testing.T) {
+	m := newTestModel(t)
+
+	// File tab.
+	ft := newFileTab()
+	ft.filePath = "file.go"
+	ft.lines = []string{"hello"}
+	m.tabs = append(m.tabs, ft)
+
+	// MCP diff tab (has diff state).
+	var rejected bool
+	mcpDt := newDiffTab("/workspace/mcp.go",
+		[]string{"mcp1"},
+		func(string) {},
+		func() { rejected = true },
+	)
+	m.tabs = append(m.tabs, mcpDt)
+
+	// Git panel diff tab (no diff state, like openGitDiffEntry).
+	gitDt := &tab{
+		kind:         diffTab,
+		filePath:     "/workspace/local.go",
+		lines:        []string{"local1"},
+		commentInput: newTextarea(),
+		vp:           newViewport(),
+	}
+	m.tabs = append(m.tabs, gitDt)
+	m.activeTab = 0
+
+	m.Update(CloseDiffMsg{})
+
+	if !rejected {
+		t.Fatal("expected MCP diff tab onReject to be called")
+	}
+	if len(m.tabs) != 2 {
+		t.Fatalf("expected 2 tabs (file + local diff), got %d", len(m.tabs))
+	}
+	if m.tabs[0] != ft {
+		t.Error("expected first tab to be the file tab")
+	}
+	if m.tabs[1] != gitDt {
+		t.Error("expected second tab to be the git panel diff tab")
+	}
+}
+
 func TestCommentSubmit_EnterSavesComment_Enhanced(t *testing.T) {
 	content := "line1\nline2\nline3"
 	m := newTestModelWithFile(t, content)
