@@ -60,3 +60,28 @@ func (m *Model) notifyComment(startLine, endLine int, comment string) {
 		0,
 	)
 }
+
+// notifyDiffComment sends a diff comment with side info as a selection_changed notification.
+func (m *Model) notifyDiffComment(side diffSide, startLine, endLine int, commentText string) {
+	t, ok := m.activeTabState()
+	if !ok {
+		return
+	}
+	var text string
+	if startLine == endLine {
+		text = fmt.Sprintf("[DiffComment:%s] %s:%d\n%s",
+			side, t.filePath, startLine+1, commentText)
+	} else {
+		text = fmt.Sprintf("[DiffComment:%s] %s:%d-%d\n%s",
+			side, t.filePath, startLine+1, endLine+1, commentText)
+	}
+
+	m.server.NotifySelectionChanged(
+		t.filePath,
+		text,
+		startLine,
+		0,
+		endLine,
+		0,
+	)
+}

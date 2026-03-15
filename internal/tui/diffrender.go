@@ -527,6 +527,121 @@ func wordDiffToStyledRuns(
 	return out
 }
 
+// renderDiffCommentLines renders a comment block inside a single side panel,
+// filling the opposite side with spaces. Each returned string is a full-width
+// diff line in "old | sep | new" format.
+func renderDiffCommentLines(
+	blockRows []string,
+	side diffSide,
+	sideWidth, width int,
+) []string {
+	filler := strings.Repeat(" ", sideWidth)
+	lines := make([]string, len(blockRows))
+	for i, r := range blockRows {
+		// Truncate before padding to prevent lipgloss wrapping.
+		sideContent := padRight(ansi.Truncate(r, sideWidth, ""), sideWidth)
+		var sb strings.Builder
+		if side == diffSideOld {
+			sb.WriteString(sideContent)
+			sb.WriteString(diffSeparator)
+			sb.WriteString(filler)
+		} else {
+			sb.WriteString(filler)
+			sb.WriteString(diffSeparator)
+			sb.WriteString(sideContent)
+		}
+		lines[i] = padRight(sb.String(), width)
+	}
+	return lines
+}
+
+// interleaveCommentBlocks inserts rendered comment blocks into the diff
+// render result after rows that have comments ending on them.
+// Active textarea blocks (inputMode) are NOT included here; they are
+// overlaid later in renderDiffEditor.
+func (t *tab) interleaveCommentBlocks(result diffRenderResult, sideWidth, width int) diffRenderResult {
+	if len(t.comments) == 0 {
+		return result
+	}
+
+	// Build a map: diff row index → comment index for comments ending at that row.
+	type commentRef struct {
+		idx  int
+		side diffSide
+	}
+	rowComments := map[int][]commentRef{}
+	for ci := range t.comments {
+		if ci >= len(t.diffCommentSides) {
+			continue
+		}
+		side := t.diffCommentSides[ci]
+		endLine := t.comments[ci].EndLine
+		// Find the diff row matching this endLine + side.
+		if t.diffViewData != nil {
+			for ri, row := range t.diffViewData.rows {
+				if diffRowLineNumForSide(row, side) == endLine &&
+					diffRowAvailableSide(row, side) == side {
+					rowComments[ri] = append(rowComments[ri], commentRef{idx: ci, side: side})
+					break
+				}
+			}
+		}
+	}
+
+	if len(rowComments) == 0 {
+		return result
+	}
+
+	var newLines []string
+	newRowStarts := make([]int, len(result.rowVisualStarts))
+	hunkOffs := make([]int, len(result.hunkVisualOffs))
+
+	// Build reverse map from original visual offset to hunk indices.
+	hunkByOrigOff := make(map[int][]int, len(result.hunkVisualOffs))
+	for hi, ho := range result.hunkVisualOffs {
+		hunkByOrigOff[ho] = append(hunkByOrigOff[ho], hi)
+	}
+
+	for ri := range result.rowVisualStarts {
+		newRowStarts[ri] = len(newLines)
+
+		// Update hunk offsets via map lookup.
+		if his, ok := hunkByOrigOff[result.rowVisualStarts[ri]]; ok {
+			for _, hi := range his {
+				hunkOffs[hi] = len(newLines)
+			}
+		}
+
+		// Copy this row's visual lines.
+		rowEnd := len(result.lines)
+		if ri+1 < len(result.rowVisualStarts) {
+			rowEnd = result.rowVisualStarts[ri+1]
+		}
+		for j := result.rowVisualStarts[ri]; j < rowEnd; j++ {
+			newLines = append(newLines, result.lines[j])
+		}
+
+		// Insert comment blocks after this row.
+		if refs, ok := rowComments[ri]; ok {
+			for _, ref := range refs {
+				c := &t.comments[ref.idx]
+				label := formatDiffCommentLabel(c, ref.side)
+				blockBodyWidth := sideWidth - commentBlockMargin
+				blockRows := renderBlock(
+					c.Text, label, blockBodyWidth, styleComment, styleBodyWhite)
+				newLines = append(newLines,
+					renderDiffCommentLines(blockRows, ref.side, sideWidth, width)...)
+			}
+		}
+	}
+
+	return diffRenderResult{
+		lines:           newLines,
+		hunkVisualOffs:  hunkOffs,
+		rowVisualStarts: newRowStarts,
+	}
+}
+
 // renderMergedRuns renders styledRuns whose ANSI fields already contain
 // combined fg+bg codes. Unlike renderSyntaxWithBg, no additional bg
 // is applied per-run; padBg is used only for trailing padding.
