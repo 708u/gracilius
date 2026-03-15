@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/diff"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -82,7 +83,7 @@ func TestHandleFileChanged_UpdatesDiffTab(t *testing.T) {
 	oldLines := []string{"old1", "old2"}
 	newLines := []string{"new1", "new2", "new3"}
 	dt := newDiffTab("/workspace/file.go", newLines, func(string) {}, func() {})
-	dt.diffViewData = buildDiffData(oldLines, newLines)
+	dt.diffViewData = diff.Build(oldLines, newLines)
 	dt.diffOldSource = "old1\nold2"
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = 0
@@ -641,8 +642,8 @@ func TestDiffSide_AutoSnapDeleted(t *testing.T) {
 
 	// Find the deleted row.
 	deletedIdx := -1
-	for i, row := range tab.diffViewData.rows {
-		if row.rowType == diffRowDeleted {
+	for i, row := range tab.diffViewData.Rows {
+		if row.RowType == diff.RowDeleted {
 			deletedIdx = i
 			break
 		}
@@ -671,8 +672,8 @@ func TestDiffSide_AutoSnapAdded(t *testing.T) {
 
 	// Find the added row.
 	addedIdx := -1
-	for i, row := range tab.diffViewData.rows {
-		if row.rowType == diffRowAdded {
+	for i, row := range tab.diffViewData.Rows {
+		if row.RowType == diff.RowAdded {
 			addedIdx = i
 			break
 		}
@@ -698,8 +699,8 @@ func TestDiffSide_NoSwitchOnDeletedRow(t *testing.T) {
 	tab := m.tabs[0]
 
 	deletedIdx := -1
-	for i, row := range tab.diffViewData.rows {
-		if row.rowType == diffRowDeleted {
+	for i, row := range tab.diffViewData.Rows {
+		if row.RowType == diff.RowDeleted {
 			deletedIdx = i
 			break
 		}
@@ -773,8 +774,8 @@ func TestDiffSide_SelectionTextMatchesSide(t *testing.T) {
 
 	// Find the modified row.
 	modIdx := -1
-	for i, row := range tab.diffViewData.rows {
-		if row.rowType == diffRowModified {
+	for i, row := range tab.diffViewData.Rows {
+		if row.RowType == diff.RowModified {
 			modIdx = i
 			break
 		}
@@ -813,16 +814,16 @@ func TestDiffSide_ChangeJumpSkipsWrongSide(t *testing.T) {
 		[]string{"new1", "new2", "added"},
 	)
 	tab := m.tabs[0]
-	rows := tab.diffViewData.rows
+	rows := tab.diffViewData.Rows
 
 	// Find first modified row and the added row.
 	modIdx := -1
 	addedIdx := -1
 	for i, row := range rows {
-		if row.rowType == diffRowModified && modIdx < 0 {
+		if row.RowType == diff.RowModified && modIdx < 0 {
 			modIdx = i
 		}
-		if row.rowType == diffRowAdded {
+		if row.RowType == diff.RowAdded {
 			addedIdx = i
 		}
 	}
@@ -859,12 +860,12 @@ func TestDiffSide_ChangeJumpSkipsAddedOnlyBlock(t *testing.T) {
 		[]string{"same1", "new1", "same2", "added1", "added2"},
 	)
 	tab := m.tabs[0]
-	rows := tab.diffViewData.rows
+	rows := tab.diffViewData.Rows
 
 	// Find the modified row.
 	modIdx := -1
 	for i, row := range rows {
-		if row.rowType == diffRowModified {
+		if row.RowType == diff.RowModified {
 			modIdx = i
 			break
 		}
