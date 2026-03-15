@@ -94,7 +94,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.openFile.active {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.MouseClickMsg,
-			tea.WindowSizeMsg,
+			tea.WindowSizeMsg, tea.FocusMsg,
 			fileChangedMsg, treeChangedMsg, commentsChangedMsg,
 			OpenDiffMsg, CloseDiffMsg,
 			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
@@ -109,7 +109,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.search.active {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.MouseClickMsg,
-			tea.WindowSizeMsg,
+			tea.WindowSizeMsg, tea.FocusMsg,
 			fileChangedMsg, treeChangedMsg, commentsChangedMsg,
 			OpenDiffMsg, CloseDiffMsg,
 			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
@@ -122,6 +122,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.FocusMsg:
+		m.server.ResendSelection()
+		return m, nil
 	case tea.KeyboardEnhancementsMsg:
 		m.enhancedKeyboard = msg.SupportsKeyDisambiguation()
 		return m, nil
