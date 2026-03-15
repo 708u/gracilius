@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/708u/gracilius/internal/tui/render"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
@@ -128,7 +129,7 @@ func highlightFile(filePath, source string, theme themeConfig) []highlightedLine
 func newHighlightedLine(runs []styledRun) highlightedLine {
 	var sb strings.Builder
 	for _, run := range runs {
-		writeStyledText(&sb, run.ANSI, expandTabs(run.Text))
+		writeStyledText(&sb, run.ANSI, render.ExpandTabs(run.Text))
 	}
 	return highlightedLine{rendered: sb.String(), runs: runs}
 }
@@ -175,12 +176,12 @@ func renderStyledLineWithSelection(sb *strings.Builder, runs []styledRun, selSta
 
 		if overlapStart >= overlapEnd {
 			// No overlap with selection
-			writeStyledText(sb, run.ANSI, expandTabs(run.Text))
+			writeStyledText(sb, run.ANSI, render.ExpandTabs(run.Text))
 		} else {
 			// Before selection
 			if overlapStart > runStart {
 				beforeEnd := overlapStart - runStart
-				writeStyledText(sb, run.ANSI, expandTabs(string(runes[:beforeEnd])))
+				writeStyledText(sb, run.ANSI, render.ExpandTabs(string(runes[:beforeEnd])))
 			}
 
 			// Within selection
@@ -190,13 +191,13 @@ func renderStyledLineWithSelection(sb *strings.Builder, runs []styledRun, selSta
 				sb.WriteString(run.ANSI)
 			}
 			sb.WriteString(selBgSeq)
-			sb.WriteString(expandTabs(string(runes[selLocalStart:selLocalEnd])))
+			sb.WriteString(render.ExpandTabs(string(runes[selLocalStart:selLocalEnd])))
 			sb.WriteString(ansiReset)
 
 			// After selection
 			if overlapEnd < runEnd {
 				afterStart := overlapEnd - runStart
-				writeStyledText(sb, run.ANSI, expandTabs(string(runes[afterStart:])))
+				writeStyledText(sb, run.ANSI, render.ExpandTabs(string(runes[afterStart:])))
 			}
 		}
 
@@ -227,7 +228,7 @@ type highlightRange struct {
 func renderStyledLineWithHighlights(sb *strings.Builder, runs []styledRun, highlights []highlightRange) {
 	if len(highlights) == 0 {
 		for _, run := range runs {
-			writeStyledText(sb, run.ANSI, expandTabs(run.Text))
+			writeStyledText(sb, run.ANSI, render.ExpandTabs(run.Text))
 		}
 		return
 	}
@@ -258,7 +259,7 @@ func renderStyledLineWithHighlights(sb *strings.Builder, runs []styledRun, highl
 			for j < runLen && bgMap[pos+j] == bg {
 				j++
 			}
-			chunk := expandTabs(string(runes[i:j]))
+			chunk := render.ExpandTabs(string(runes[i:j]))
 			if bg != "" {
 				if run.ANSI != "" {
 					sb.WriteString(run.ANSI)

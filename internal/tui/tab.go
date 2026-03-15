@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	"github.com/708u/gracilius/internal/comment"
 	"github.com/708u/gracilius/internal/diff"
+	"github.com/708u/gracilius/internal/tui/render"
 )
 
 // tabKind distinguishes between file and diff tabs.
@@ -619,7 +620,7 @@ func (t *tab) adjustScrollForCursor(contentHeight, textWidth int) {
 func (t *tab) lineVisualRows(line, textWidth int) int {
 	rows := 1
 	if textWidth > 0 && line >= 0 && line < len(t.lines) {
-		rows = countWraps(t.lines[line], textWidth)
+		rows = render.CountWraps(t.lines[line], textWidth)
 	}
 	if c := t.commentEndingAt(line); c != nil {
 		rows += commentDisplayRows(c.Text)

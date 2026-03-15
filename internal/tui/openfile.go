@@ -11,6 +11,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/708u/gracilius/internal/tui/render"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/sahilm/fuzzy"
 )
@@ -348,7 +349,7 @@ func (s *openFileOverlay) cursorPos(width, height int) cursorPosition {
 	// See: https://github.com/charmbracelet/bubbles/issues/906
 	val := s.input.Value()
 	pos := s.input.Position()
-	cursorCol := displayWidthRange(val, 0, pos)
+	cursorCol := render.DisplayWidthRange(val, 0, pos)
 	promptW := ansi.StringWidth(s.input.Prompt)
 	return cursorPosition{
 		x: g.startX + overlayBorderW/2 + overlayPaddingW/2 + promptW + cursorCol,

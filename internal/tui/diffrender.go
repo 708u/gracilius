@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/708u/gracilius/internal/diff"
+	"github.com/708u/gracilius/internal/tui/render"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 )
@@ -127,7 +128,7 @@ func renderSingleDiffRow(
 		} else {
 			writeDiffFiller(&sb, row.NewLineNum, row.Type, false, newCtx)
 		}
-		result = append(result, padRight(sb.String(), width))
+		result = append(result, render.PadRight(sb.String(), width))
 	}
 	return result
 }
@@ -216,8 +217,8 @@ func wrapDiffSide(
 		gutterStyle = gutterBg + ansiFaint
 	}
 
-	expanded := expandTabs(text)
-	bp := wrapBreakpoints(expanded, ctx.textWidth)
+	expanded := render.ExpandTabs(text)
+	bp := render.WrapBreakpoints(expanded, ctx.textWidth)
 
 	// No soft-wrap: single visual line.
 	if bp == nil {
@@ -373,7 +374,7 @@ func renderWordDiffText(
 ) {
 	var raw strings.Builder
 	for _, s := range spans {
-		expanded := expandTabs(s.Text)
+		expanded := render.ExpandTabs(s.Text)
 		bg := lineBg
 		if s.Op == diff.OpInsert || s.Op == diff.OpDelete {
 			bg = wordBg
@@ -422,7 +423,7 @@ func writeColoredChunk(sb *strings.Builder, fg, bg, text string) {
 func expandStyledRuns(runs []styledRun) []styledRun {
 	out := make([]styledRun, len(runs))
 	for i, r := range runs {
-		out[i] = styledRun{Text: expandTabs(r.Text), ANSI: r.ANSI}
+		out[i] = styledRun{Text: render.ExpandTabs(r.Text), ANSI: r.ANSI}
 	}
 	return out
 }
@@ -445,7 +446,7 @@ func renderSyntaxWithBgAndHighlights(sb *strings.Builder, runs []styledRun, bg s
 func renderSyntaxWithBg(sb *strings.Builder, runs []styledRun, bg string, textWidth int) {
 	var raw strings.Builder
 	for _, r := range runs {
-		expanded := expandTabs(r.Text)
+		expanded := render.ExpandTabs(r.Text)
 		writeColoredChunk(&raw, r.ANSI, bg, expanded)
 	}
 	truncated := ansi.Truncate(raw.String(), textWidth, "")
@@ -490,7 +491,7 @@ func wordDiffToStyledRuns(
 	var out []styledRun
 	syntaxPos := 0
 	for _, span := range spans {
-		expanded := expandTabs(span.Text)
+		expanded := render.ExpandTabs(span.Text)
 		bg := lineBg
 		if span.Op == diff.OpInsert || span.Op == diff.OpDelete {
 			bg = wordBg
@@ -539,7 +540,7 @@ func renderDiffCommentLines(
 	lines := make([]string, len(blockRows))
 	for i, r := range blockRows {
 		// Truncate before padding to prevent lipgloss wrapping.
-		sideContent := padRight(ansi.Truncate(r, sideWidth, ""), sideWidth)
+		sideContent := render.PadRight(ansi.Truncate(r, sideWidth, ""), sideWidth)
 		var sb strings.Builder
 		if side == diffSideOld {
 			sb.WriteString(sideContent)
@@ -550,7 +551,7 @@ func renderDiffCommentLines(
 			sb.WriteString(diffSeparator)
 			sb.WriteString(sideContent)
 		}
-		lines[i] = padRight(sb.String(), width)
+		lines[i] = render.PadRight(sb.String(), width)
 	}
 	return lines
 }
