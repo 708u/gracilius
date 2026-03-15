@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	"github.com/708u/gracilius/internal/comment"
+	"github.com/708u/gracilius/internal/diff"
 )
 
 // tabKind distinguishes between file and diff tabs.
@@ -42,7 +43,7 @@ type tab struct {
 	inputEnd     int
 
 	diff              *diffState  // non-nil for diff review tabs
-	diffViewData      *diffData   // side-by-side diff data (nil for file tabs)
+	diffViewData      *diff.Data  // side-by-side diff data (nil for file tabs)
 	gitDiffModeTag    gitDiffMode // diff mode for git diff tabs
 	hasGitDiffModeTag bool        // true if opened from git panel
 	gitDiffLabel      string      // tab label prefix (e.g. "[working]", "[vs main]")
@@ -53,7 +54,7 @@ type tab struct {
 	diffOldSource     string // old-side source text for re-highlighting on theme change
 
 	// diff cursor/selection
-	diffCursor    int      // index into diffData.rows
+	diffCursor    int      // index into diff.Data.Rows
 	diffAnchor    int      // selection anchor row index
 	diffSelecting bool     // whether row-level selection is active
 	diffSide      diffSide // old/new side the cursor is on
@@ -92,11 +93,11 @@ func (s diffSide) String() string {
 
 // diffRowAvailableSide returns the available side for a row type.
 // deleted → old only, added → new only, otherwise preferred as-is.
-func diffRowAvailableSide(row diffRow, preferred diffSide) diffSide {
-	switch row.rowType {
-	case diffRowDeleted:
+func diffRowAvailableSide(row diff.Row, preferred diffSide) diffSide {
+	switch row.Type {
+	case diff.RowDeleted:
 		return diffSideOld
-	case diffRowAdded:
+	case diff.RowAdded:
 		return diffSideNew
 	}
 	return preferred
@@ -104,24 +105,24 @@ func diffRowAvailableSide(row diffRow, preferred diffSide) diffSide {
 
 // snapDiffSide adjusts diffSide to match the current row's constraints.
 func (t *tab) snapDiffSide() {
-	if t.diffViewData == nil || t.diffCursor >= len(t.diffViewData.rows) {
+	if t.diffViewData == nil || t.diffCursor >= len(t.diffViewData.Rows) {
 		return
 	}
-	t.diffSide = diffRowAvailableSide(t.diffViewData.rows[t.diffCursor], t.diffSide)
+	t.diffSide = diffRowAvailableSide(t.diffViewData.Rows[t.diffCursor], t.diffSide)
 }
 
 // diffRowTextForSide returns the text for the given side of a diff row.
-func diffRowTextForSide(row diffRow, side diffSide) string {
+func diffRowTextForSide(row diff.Row, side diffSide) string {
 	if side == diffSideOld {
-		if row.oldLineNum > 0 {
-			return row.oldText
+		if row.OldLineNum > 0 {
+			return row.OldText
 		}
-		return row.newText
+		return row.NewText
 	}
-	if row.newLineNum > 0 {
-		return row.newText
+	if row.NewLineNum > 0 {
+		return row.NewText
 	}
-	return row.oldText
+	return row.OldText
 }
 
 // diffState holds accept/reject callbacks for a diff review tab.
@@ -208,10 +209,10 @@ func (t *tab) getCursorPos() (int, int) {
 // diffCursorLineNum returns the 0-based line number for the current diff cursor row,
 // respecting the current diffSide.
 func (t *tab) diffCursorLineNum() int {
-	if t.diffViewData == nil || t.diffCursor >= len(t.diffViewData.rows) {
+	if t.diffViewData == nil || t.diffCursor >= len(t.diffViewData.Rows) {
 		return 0
 	}
-	return diffRowLineNumForSide(t.diffViewData.rows[t.diffCursor], t.diffSide)
+	return diffRowLineNumForSide(t.diffViewData.Rows[t.diffCursor], t.diffSide)
 }
 
 // syncDiffAnchor synchronizes the diff anchor to the cursor when not selecting.
@@ -233,21 +234,21 @@ func (t *tab) diffNormalizedSelection() (startRow, endRow int) {
 // diffRowLineNumForSide returns the 0-based line number for a diff row
 // respecting the given side. Falls back to the other side if the
 // requested side has no line number.
-func diffRowLineNumForSide(row diffRow, side diffSide) int {
+func diffRowLineNumForSide(row diff.Row, side diffSide) int {
 	if side == diffSideOld {
-		if row.oldLineNum > 0 {
-			return row.oldLineNum - 1
+		if row.OldLineNum > 0 {
+			return row.OldLineNum - 1
 		}
-		if row.newLineNum > 0 {
-			return row.newLineNum - 1
+		if row.NewLineNum > 0 {
+			return row.NewLineNum - 1
 		}
 		return 0
 	}
-	if row.newLineNum > 0 {
-		return row.newLineNum - 1
+	if row.NewLineNum > 0 {
+		return row.NewLineNum - 1
 	}
-	if row.oldLineNum > 0 {
-		return row.oldLineNum - 1
+	if row.OldLineNum > 0 {
+		return row.OldLineNum - 1
 	}
 	return 0
 }
@@ -268,8 +269,8 @@ func (t *tab) diffSelectedText() string {
 	}
 	startRow, endRow := t.diffEffectiveRange()
 	var parts []string
-	for i := startRow; i <= endRow && i < len(t.diffViewData.rows); i++ {
-		row := t.diffViewData.rows[i]
+	for i := startRow; i <= endRow && i < len(t.diffViewData.Rows); i++ {
+		row := t.diffViewData.Rows[i]
 		side := diffRowAvailableSide(row, t.diffSide)
 		parts = append(parts, diffRowTextForSide(row, side))
 	}
@@ -278,20 +279,20 @@ func (t *tab) diffSelectedText() string {
 
 // getDiffSelectionInfo returns selection info for MCP notification in diff mode.
 func (t *tab) getDiffSelectionInfo() selectionInfo {
-	if t.diffViewData == nil || len(t.diffViewData.rows) == 0 {
+	if t.diffViewData == nil || len(t.diffViewData.Rows) == 0 {
 		return selectionInfo{}
 	}
 	startRow, endRow := t.diffEffectiveRange()
-	startRowData := t.diffViewData.rows[startRow]
+	startRowData := t.diffViewData.Rows[startRow]
 	startSide := diffRowAvailableSide(startRowData, t.diffSide)
 	startLineNum := diffRowLineNumForSide(startRowData, startSide)
-	endRowData := t.diffViewData.rows[min(endRow, len(t.diffViewData.rows)-1)]
+	endRowData := t.diffViewData.Rows[min(endRow, len(t.diffViewData.Rows)-1)]
 	endSide := diffRowAvailableSide(endRowData, t.diffSide)
 	endLineNum := diffRowLineNumForSide(endRowData, endSide)
 	endText := diffRowTextForSide(endRowData, endSide)
 	var parts []string
-	for i := startRow; i <= endRow && i < len(t.diffViewData.rows); i++ {
-		row := t.diffViewData.rows[i]
+	for i := startRow; i <= endRow && i < len(t.diffViewData.Rows); i++ {
+		row := t.diffViewData.Rows[i]
 		side := diffRowAvailableSide(row, t.diffSide)
 		parts = append(parts, diffRowTextForSide(row, side))
 	}
@@ -401,8 +402,8 @@ func (t *tab) initDiffContent(theme themeConfig, width, height int) {
 	}
 	// Set cursor to first changed row.
 	if t.diffViewData != nil {
-		for i, row := range t.diffViewData.rows {
-			if row.rowType != diffRowUnchanged {
+		for i, row := range t.diffViewData.Rows {
+			if row.Type != diff.RowUnchanged {
 				t.diffCursor = i
 				t.diffAnchor = i
 				break
@@ -677,7 +678,7 @@ func (t *tab) diffCaptureSnippet(startLine, endLine int, side diffSide) string {
 		return ""
 	}
 	var parts []string
-	for _, row := range t.diffViewData.rows {
+	for _, row := range t.diffViewData.Rows {
 		ln := diffRowLineNumForSide(row, side)
 		if ln >= startLine && ln <= endLine {
 			parts = append(parts, diffRowTextForSide(row, side))

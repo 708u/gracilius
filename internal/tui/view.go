@@ -521,7 +521,7 @@ func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 func (m *Model) overlayDiffTextarea(t *tab, diffLines []string, viewOff, width, height int) {
 	// Find the diff row where the input ends.
 	insertRowIdx := -1
-	for ri, row := range t.diffViewData.rows {
+	for ri, row := range t.diffViewData.Rows {
 		ln := diffRowLineNumForSide(row, t.diffInputSide)
 		if ln == t.inputEnd && diffRowAvailableSide(row, t.diffInputSide) == t.diffInputSide {
 			insertRowIdx = ri
@@ -591,7 +591,7 @@ func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, w
 	viewEnd := viewOff + len(diffLines)
 
 	// Only iterate cursor/selection rows instead of all rows.
-	for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.rows); rowIdx++ {
+	for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.Rows); rowIdx++ {
 		rowVisStart := t.diffRowVisualStarts[rowIdx]
 		rowVisEnd := len(t.diffCachedLines)
 		if rowIdx+1 < len(t.diffRowVisualStarts) {
@@ -603,7 +603,7 @@ func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, w
 			continue
 		}
 
-		row := t.diffViewData.rows[rowIdx]
+		row := t.diffViewData.Rows[rowIdx]
 		activeSide := diffRowAvailableSide(row, t.diffSide)
 		oldCtx, newCtx := ctx, ctx
 		if activeSide == diffSideOld {

@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/708u/gracilius/internal/diff"
 	"github.com/708u/gracilius/internal/git"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -280,7 +281,7 @@ func (m *Model) openGitDiffEntry() {
 		dt.diffNewHighlights = highlightFile(entry.absPath, strings.Join(newContent, "\n"), m.theme)
 	}
 
-	dt.diffViewData = buildDiffData(oldContent, newContent)
+	dt.diffViewData = diff.Build(oldContent, newContent)
 	dt.initDiffContent(m.theme, lo.editorWidth, lo.contentHeight)
 
 	m.tabs = append(m.tabs, dt)

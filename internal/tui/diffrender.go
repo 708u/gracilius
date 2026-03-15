@@ -76,9 +76,9 @@ type diffRenderResult struct {
 }
 
 // newDiffSideCtx creates a diffSideCtx from diff data, theme, and viewport width.
-func newDiffSideCtx(data *diffData, theme themeConfig, width int) diffSideCtx {
+func newDiffSideCtx(data *diff.Data, theme themeConfig, width int) diffSideCtx {
 	colors := diffColorsFor(theme)
-	maxLine := max(data.maxLineNum, 1)
+	maxLine := max(data.MaxLineNum, 1)
 	sideWidth := (width - diffSeparatorWidth) / 2
 	gutterW := diffGutterWidth(maxLine)
 	return diffSideCtx{
@@ -95,22 +95,22 @@ func newDiffSideCtx(data *diffData, theme themeConfig, width int) diffSideCtx {
 // oldCtx/newCtx control the gutter background color independently for each side.
 // oldSearchHL/newSearchHL are search match highlights for this row (may be nil).
 func renderSingleDiffRow(
-	row diffRow,
+	row diff.Row,
 	oldHL, newHL []highlightedLine,
 	oldCtx, newCtx diffSideCtx,
 	width int,
 	oldSearchHL, newSearchHL []highlightRange,
 ) []string {
 	var oldRuns, newRuns []styledRun
-	if row.oldLineNum > 0 && oldHL != nil && row.oldLineNum-1 < len(oldHL) {
-		oldRuns = oldHL[row.oldLineNum-1].runs
+	if row.OldLineNum > 0 && oldHL != nil && row.OldLineNum-1 < len(oldHL) {
+		oldRuns = oldHL[row.OldLineNum-1].runs
 	}
-	if row.newLineNum > 0 && newHL != nil && row.newLineNum-1 < len(newHL) {
-		newRuns = newHL[row.newLineNum-1].runs
+	if row.NewLineNum > 0 && newHL != nil && row.NewLineNum-1 < len(newHL) {
+		newRuns = newHL[row.NewLineNum-1].runs
 	}
 
-	oldVisuals := wrapDiffSide(row.oldLineNum, row.oldText, row.oldSpans, oldRuns, row.rowType, true, oldCtx, oldSearchHL)
-	newVisuals := wrapDiffSide(row.newLineNum, row.newText, row.newSpans, newRuns, row.rowType, false, newCtx, newSearchHL)
+	oldVisuals := wrapDiffSide(row.OldLineNum, row.OldText, row.OldSpans, oldRuns, row.Type, true, oldCtx, oldSearchHL)
+	newVisuals := wrapDiffSide(row.NewLineNum, row.NewText, row.NewSpans, newRuns, row.Type, false, newCtx, newSearchHL)
 
 	rowCount := max(len(oldVisuals), len(newVisuals))
 	result := make([]string, 0, rowCount)
@@ -119,13 +119,13 @@ func renderSingleDiffRow(
 		if j < len(oldVisuals) {
 			sb.WriteString(oldVisuals[j])
 		} else {
-			writeDiffFiller(&sb, row.oldLineNum, row.rowType, true, oldCtx)
+			writeDiffFiller(&sb, row.OldLineNum, row.Type, true, oldCtx)
 		}
 		sb.WriteString(diffSeparator)
 		if j < len(newVisuals) {
 			sb.WriteString(newVisuals[j])
 		} else {
-			writeDiffFiller(&sb, row.newLineNum, row.rowType, false, newCtx)
+			writeDiffFiller(&sb, row.NewLineNum, row.Type, false, newCtx)
 		}
 		result = append(result, padRight(sb.String(), width))
 	}
@@ -133,7 +133,7 @@ func renderSingleDiffRow(
 }
 
 // renderAllDiffLines pre-renders all diff rows into a flat visual line slice.
-func renderAllDiffLines(data *diffData, theme themeConfig, width int, oldHL, newHL []highlightedLine, searchMatches []diffSearchMatch) diffRenderResult {
+func renderAllDiffLines(data *diff.Data, theme themeConfig, width int, oldHL, newHL []highlightedLine, searchMatches []diffSearchMatch) diffRenderResult {
 	ctx := newDiffSideCtx(data, theme, width)
 
 	// Index search matches by row (skip allocation when empty).
@@ -152,20 +152,20 @@ func renderAllDiffLines(data *diffData, theme themeConfig, width int, oldHL, new
 		}
 	}
 
-	rowVisualStart := make([]int, len(data.rows))
+	rowVisualStart := make([]int, len(data.Rows))
 	var lines []string
 
-	for i, row := range data.rows {
+	for i, row := range data.Rows {
 		rowVisualStart[i] = len(lines)
 		rowLines := renderSingleDiffRow(row, oldHL, newHL, ctx, ctx, width, oldSearchByRow[i], newSearchByRow[i])
 		lines = append(lines, rowLines...)
 	}
 
 	// Convert hunk start indices (row-based) to visual line offsets.
-	hunkOffs := make([]int, len(data.hunks))
-	for i, h := range data.hunks {
-		if h.startIdx < len(rowVisualStart) {
-			hunkOffs[i] = rowVisualStart[h.startIdx]
+	hunkOffs := make([]int, len(data.Hunks))
+	for i, h := range data.Hunks {
+		if h.StartIdx < len(rowVisualStart) {
+			hunkOffs[i] = rowVisualStart[h.StartIdx]
 		}
 	}
 
@@ -173,16 +173,16 @@ func renderAllDiffLines(data *diffData, theme themeConfig, width int, oldHL, new
 }
 
 // diffSideBg returns the line and word background colors for a diff side.
-func diffSideBg(rowType diffRowType, isOld bool, colors diffColors) (lineBg, wordBg string) {
+func diffSideBg(rowType diff.RowType, isOld bool, colors diffColors) (lineBg, wordBg string) {
 	switch rowType {
-	case diffRowModified:
+	case diff.RowModified:
 		if isOld {
 			return colors.delBg, colors.wordDelBg
 		}
 		return colors.addBg, colors.wordAddBg
-	case diffRowAdded:
+	case diff.RowAdded:
 		return colors.addBg, ""
-	case diffRowDeleted:
+	case diff.RowDeleted:
 		return colors.delBg, ""
 	}
 	return "", ""
@@ -195,7 +195,7 @@ func wrapDiffSide(
 	text string,
 	spans []diff.WordSpan,
 	syntaxRuns []styledRun,
-	rowType diffRowType,
+	rowType diff.RowType,
 	isOld bool,
 	ctx diffSideCtx,
 	searchHL []highlightRange,
@@ -347,7 +347,7 @@ func renderWrappedSegmentsWithHighlights(
 
 // writeDiffFiller writes a continuation filler line for a side whose
 // content has fewer wrap rows than the other side.
-func writeDiffFiller(sb *strings.Builder, lineNum int, rowType diffRowType, isOld bool, ctx diffSideCtx) {
+func writeDiffFiller(sb *strings.Builder, lineNum int, rowType diff.RowType, isOld bool, ctx diffSideCtx) {
 	if lineNum == 0 {
 		sb.WriteString(ctx.colors.fillerBg)
 		sb.WriteString(ctx.fillerPad)
@@ -578,7 +578,7 @@ func (t *tab) interleaveCommentBlocks(result diffRenderResult, sideWidth, width 
 		endLine := t.comments[ci].EndLine
 		// Find the diff row matching this endLine + side.
 		if t.diffViewData != nil {
-			for ri, row := range t.diffViewData.rows {
+			for ri, row := range t.diffViewData.Rows {
 				if diffRowLineNumForSide(row, side) == endLine &&
 					diffRowAvailableSide(row, side) == side {
 					rowComments[ri] = append(rowComments[ri], commentRef{idx: ci, side: side})
