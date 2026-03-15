@@ -225,7 +225,7 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 // closeTab removes the tab at idx and adjusts activeTab.
 func (m *Model) closeTab(idx int) {
 	t := m.tabs[idx]
-	if t.kind == diffTab {
+	if t.kind == diffTab && t.diff != nil {
 		t.rejectAndClear()
 	}
 	filePath := t.filePath
@@ -248,7 +248,7 @@ func (m *Model) closeDiffTabs() {
 	tabs := make([]*tab, 0, len(m.tabs))
 	var removedPaths []string
 	for _, t := range m.tabs {
-		if t.kind == diffTab {
+		if t.kind == diffTab && t.diff != nil {
 			t.rejectAndClear()
 			if t.filePath != "" {
 				removedPaths = append(removedPaths, t.filePath)
