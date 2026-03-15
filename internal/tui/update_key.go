@@ -446,6 +446,26 @@ func (m *Model) diffJumpToNextBlock(t *tab, from, dir int) {
 	matchesSide := func(i int) bool {
 		return diffRowAvailableSide(rows[i], t.diffSide) == t.diffSide
 	}
+	expandBlock := func(pos int) (int, int) {
+		s, e := pos, pos
+		for s > 0 && isChanged(s-1) {
+			s--
+		}
+		for e < last && isChanged(e+1) {
+			e++
+		}
+		return s, e
+	}
+	// searchMatch scans [from, to] in steps of step for a matching row.
+	// Returns the index or -1.
+	searchMatch := func(from, to, step int) int {
+		for i := from; i != to+step; i += step {
+			if matchesSide(i) {
+				return i
+			}
+		}
+		return -1
+	}
 
 	line := from + dir
 	// Skip any remaining changed rows of the current block.
@@ -455,7 +475,6 @@ func (m *Model) diffJumpToNextBlock(t *tab, from, dir int) {
 
 	// Search successive blocks until finding one with a matching row.
 	for {
-		// Skip unchanged rows.
 		for line >= 0 && line <= last && !isChanged(line) {
 			line += dir
 		}
@@ -463,34 +482,19 @@ func (m *Model) diffJumpToNextBlock(t *tab, from, dir int) {
 			return
 		}
 
-		// Determine block boundaries.
-		bStart, bEnd := line, line
-		for bStart > 0 && isChanged(bStart-1) {
-			bStart--
-		}
-		for bEnd < last && isChanged(bEnd+1) {
-			bEnd++
-		}
+		bStart, bEnd := expandBlock(line)
 
-		// Find a matching row within this block.
+		var target int
 		if dir > 0 {
-			for i := bStart; i <= bEnd; i++ {
-				if matchesSide(i) {
-					t.diffCursor = i
-					t.syncDiffAnchor()
-					m.notifySelectionChanged()
-					return
-				}
-			}
+			target = searchMatch(bStart, bEnd, 1)
 		} else {
-			for i := bEnd; i >= bStart; i-- {
-				if matchesSide(i) {
-					t.diffCursor = i
-					t.syncDiffAnchor()
-					m.notifySelectionChanged()
-					return
-				}
-			}
+			target = searchMatch(bEnd, bStart, -1)
+		}
+		if target >= 0 {
+			t.diffCursor = target
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
+			return
 		}
 
 		// No matching row in this block; skip past it.
