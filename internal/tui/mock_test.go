@@ -32,6 +32,8 @@ func (s *mockServer) NotifySelectionChanged(
 	})
 }
 
+func (s *mockServer) ResendSelection() {}
+
 func (s *mockServer) lastNotification() (selectionNotification, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

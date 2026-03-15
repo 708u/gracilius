@@ -279,6 +279,16 @@ func (s *Server) GetLatestSelection() *protocol.SelectionResult {
 	}
 }
 
+// ResendSelection re-broadcasts the last sent selection to all connected clients.
+// This bypasses debounce and change detection to force a re-send.
+func (s *Server) ResendSelection() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lastSentSelection != nil {
+		s.broadcastSelection(s.lastSentSelection)
+	}
+}
+
 // hasSelectionChanged checks if the selection has changed from the last sent state.
 func (s *Server) hasSelectionChanged(filePath, text string, startLine, startChar, endLine, endChar int) bool {
 	if s.lastSentSelection == nil {
