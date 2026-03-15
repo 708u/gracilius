@@ -215,6 +215,9 @@ type Model struct {
 	gitMergeBase     string
 	gitDefaultBranch string
 
+	// auto-open guard: ensures the first diff tab is opened only once at startup
+	initialDiffAutoOpened bool
+
 	// file exclusion (gitignore-based when available)
 	excludeFunc ExcludeFunc
 
@@ -333,7 +336,7 @@ func NewModel(srv MCPServer, store CommentRepository, diffStore DiffCommentRepos
 		dirWatcher:         dirWatcher,
 		tabs:               []*tab{},
 		treeWidth:          30,
-		activePanel:        panelFiles,
+		activePanel:        panelGitDiff,
 		sidebarVisible:     true,
 		keys:               newKeyMap(),
 		help:               help.New(),
@@ -346,7 +349,7 @@ func NewModel(srv MCPServer, store CommentRepository, diffStore DiffCommentRepos
 		diffCommentRepo:    diffStore,
 		diffCommentWatcher: diffCommentWatcher,
 		gitDirWatcher:      gitDirWatcher,
-		gitDiffMode:        gitModeWorking,
+		gitDiffMode:        gitModeBranch,
 		gitModeState:       make([]gitPanelState, len(gitDiffModes)),
 		excludeFunc:        exclude,
 		search:             newSearchState(),

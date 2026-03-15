@@ -29,7 +29,7 @@ type selectionDebounceMsg struct{ gen int }
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.watchFile(), m.watchDir(), m.watchComments(), m.watchDiffComments(), m.watchGitDir(), tea.RequestBackgroundColor)
+	return tea.Batch(m.watchFile(), m.watchDir(), m.watchComments(), m.watchDiffComments(), m.watchGitDir(), tea.RequestBackgroundColor, m.initGitBranchInfoAsync())
 }
 
 type direction int

@@ -132,6 +132,7 @@ func (m *Model) handleGitBranchInfo(msg gitBranchInfoMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.err != "" {
 		m.statusMsg = msg.err
+		m.initialDiffAutoOpened = true
 		return m, statusTickCmd()
 	}
 	m.gitMergeBase = msg.mergeBase
@@ -146,6 +147,9 @@ func (m *Model) handleGitChangedFiles(msg gitChangedFilesMsg) (tea.Model, tea.Cm
 		m.statusMsg = fmt.Sprintf("git diff: %v", msg.err)
 		gs.loaded = true
 		m.gitAnyLoaded = true
+		if !m.initialDiffAutoOpened && msg.mode == gitModeBranch {
+			m.initialDiffAutoOpened = true
+		}
 		return m, statusTickCmd()
 	}
 	gs.entries = msg.entries
@@ -156,6 +160,12 @@ func (m *Model) handleGitChangedFiles(msg gitChangedFilesMsg) (tea.Model, tea.Cm
 	if gs.cursor >= len(gs.entries) {
 		gs.cursor = max(0, len(gs.entries)-1)
 	}
+
+	// Auto-open the first file on initial branch mode load.
+	if !m.initialDiffAutoOpened && msg.mode == gitModeBranch {
+		m.autoOpenFirstDiff()
+	}
+
 	return m, nil
 }
 
@@ -231,6 +241,31 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 		}
 	}
 	return rows, reverseMap
+}
+
+// autoOpenFirstDiff opens the first non-binary changed file as a diff tab
+// on initial startup. Called once when the first branch-mode result arrives.
+func (m *Model) autoOpenFirstDiff() {
+	m.initialDiffAutoOpened = true
+
+	gs := &m.gitModeState[gitModeBranch]
+	if len(gs.entries) == 0 {
+		return
+	}
+
+	idx := -1
+	for i := range gs.entries {
+		if !gs.entries[i].binary {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return
+	}
+
+	gs.cursor = idx
+	m.openGitDiffEntry()
 }
 
 // openGitDiffEntry opens a diff tab for the selected git changed file.
