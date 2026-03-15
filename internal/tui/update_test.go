@@ -800,3 +800,55 @@ func TestDiffSide_SelectionTextMatchesSide(t *testing.T) {
 		t.Errorf("expected 'world' for new side, got %q", newText)
 	}
 }
+
+func TestDiffSide_ChangeJumpPreservesSide(t *testing.T) {
+	// Block: [modified, modified, added]
+	// Pressing ] from first modified row with old side should land at
+	// blockEnd (added row) but keep old side.
+	m := newTestModelWithDiff(t,
+		[]string{"old1", "old2"},
+		[]string{"new1", "new2", "added"},
+	)
+	tab := m.tabs[0]
+
+	// Start on first modified row, old side.
+	tab.diffCursor = 0
+	tab.diffSide = diffSideOld
+
+	// Find block end.
+	rows := tab.diffViewData.rows
+	blockEnd := len(rows) - 1
+
+	// Verify the last row is an added row (only has new side).
+	if rows[blockEnd].rowType != diffRowAdded {
+		t.Fatalf("expected last row to be added, got %d", rows[blockEnd].rowType)
+	}
+
+	// Press ] to jump to block end.
+	m.Update(tea.KeyPressMsg{Code: ']', Text: "]"})
+
+	if tab.diffSide != diffSideOld {
+		t.Errorf("expected diffSideOld preserved after ], got %d", tab.diffSide)
+	}
+	if tab.diffCursor != blockEnd {
+		t.Errorf("expected cursor at blockEnd=%d, got %d", blockEnd, tab.diffCursor)
+	}
+}
+
+func TestDiffSide_BlankLineJumpPreservesSide(t *testing.T) {
+	m := newTestModelWithDiff(t,
+		[]string{"line1", "", "line3"},
+		[]string{"line1", "", "line3-changed"},
+	)
+	tab := m.tabs[0]
+
+	tab.diffCursor = 0
+	tab.diffSide = diffSideOld
+
+	// Press } to jump to next blank-line boundary.
+	m.Update(tea.KeyPressMsg{Code: '}', Text: "}"})
+
+	if tab.diffSide != diffSideOld {
+		t.Errorf("expected diffSideOld preserved after }, got %d", tab.diffSide)
+	}
+}

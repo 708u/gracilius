@@ -347,7 +347,6 @@ func (m *Model) diffJumpBlankLine(t *tab, dir int) {
 
 	if line != cur {
 		t.diffCursor = line
-		t.snapDiffSide()
 		t.syncDiffAnchor()
 		m.notifySelectionChanged()
 	}
@@ -415,7 +414,6 @@ func (m *Model) diffJumpChange(t *tab, dir int) {
 		}
 	}
 
-	t.snapDiffSide()
 	t.syncDiffAnchor()
 	m.notifySelectionChanged()
 }
@@ -453,7 +451,6 @@ func (m *Model) diffJumpToNextBlock(t *tab, from, dir int) {
 	}
 
 	t.diffCursor = line
-	t.snapDiffSide()
 	t.syncDiffAnchor()
 	m.notifySelectionChanged()
 }
