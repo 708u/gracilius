@@ -577,11 +577,11 @@ func (m *Model) overlayDiffTextarea(t *tab, diffLines []string, viewOff, width, 
 // applyDiffGutterHighlights re-renders diff rows that need cursor or selection
 // gutter highlighting within the visible window.
 func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, width int) {
-	if t.diffViewData == nil || len(t.diffRowVisualStarts) == 0 {
+	if t.diffViewData == nil || len(t.diffRowVisualStarts) == 0 || t.diffCachedCtx == nil {
 		return
 	}
 
-	ctx := newDiffSideCtx(t.diffViewData, m.theme, width)
+	ctx := *t.diffCachedCtx
 	highlightBg := m.theme.SelectionBgSeq()
 
 	startRow, endRow := t.diffCursor, t.diffCursor

@@ -204,6 +204,9 @@ type Model struct {
 
 	// in-file search
 	search searchState
+
+	// selection notification debounce
+	selectionGen int
 }
 
 // lineKind distinguishes the type of a visual row.

@@ -260,7 +260,8 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 			t.diffCursor--
 			t.snapDiffSide()
 			t.syncDiffAnchor()
-			m.notifySelectionChanged()
+			cmd := m.scheduleSelectionNotify()
+			return m, cmd, true
 		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.Down):
@@ -268,7 +269,8 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 			t.diffCursor++
 			t.snapDiffSide()
 			t.syncDiffAnchor()
-			m.notifySelectionChanged()
+			cmd := m.scheduleSelectionNotify()
+			return m, cmd, true
 		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.GoBottom):
@@ -276,7 +278,8 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 			t.diffCursor = len(t.diffViewData.Rows) - 1
 			t.snapDiffSide()
 			t.syncDiffAnchor()
-			m.notifySelectionChanged()
+			cmd := m.scheduleSelectionNotify()
+			return m, cmd, true
 		}
 		return m, nil, true
 
@@ -297,18 +300,22 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	// Blank-line boundary jump (same as file tab {/}).
 	case key.Matches(msg, m.keys.BlockUp):
 		m.diffJumpBlankLine(t, -1)
-		return m, nil, true
+		cmd := m.scheduleSelectionNotify()
+		return m, cmd, true
 	case key.Matches(msg, m.keys.BlockDown):
 		m.diffJumpBlankLine(t, 1)
-		return m, nil, true
+		cmd := m.scheduleSelectionNotify()
+		return m, cmd, true
 
 	// Change block jump ([/]).
 	case key.Matches(msg, m.keys.ChangeUp):
 		m.diffJumpChange(t, -1)
-		return m, nil, true
+		cmd := m.scheduleSelectionNotify()
+		return m, cmd, true
 	case key.Matches(msg, m.keys.ChangeDown):
 		m.diffJumpChange(t, 1)
-		return m, nil, true
+		cmd := m.scheduleSelectionNotify()
+		return m, cmd, true
 
 	// Copy selection.
 	case key.Matches(msg, m.keys.Copy):
@@ -432,7 +439,6 @@ func (m *Model) diffJumpBlankLine(t *tab, dir int) {
 	if line != cur {
 		t.diffCursor = line
 		t.syncDiffAnchor()
-		m.notifySelectionChanged()
 	}
 }
 
@@ -514,7 +520,6 @@ func (m *Model) diffJumpChange(t *tab, dir int) {
 	}
 
 	t.syncDiffAnchor()
-	m.notifySelectionChanged()
 }
 
 // diffJumpToNextBlock moves the cursor to the next change block in dir,
@@ -577,7 +582,6 @@ func (m *Model) diffJumpToNextBlock(t *tab, from, dir int) {
 		if target >= 0 {
 			t.diffCursor = target
 			t.syncDiffAnchor()
-			m.notifySelectionChanged()
 			return
 		}
 

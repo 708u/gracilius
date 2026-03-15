@@ -15,6 +15,7 @@ const (
 	quitTimeout        = 750 * time.Millisecond
 	statusClearTimeout = 2 * time.Second
 	gitSyncDebounce    = 200 * time.Millisecond
+	selectionDebounce  = 50 * time.Millisecond
 )
 
 // quitTimeoutMsg is sent when the quit confirmation window expires.
@@ -22,6 +23,9 @@ type quitTimeoutMsg struct{}
 
 // statusClearMsg is sent to clear the temporary status message.
 type statusClearMsg struct{}
+
+// selectionDebounceMsg fires after selectionDebounce to send a batched notification.
+type selectionDebounceMsg struct{ gen int }
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
@@ -170,6 +174,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleGitBranchInfo(msg)
 	case gitDirChangedMsg:
 		return m.handleGitDirChanged(msg)
+	case selectionDebounceMsg:
+		if msg.gen == m.selectionGen {
+			m.notifySelectionChanged()
+		}
+		return m, nil
 	case gitSyncMsg:
 		return m.handleGitSync(msg)
 	case OpenDiffMsg:
