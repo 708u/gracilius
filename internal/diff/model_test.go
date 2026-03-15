@@ -219,3 +219,174 @@ func TestDetectHunks_NoChanges(t *testing.T) {
 		t.Fatalf("expected 0 hunks, got %d", len(d.Hunks))
 	}
 }
+
+func TestBuild_BothNil(t *testing.T) {
+	d := Build(nil, nil)
+
+	if len(d.Rows) != 0 {
+		t.Errorf("expected 0 rows, got %d", len(d.Rows))
+	}
+	if len(d.Hunks) != 0 {
+		t.Errorf("expected 0 hunks, got %d", len(d.Hunks))
+	}
+	if d.Summary.Additions != 0 || d.Summary.Deletions != 0 || d.Summary.Modified != 0 {
+		t.Errorf("expected zero stats, got %+v", d.Summary)
+	}
+	if d.MaxLineNum != 0 {
+		t.Errorf("expected MaxLineNum 0, got %d", d.MaxLineNum)
+	}
+}
+
+func TestBuild_BothEmpty(t *testing.T) {
+	d := Build([]string{}, []string{})
+
+	if len(d.Rows) != 0 {
+		t.Errorf("expected 0 rows, got %d", len(d.Rows))
+	}
+	if len(d.Hunks) != 0 {
+		t.Errorf("expected 0 hunks, got %d", len(d.Hunks))
+	}
+	if d.Summary.Additions != 0 || d.Summary.Deletions != 0 || d.Summary.Modified != 0 {
+		t.Errorf("expected zero stats, got %+v", d.Summary)
+	}
+	if d.MaxLineNum != 0 {
+		t.Errorf("expected MaxLineNum 0, got %d", d.MaxLineNum)
+	}
+}
+
+func TestBuild_WordDiffComputed(t *testing.T) {
+	old := []string{"hello world"}
+	new := []string{"hello earth"}
+	d := Build(old, new)
+
+	if len(d.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(d.Rows))
+	}
+	r := d.Rows[0]
+	if r.Type != RowModified {
+		t.Fatalf("expected RowModified, got %d", r.Type)
+	}
+	if r.OldSpans == nil {
+		t.Error("expected non-nil OldSpans for modified row")
+	}
+	if r.NewSpans == nil {
+		t.Error("expected non-nil NewSpans for modified row")
+	}
+
+	// Verify unchanged rows do NOT get word diff spans.
+	old2 := []string{"same", "changed"}
+	new2 := []string{"same", "CHANGED"}
+	d2 := Build(old2, new2)
+
+	for _, r := range d2.Rows {
+		if r.Type == RowUnchanged {
+			if r.OldSpans != nil || r.NewSpans != nil {
+				t.Error("unchanged row should have nil spans")
+			}
+		}
+	}
+}
+
+func TestBuild_MaxLineNum(t *testing.T) {
+	old := []string{"a", "b", "c"}
+	new := []string{"a", "b", "c"}
+	d := Build(old, new)
+
+	if d.MaxLineNum != 3 {
+		t.Errorf("expected MaxLineNum 3, got %d", d.MaxLineNum)
+	}
+
+	// When new side is longer, MaxLineNum should reflect it.
+	d2 := Build([]string{"a"}, []string{"a", "b", "c", "d", "e"})
+	if d2.MaxLineNum != 5 {
+		t.Errorf("expected MaxLineNum 5, got %d", d2.MaxLineNum)
+	}
+
+	// When old side is longer, MaxLineNum should reflect it.
+	d3 := Build([]string{"a", "b", "c", "d"}, []string{"a"})
+	if d3.MaxLineNum != 4 {
+		t.Errorf("expected MaxLineNum 4, got %d", d3.MaxLineNum)
+	}
+}
+
+func TestBuild_StandaloneInsert(t *testing.T) {
+	// Insert at the beginning (not preceded by deletes).
+	old := []string{"a", "b"}
+	new := []string{"x", "a", "b"}
+	d := Build(old, new)
+
+	foundAdded := false
+	for _, r := range d.Rows {
+		if r.Type == RowAdded && r.NewText == "x" {
+			foundAdded = true
+			if r.OldLineNum != 0 {
+				t.Errorf("standalone insert should have OldLineNum 0, got %d", r.OldLineNum)
+			}
+		}
+	}
+	if !foundAdded {
+		t.Error("expected to find a RowAdded for standalone insert 'x'")
+	}
+	if d.Summary.Additions < 1 {
+		t.Errorf("expected at least 1 addition, got %d", d.Summary.Additions)
+	}
+}
+
+func TestDetectHunks_EmptyRows(t *testing.T) {
+	hunks := DetectHunks(nil, 3)
+	if hunks != nil {
+		t.Errorf("expected nil hunks, got %v", hunks)
+	}
+
+	hunks2 := DetectHunks([]Row{}, 3)
+	if hunks2 != nil {
+		t.Errorf("expected nil hunks for empty slice, got %v", hunks2)
+	}
+}
+
+func TestDetectHunks_AllChanged(t *testing.T) {
+	rows := []Row{
+		{Type: RowModified},
+		{Type: RowAdded},
+		{Type: RowDeleted},
+		{Type: RowModified},
+	}
+	hunks := DetectHunks(rows, 3)
+
+	if len(hunks) != 1 {
+		t.Fatalf("expected 1 hunk, got %d", len(hunks))
+	}
+	if hunks[0].StartIdx != 0 {
+		t.Errorf("expected StartIdx 0, got %d", hunks[0].StartIdx)
+	}
+	if hunks[0].EndIdx != 4 {
+		t.Errorf("expected EndIdx 4, got %d", hunks[0].EndIdx)
+	}
+}
+
+func TestDetectHunks_ContextZero(t *testing.T) {
+	rows := []Row{
+		{Type: RowUnchanged},
+		{Type: RowUnchanged},
+		{Type: RowModified},
+		{Type: RowUnchanged},
+		{Type: RowUnchanged},
+		{Type: RowUnchanged},
+		{Type: RowUnchanged},
+		{Type: RowDeleted},
+		{Type: RowUnchanged},
+	}
+	hunks := DetectHunks(rows, 0)
+
+	if len(hunks) != 2 {
+		t.Fatalf("expected 2 hunks with zero context, got %d", len(hunks))
+	}
+	// First hunk covers only the modified row.
+	if hunks[0].StartIdx != 2 || hunks[0].EndIdx != 3 {
+		t.Errorf("hunk[0]: expected [2,3), got [%d,%d)", hunks[0].StartIdx, hunks[0].EndIdx)
+	}
+	// Second hunk covers only the deleted row.
+	if hunks[1].StartIdx != 7 || hunks[1].EndIdx != 8 {
+		t.Errorf("hunk[1]: expected [7,8), got [%d,%d)", hunks[1].StartIdx, hunks[1].EndIdx)
+	}
+}
