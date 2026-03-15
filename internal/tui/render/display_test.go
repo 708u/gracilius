@@ -72,7 +72,7 @@ func TestRuneWidth_ASCII(t *testing.T) {
 }
 
 func TestRuneWidth_CJK(t *testing.T) {
-	cjk := []rune("\u4e16\u754c\u4eba\u3042\uff21")
+	cjk := "\u4e16\u754c\u4eba\u3042\uff21"
 	for _, r := range cjk {
 		w := RuneWidth(r)
 		if w != 2 {
