@@ -58,6 +58,7 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.treeCursor = 0
 			case hasTab && t.diffViewData != nil:
 				t.diffCursor = 0
+				t.snapDiffSide()
 				t.syncDiffAnchor()
 				m.notifySelectionChanged()
 			case hasTab && len(t.lines) > 0:
@@ -208,6 +209,7 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	case key.Matches(msg, m.keys.Up):
 		if t.diffViewData != nil && t.diffCursor > 0 {
 			t.diffCursor--
+			t.snapDiffSide()
 			t.syncDiffAnchor()
 			m.notifySelectionChanged()
 		}
@@ -215,6 +217,7 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	case key.Matches(msg, m.keys.Down):
 		if t.diffViewData != nil && t.diffCursor < len(t.diffViewData.rows)-1 {
 			t.diffCursor++
+			t.snapDiffSide()
 			t.syncDiffAnchor()
 			m.notifySelectionChanged()
 		}
@@ -222,6 +225,7 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	case key.Matches(msg, m.keys.GoBottom):
 		if t.diffViewData != nil && len(t.diffViewData.rows) > 0 {
 			t.diffCursor = len(t.diffViewData.rows) - 1
+			t.snapDiffSide()
 			t.syncDiffAnchor()
 			m.notifySelectionChanged()
 		}
@@ -278,16 +282,34 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 			return m, nil, true
 		}
 
+	// Left/Right: switch diff side on unchanged/modified rows.
+	case key.Matches(msg, m.keys.Left):
+		m.setDiffSide(t, diffSideOld)
+		return m, nil, true
+	case key.Matches(msg, m.keys.Right):
+		m.setDiffSide(t, diffSideNew)
+		return m, nil, true
+
 	// No-op: suppress file-tab actions that should not fire on diff tabs.
 	// Search keys (/, n, N, Enter, Shift+Enter) are intentionally NOT
 	// listed here so they fall through to handleKeyNormal.
-	case key.Matches(msg, m.keys.Left),
-		key.Matches(msg, m.keys.Right),
-		key.Matches(msg, m.keys.Comment):
+	case key.Matches(msg, m.keys.Comment):
 		return m, nil, true
 	}
 
 	return m, nil, false
+}
+
+// setDiffSide switches the diff side on rows that have both sides.
+func (m *Model) setDiffSide(t *tab, side diffSide) {
+	if t.diffViewData == nil || t.diffCursor >= len(t.diffViewData.rows) {
+		return
+	}
+	row := t.diffViewData.rows[t.diffCursor]
+	if row.rowType == diffRowUnchanged || row.rowType == diffRowModified {
+		t.diffSide = side
+		m.notifySelectionChanged()
+	}
 }
 
 // diffJumpBlankLine moves the diff cursor to the next/previous blank-line
@@ -308,7 +330,8 @@ func (m *Model) diffJumpBlankLine(t *tab, dir int) {
 	}
 
 	isBlank := func(i int) bool {
-		return isBlankLine(diffRowText(rows[i]))
+		side := diffRowAvailableSide(rows[i], t.diffSide)
+		return isBlankLine(diffRowTextForSide(rows[i], side))
 	}
 
 	line := cur
@@ -329,17 +352,18 @@ func (m *Model) diffJumpBlankLine(t *tab, dir int) {
 	}
 }
 
-// diffJumpChange moves the diff cursor stepwise through change blocks.
+// diffJumpChange moves the diff cursor stepwise through change blocks,
+// landing only on rows that have content on the current diffSide.
 //
 // For dir > 0 (]):
-//   - Inside a change block (not at its last row): jump to the last row.
-//   - At the last row of a change block, or on an unchanged row: jump to
-//     the first row of the next change block.
+//   - Inside a change block: jump to the last matching row in this block.
+//   - At the last matching row or on an unchanged row: jump to the next
+//     block's first matching row.
 //
 // For dir < 0 ([):
-//   - Inside a change block (not at its first row): jump to the first row.
-//   - At the first row of a change block, or on an unchanged row: jump to
-//     the last row of the previous change block.
+//   - Inside a change block: jump to the first matching row in this block.
+//   - At the first matching row or on an unchanged row: jump to the
+//     previous block's last matching row.
 func (m *Model) diffJumpChange(t *tab, dir int) {
 	if t.diffViewData == nil {
 		return
@@ -354,9 +378,11 @@ func (m *Model) diffJumpChange(t *tab, dir int) {
 	isChanged := func(i int) bool {
 		return rows[i].rowType != diffRowUnchanged
 	}
+	matchesSide := func(i int) bool {
+		return diffRowAvailableSide(rows[i], t.diffSide) == t.diffSide
+	}
 
 	if !isChanged(cur) {
-		// On an unchanged row: find the nearest change block in dir.
 		m.diffJumpToNextBlock(t, cur, dir)
 		return
 	}
@@ -372,21 +398,33 @@ func (m *Model) diffJumpChange(t *tab, dir int) {
 	}
 
 	if dir > 0 {
-		if cur < blockEnd {
-			// Not at the last row: jump to end of this block.
-			t.diffCursor = blockEnd
+		// Find last matching row between cur+1 and blockEnd.
+		target := -1
+		for i := blockEnd; i > cur; i-- {
+			if matchesSide(i) {
+				target = i
+				break
+			}
+		}
+		if target >= 0 {
+			t.diffCursor = target
 		} else {
-			// At the last row: jump to the next block's first row.
-			m.diffJumpToNextBlock(t, cur, dir)
+			m.diffJumpToNextBlock(t, blockEnd, dir)
 			return
 		}
 	} else {
-		if cur > blockStart {
-			// Not at the first row: jump to start of this block.
-			t.diffCursor = blockStart
+		// Find first matching row between blockStart and cur-1.
+		target := -1
+		for i := blockStart; i < cur; i++ {
+			if matchesSide(i) {
+				target = i
+				break
+			}
+		}
+		if target >= 0 {
+			t.diffCursor = target
 		} else {
-			// At the first row: jump to the previous block's last row.
-			m.diffJumpToNextBlock(t, cur, dir)
+			m.diffJumpToNextBlock(t, blockStart, dir)
 			return
 		}
 	}
@@ -395,8 +433,9 @@ func (m *Model) diffJumpChange(t *tab, dir int) {
 	m.notifySelectionChanged()
 }
 
-// diffJumpToNextBlock moves the cursor to the next change block in dir.
-// For dir > 0 it lands on the block's first row; for dir < 0 on its last row.
+// diffJumpToNextBlock moves the cursor to the next change block in dir,
+// landing on the first (dir>0) or last (dir<0) row that matches the
+// current diffSide. Blocks with no matching rows are skipped.
 func (m *Model) diffJumpToNextBlock(t *tab, from, dir int) {
 	rows := t.diffViewData.rows
 	last := len(rows) - 1
@@ -404,32 +443,67 @@ func (m *Model) diffJumpToNextBlock(t *tab, from, dir int) {
 	isChanged := func(i int) bool {
 		return rows[i].rowType != diffRowUnchanged
 	}
+	matchesSide := func(i int) bool {
+		return diffRowAvailableSide(rows[i], t.diffSide) == t.diffSide
+	}
+	expandBlock := func(pos int) (int, int) {
+		s, e := pos, pos
+		for s > 0 && isChanged(s-1) {
+			s--
+		}
+		for e < last && isChanged(e+1) {
+			e++
+		}
+		return s, e
+	}
+	// searchMatch scans [from, to] in steps of step for a matching row.
+	// Returns the index or -1.
+	searchMatch := func(from, to, step int) int {
+		for i := from; i != to+step; i += step {
+			if matchesSide(i) {
+				return i
+			}
+		}
+		return -1
+	}
 
 	line := from + dir
 	// Skip any remaining changed rows of the current block.
 	for line >= 0 && line <= last && isChanged(line) {
 		line += dir
 	}
-	// Skip unchanged rows.
-	for line >= 0 && line <= last && !isChanged(line) {
-		line += dir
-	}
 
-	if line < 0 || line > last || !isChanged(line) {
-		return
-	}
+	// Search successive blocks until finding one with a matching row.
+	for {
+		for line >= 0 && line <= last && !isChanged(line) {
+			line += dir
+		}
+		if line < 0 || line > last || !isChanged(line) {
+			return
+		}
 
-	// Going backward: the scan lands on the first changed row of the block;
-	// walk forward to find the last row so we land on the block's end.
-	if dir < 0 {
-		for line < last && isChanged(line+1) {
-			line++
+		bStart, bEnd := expandBlock(line)
+
+		var target int
+		if dir > 0 {
+			target = searchMatch(bStart, bEnd, 1)
+		} else {
+			target = searchMatch(bEnd, bStart, -1)
+		}
+		if target >= 0 {
+			t.diffCursor = target
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
+			return
+		}
+
+		// No matching row in this block; skip past it.
+		if dir > 0 {
+			line = bEnd + 1
+		} else {
+			line = bStart - 1
 		}
 	}
-
-	t.diffCursor = line
-	t.syncDiffAnchor()
-	m.notifySelectionChanged()
 }
 
 // handleKeyNormal handles key events in normal (non-input, non-overlay) mode.

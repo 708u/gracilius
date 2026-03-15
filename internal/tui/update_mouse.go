@@ -95,6 +95,8 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		t.diffCursor = row
 		t.diffAnchor = row
 		t.diffSelecting = false
+		t.diffSide = m.diffSideFromX(lo, msg.X)
+		t.snapDiffSide()
 		m.mouseDown = true
 		m.lastMouseLine = row
 		m.notifySelectionChanged()
@@ -207,6 +209,15 @@ func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) (tea.Model, tea.Cmd)
 		m.notifySelectionChanged()
 	}
 	return m, nil
+}
+
+// diffSideFromX returns the diff side based on the mouse X coordinate.
+func (m *Model) diffSideFromX(lo layout, x int) diffSide {
+	sideWidth := (lo.editorWidth - diffSeparatorWidth) / 2
+	if x-lo.editorStartX < sideWidth {
+		return diffSideOld
+	}
+	return diffSideNew
 }
 
 // handleMouseWheel handles mouse scroll events.

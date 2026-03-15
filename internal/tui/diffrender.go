@@ -91,12 +91,12 @@ func newDiffSideCtx(data *diffData, theme themeConfig, width int) diffSideCtx {
 }
 
 // renderSingleDiffRow renders one diff row into visual lines.
-// ctx.gutterHighlight controls the gutter background color for cursor/selection.
+// oldCtx/newCtx control the gutter background color independently for each side.
 // oldSearchHL/newSearchHL are search match highlights for this row (may be nil).
 func renderSingleDiffRow(
 	row diffRow,
 	oldHL, newHL []highlightedLine,
-	ctx diffSideCtx,
+	oldCtx, newCtx diffSideCtx,
 	width int,
 	oldSearchHL, newSearchHL []highlightRange,
 ) []string {
@@ -108,8 +108,8 @@ func renderSingleDiffRow(
 		newRuns = newHL[row.newLineNum-1].runs
 	}
 
-	oldVisuals := wrapDiffSide(row.oldLineNum, row.oldText, row.oldSpans, oldRuns, row.rowType, true, ctx, oldSearchHL)
-	newVisuals := wrapDiffSide(row.newLineNum, row.newText, row.newSpans, newRuns, row.rowType, false, ctx, newSearchHL)
+	oldVisuals := wrapDiffSide(row.oldLineNum, row.oldText, row.oldSpans, oldRuns, row.rowType, true, oldCtx, oldSearchHL)
+	newVisuals := wrapDiffSide(row.newLineNum, row.newText, row.newSpans, newRuns, row.rowType, false, newCtx, newSearchHL)
 
 	rowCount := max(len(oldVisuals), len(newVisuals))
 	result := make([]string, 0, rowCount)
@@ -118,13 +118,13 @@ func renderSingleDiffRow(
 		if j < len(oldVisuals) {
 			sb.WriteString(oldVisuals[j])
 		} else {
-			writeDiffFiller(&sb, row.oldLineNum, row.rowType, true, ctx)
+			writeDiffFiller(&sb, row.oldLineNum, row.rowType, true, oldCtx)
 		}
 		sb.WriteString(diffSeparator)
 		if j < len(newVisuals) {
 			sb.WriteString(newVisuals[j])
 		} else {
-			writeDiffFiller(&sb, row.newLineNum, row.rowType, false, ctx)
+			writeDiffFiller(&sb, row.newLineNum, row.rowType, false, newCtx)
 		}
 		result = append(result, padRight(sb.String(), width))
 	}
@@ -156,7 +156,7 @@ func renderAllDiffLines(data *diffData, theme themeConfig, width int, oldHL, new
 
 	for i, row := range data.rows {
 		rowVisualStart[i] = len(lines)
-		rowLines := renderSingleDiffRow(row, oldHL, newHL, ctx, width, oldSearchByRow[i], newSearchByRow[i])
+		rowLines := renderSingleDiffRow(row, oldHL, newHL, ctx, ctx, width, oldSearchByRow[i], newSearchByRow[i])
 		lines = append(lines, rowLines...)
 	}
 
