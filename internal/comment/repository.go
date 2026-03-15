@@ -19,6 +19,7 @@ type Entry struct {
 	EndLine    int
 	Text       string
 	Snippet    string
+	Side       string    // "old", "new", or "" (file comment)
 	ResolvedAt time.Time // zero value = unresolved
 	CreatedAt  time.Time
 }
@@ -31,6 +32,7 @@ type commentJSON struct {
 	EndLine    int    `json:"endLine"`
 	Text       string `json:"text"`
 	Snippet    string `json:"snippet"`
+	Side       string `json:"side,omitempty"`
 	ResolvedAt string `json:"resolvedAt,omitempty"`
 	CreatedAt  string `json:"createdAt"`
 }
@@ -44,6 +46,7 @@ func (c *Entry) MarshalJSON() ([]byte, error) {
 		EndLine:   c.EndLine,
 		Text:      c.Text,
 		Snippet:   c.Snippet,
+		Side:      c.Side,
 		CreatedAt: c.CreatedAt.Format(time.RFC3339),
 	}
 	if !c.ResolvedAt.IsZero() {
@@ -64,6 +67,7 @@ func (c *Entry) UnmarshalJSON(data []byte) error {
 	c.EndLine = j.EndLine
 	c.Text = j.Text
 	c.Snippet = j.Snippet
+	c.Side = j.Side
 	if j.CreatedAt != "" {
 		t, err := time.Parse(time.RFC3339, j.CreatedAt)
 		if err != nil {
@@ -89,6 +93,79 @@ type CommentsFile struct {
 }
 
 const purgeAge = 30 * 24 * time.Hour
+
+// purgeResolved removes resolved comments older than purgeAge.
+func purgeResolved(comments []Entry) []Entry {
+	now := time.Now()
+	var kept []Entry
+	for i := range comments {
+		if !comments[i].ResolvedAt.IsZero() && now.Sub(comments[i].ResolvedAt) > purgeAge {
+			continue
+		}
+		kept = append(kept, comments[i])
+	}
+	return kept
+}
+
+// commentsFileI is a constraint for types that have a Comments field.
+type commentsFileI interface {
+	CommentsFile | DiffCommentsFile
+	comments() []Entry
+}
+
+func (cf CommentsFile) comments() []Entry     { return cf.Comments }
+func (cf DiffCommentsFile) comments() []Entry { return cf.Comments }
+
+// loadJSON reads and unmarshals a comments file, returning nil on not-found.
+func loadJSON[T commentsFileI](path string) ([]Entry, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var cf T
+	if err := json.Unmarshal(data, &cf); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return cf.comments(), nil
+}
+
+// filterComments returns comments matching the given filters.
+func filterComments(comments []Entry, filePath string, includeResolved bool) []Entry {
+	var result []Entry
+	for i := range comments {
+		if filePath != "" && comments[i].FilePath != filePath {
+			continue
+		}
+		if !includeResolved && !comments[i].ResolvedAt.IsZero() {
+			continue
+		}
+		result = append(result, comments[i])
+	}
+	return result
+}
+
+// atomicWriteJSON writes data to path atomically via a temp file and rename.
+func atomicWriteJSON(path string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	data = append(data, '\n')
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return fmt.Errorf("write temp file: %w", err)
+	}
+
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("rename temp file: %w", err)
+	}
+	return nil
+}
 
 // Repository manages comment persistence.
 type Repository struct {
@@ -122,53 +199,16 @@ func (s *Repository) DataPath() string {
 }
 
 func (s *Repository) load() ([]Entry, error) {
-	data, err := os.ReadFile(s.DataPath())
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var cf CommentsFile
-	if err := json.Unmarshal(data, &cf); err != nil {
-		return nil, fmt.Errorf("decode comments: %w", err)
-	}
-	return cf.Comments, nil
+	return loadJSON[CommentsFile](s.DataPath())
 }
 
 func (s *Repository) save(comments []Entry) error {
-	now := time.Now()
-	var kept []Entry
-	for i := range comments {
-		if !comments[i].ResolvedAt.IsZero() && now.Sub(comments[i].ResolvedAt) > purgeAge {
-			continue
-		}
-		kept = append(kept, comments[i])
-	}
-
 	cf := CommentsFile{
 		RootDir:  s.rootDir,
 		Version:  1,
-		Comments: kept,
+		Comments: purgeResolved(comments),
 	}
-
-	data, err := json.MarshalIndent(cf, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal comments: %w", err)
-	}
-	data = append(data, '\n')
-
-	tmp := s.DataPath() + ".tmp"
-	if err := os.WriteFile(tmp, data, 0600); err != nil {
-		return fmt.Errorf("write temp file: %w", err)
-	}
-
-	if err := os.Rename(tmp, s.DataPath()); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("rename temp file: %w", err)
-	}
-
-	return nil
+	return atomicWriteJSON(s.DataPath(), cf)
 }
 
 // Add adds a comment to the store.
@@ -248,15 +288,5 @@ func (s *Repository) List(filePath string, includeResolved bool) ([]Entry, error
 	if err != nil {
 		return nil, err
 	}
-	var result []Entry
-	for i := range comments {
-		if filePath != "" && comments[i].FilePath != filePath {
-			continue
-		}
-		if !includeResolved && !comments[i].ResolvedAt.IsZero() {
-			continue
-		}
-		result = append(result, comments[i])
-	}
-	return result, nil
+	return filterComments(comments, filePath, includeResolved), nil
 }

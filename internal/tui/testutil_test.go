@@ -41,24 +41,78 @@ func (s *mockCommentRepository) Delete(id string) error {
 func (s *mockCommentRepository) DeleteByFile(string) error { s.comments = nil; return nil }
 func (s *mockCommentRepository) DataPath() string          { return "" }
 
+// mockDiffCommentRepository is a no-op DiffCommentRepository for tests.
+type mockDiffCommentRepository struct {
+	comments map[string][]comment.Entry // key: context.Key()
+}
+
+func newMockDiffCommentRepo() *mockDiffCommentRepository {
+	return &mockDiffCommentRepository{comments: map[string][]comment.Entry{}}
+}
+
+func (s *mockDiffCommentRepository) List(ctx comment.DiffContext, filePath string, _ bool) ([]comment.Entry, error) {
+	var result []comment.Entry
+	for _, c := range s.comments[ctx.Key()] {
+		if filePath == "" || c.FilePath == filePath {
+			result = append(result, c)
+		}
+	}
+	return result, nil
+}
+func (s *mockDiffCommentRepository) Add(ctx comment.DiffContext, c comment.Entry) error {
+	s.comments[ctx.Key()] = append(s.comments[ctx.Key()], c)
+	return nil
+}
+func (s *mockDiffCommentRepository) Replace(ctx comment.DiffContext, oldID string, c comment.Entry) error {
+	key := ctx.Key()
+	for i := range s.comments[key] {
+		if s.comments[key][i].ID == oldID {
+			s.comments[key] = append(s.comments[key][:i], s.comments[key][i+1:]...)
+			break
+		}
+	}
+	s.comments[key] = append(s.comments[key], c)
+	return nil
+}
+func (s *mockDiffCommentRepository) Delete(ctx comment.DiffContext, id string) error {
+	key := ctx.Key()
+	for i := range s.comments[key] {
+		if s.comments[key][i].ID == id {
+			s.comments[key] = append(s.comments[key][:i], s.comments[key][i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+func (s *mockDiffCommentRepository) DeleteByFile(ctx comment.DiffContext, _ string) error {
+	s.comments[ctx.Key()] = nil
+	return nil
+}
+func (s *mockDiffCommentRepository) DeleteContext(ctx comment.DiffContext) error {
+	delete(s.comments, ctx.Key())
+	return nil
+}
+func (s *mockDiffCommentRepository) DiffDir() string { return "" }
+
 // newTestModel creates a minimal Model with mock server and temp directory.
 func newTestModel(t *testing.T) *Model {
 	t.Helper()
 	tmpDir := t.TempDir()
 	srv := &mockServer{port: 18765}
 	m := &Model{
-		server:         srv,
-		commentRepo:    &mockCommentRepository{},
-		rootDir:        tmpDir,
-		tabs:           []*tab{},
-		treeWidth:      30,
-		sidebarVisible: true,
-		keys:           newKeyMap(),
-		iconMode:       iconSymbol,
-		openFile:       newOpenFileOverlay(iconSymbol, darkTheme),
-		width:          120,
-		height:         40,
-		gitModeState:   make([]gitPanelState, len(gitDiffModes)),
+		server:          srv,
+		commentRepo:     &mockCommentRepository{},
+		diffCommentRepo: newMockDiffCommentRepo(),
+		rootDir:         tmpDir,
+		tabs:            []*tab{},
+		treeWidth:       30,
+		sidebarVisible:  true,
+		keys:            newKeyMap(),
+		iconMode:        iconSymbol,
+		openFile:        newOpenFileOverlay(iconSymbol, darkTheme),
+		width:           120,
+		height:          40,
+		gitModeState:    make([]gitPanelState, len(gitDiffModes)),
 	}
 	return m
 }

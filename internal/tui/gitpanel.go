@@ -2,12 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/708u/gracilius/internal/comment"
 	"github.com/708u/gracilius/internal/git"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -258,6 +260,14 @@ func (m *Model) openGitDiffEntry() {
 	}
 
 	lo := m.computeLayout()
+	var diffCtx comment.DiffContext
+	switch m.gitDiffMode {
+	case gitModeBranch:
+		diffCtx = comment.DiffContext{Kind: "branch", Base: m.gitDefaultBranch}
+	default:
+		diffCtx = comment.DiffContext{Kind: "working"}
+	}
+
 	dt := &tab{
 		kind:              diffTab,
 		filePath:          entry.absPath,
@@ -267,6 +277,7 @@ func (m *Model) openGitDiffEntry() {
 		gitDiffModeTag:    m.gitDiffMode,
 		hasGitDiffModeTag: true,
 		gitDiffLabel:      m.gitDiffMode.tabPrefix(m.gitDefaultBranch),
+		diffContext:       diffCtx,
 	}
 	dt.vp.SetWidth(lo.editorWidth)
 	dt.vp.SetHeight(lo.contentHeight)
@@ -282,6 +293,14 @@ func (m *Model) openGitDiffEntry() {
 
 	dt.diffViewData = buildDiffData(oldContent, newContent)
 	dt.initDiffContent(m.theme, lo.editorWidth, lo.contentHeight)
+
+	// Load persisted diff comments.
+	if stored, err := m.diffCommentRepo.List(diffCtx, entry.absPath, false); err != nil {
+		log.Printf("Failed to load diff comments for %s: %v", entry.absPath, err)
+	} else if len(stored) > 0 {
+		dt.comments = stored
+		dt.diffCacheWidth = 0 // force re-render with comments
+	}
 
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1
