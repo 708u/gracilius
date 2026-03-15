@@ -49,6 +49,7 @@ type MCPServer interface {
 		filePath, text string,
 		startLine, startChar, endLine, endChar int,
 	)
+	ResendSelection()
 }
 
 // CommentRepository is the interface for comment persistence.

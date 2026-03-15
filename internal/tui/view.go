@@ -75,6 +75,7 @@ func newView(content string) tea.View {
 	var v tea.View
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
+	v.ReportFocus = true
 	v.SetContent(content)
 	return v
 }

@@ -125,6 +125,49 @@ func (s *StatusReader) UntrackedFiles() ([]ChangedFile, error) {
 	return files, nil
 }
 
+// BranchDiff returns files changed between baseRef and HEAD.
+func BranchDiff(dir, baseRef string) ([]ChangedFile, error) {
+	if baseRef == "" {
+		return nil, fmt.Errorf("baseRef must not be empty")
+	}
+	out, err := gitCmd(dir, "diff", baseRef+"..HEAD", "--name-status")
+	if err != nil {
+		return nil, fmt.Errorf("git diff %s..HEAD: %w", baseRef, err)
+	}
+	readers := diffReader{
+		readOld: func(d, path string) ([]string, bool, error) {
+			return readCommitBlob(d, baseRef, path)
+		},
+		readNew: readHEADBlob,
+	}
+	return parseChangedFiles(dir, out, readers)
+}
+
+// MergeBase returns the merge-base commit between HEAD and ref.
+func MergeBase(dir, ref string) (string, error) {
+	out, err := gitCmd(dir, "merge-base", "HEAD", ref)
+	if err != nil {
+		return "", fmt.Errorf("git merge-base HEAD %s: %w", ref, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// DefaultBranch detects the default branch name for the repository.
+// It first tries symbolic-ref, then falls back to checking main and master.
+func DefaultBranch(dir string) (string, error) {
+	out, err := gitCmd(dir, "symbolic-ref", "refs/remotes/origin/HEAD")
+	if err == nil {
+		ref := strings.TrimSpace(string(out))
+		return strings.TrimPrefix(ref, "refs/remotes/origin/"), nil
+	}
+	for _, name := range []string{"main", "master"} {
+		if _, err := gitCmd(dir, "rev-parse", "--verify", name); err == nil {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("cannot detect default branch")
+}
+
 // parseChangedFiles parses git diff --name-status output
 // using the provided diffReader for old and new content.
 func parseChangedFiles(
@@ -221,56 +264,6 @@ func parseChangedFiles(
 	return files, nil
 }
 
-// BranchDiff returns changed files between merge-base and HEAD.
-func BranchDiff(dir, baseRef string) ([]ChangedFile, error) {
-	if baseRef == "" {
-		return nil, fmt.Errorf("baseRef required for BranchDiff")
-	}
-
-	out, err := gitCmd(dir, "diff", baseRef+"..HEAD", "--name-status")
-	if err != nil {
-		return nil, fmt.Errorf("git diff: %w", err)
-	}
-
-	dr := diffReader{
-		readOld: func(d, path string) ([]string, bool, error) {
-			return readCommitBlob(d, baseRef, path)
-		},
-		readNew: readHEADBlob,
-	}
-
-	return parseChangedFiles(dir, out, dr)
-}
-
-// MergeBase returns the merge-base between HEAD and the given ref.
-func MergeBase(dir, ref string) (string, error) {
-	out, err := gitCmd(dir, "merge-base", "HEAD", ref)
-	if err != nil {
-		return "", fmt.Errorf("git merge-base: %w", err)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-// DefaultBranch detects the default branch from the remote HEAD.
-// Falls back to checking main/master if remote HEAD is unavailable.
-func DefaultBranch(dir string) (string, error) {
-	out, err := gitCmd(dir, "symbolic-ref", "refs/remotes/origin/HEAD")
-	if err == nil {
-		ref := strings.TrimSpace(string(out))
-		// refs/remotes/origin/main -> main
-		if name, ok := strings.CutPrefix(ref, "refs/remotes/origin/"); ok {
-			return name, nil
-		}
-	}
-	for _, name := range []string{"main", "master"} {
-		_, err := gitCmd(dir, "rev-parse", "--verify", name)
-		if err == nil {
-			return name, nil
-		}
-	}
-	return "", fmt.Errorf("no default branch found")
-}
-
 func readWorkFile(root, relPath string) ([]string, bool, error) {
 	abs := filepath.Join(root, relPath)
 	data, err := os.ReadFile(abs)
@@ -283,7 +276,19 @@ func readWorkFile(root, relPath string) ([]string, bool, error) {
 	return splitLines(data), false, nil
 }
 
-// readGitBlob reads content from git show :<path> (index).
+// readCommitBlob reads a file from a specific commit ref.
+func readCommitBlob(dir, ref, path string) ([]string, bool, error) {
+	data, err := gitCmd(dir, "show", ref+":"+path)
+	if err != nil {
+		return nil, false, fmt.Errorf("git show %s:%s: %w", ref, path, err)
+	}
+	if isBinaryContent(data) {
+		return nil, true, nil
+	}
+	return splitLines(data), false, nil
+}
+
+// readGitBlob reads a file from the index (staging area).
 func readGitBlob(dir, path string) ([]string, bool, error) {
 	data, err := gitCmd(dir, "show", ":"+path)
 	if err != nil {
@@ -305,18 +310,6 @@ func readHEADBlob(dir, path string) ([]string, bool, error) {
 			return nil, false, nil
 		}
 		return nil, false, fmt.Errorf("git show HEAD:%s: %w", path, err)
-	}
-	if isBinaryContent(data) {
-		return nil, true, nil
-	}
-	return splitLines(data), false, nil
-}
-
-// readCommitBlob reads a file from a specific commit.
-func readCommitBlob(dir, ref, path string) ([]string, bool, error) {
-	data, err := gitCmd(dir, "show", ref+":"+path)
-	if err != nil {
-		return nil, false, fmt.Errorf("git show %s:%s: %w", ref, path, err)
 	}
 	if isBinaryContent(data) {
 		return nil, true, nil

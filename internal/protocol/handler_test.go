@@ -365,6 +365,173 @@ func TestCloseAllDiffTabs_RejectsPending(t *testing.T) {
 	}
 }
 
+func TestToolsList_IncludesSelectionTools(t *testing.T) {
+	h := NewHandler([]string{"/workspace"})
+	req := &Request{
+		JSONRPC: "2.0",
+		ID:      testID(),
+		Method:  "tools/list",
+	}
+
+	send, ch := collectSend()
+	h.HandleMessage(req, send)
+
+	resp := <-ch
+	data, _ := json.Marshal(resp.Result)
+	var result struct {
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("failed to unmarshal tools/list result: %v", err)
+	}
+
+	want := map[string]bool{
+		"getCurrentSelection": false,
+		"getLatestSelection":  false,
+	}
+	for _, tool := range result.Tools {
+		if _, ok := want[tool.Name]; ok {
+			want[tool.Name] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("tools/list should include %s", name)
+		}
+	}
+}
+
+func TestGetCurrentSelection_NoCallback(t *testing.T) {
+	h := NewHandler([]string{"/workspace"})
+
+	params, _ := json.Marshal(ToolCallParams{Name: "getCurrentSelection"})
+	req := &Request{
+		JSONRPC: "2.0",
+		ID:      testID(),
+		Method:  "tools/call",
+		Params:  params,
+	}
+
+	send, ch := collectSend()
+	h.HandleMessage(req, send)
+
+	resp := <-ch
+	data, _ := json.Marshal(resp.Result)
+	var mcpResult MCPResult
+	if err := json.Unmarshal(data, &mcpResult); err != nil {
+		t.Fatalf("failed to unmarshal MCP result: %v", err)
+	}
+	if len(mcpResult.Content) == 0 {
+		t.Fatal("expected content in response")
+	}
+
+	var selResult SelectionResult
+	if err := json.Unmarshal([]byte(mcpResult.Content[0].Text), &selResult); err != nil {
+		t.Fatalf("failed to unmarshal selection result: %v", err)
+	}
+	if selResult.Success {
+		t.Fatal("expected success=false when no callback is set")
+	}
+	if selResult.Message != "No active editor found" {
+		t.Fatalf("expected fallback message, got %q", selResult.Message)
+	}
+}
+
+func TestGetCurrentSelection_WithSelection(t *testing.T) {
+	h := NewHandler([]string{"/workspace"})
+
+	expected := &SelectionResult{
+		Success:  true,
+		Text:     "selected text",
+		FilePath: "/workspace/main.go",
+		FileURL:  "file:///workspace/main.go",
+		Selection: &Selection{
+			Start: Position{Line: 10, Character: 5},
+			End:   Position{Line: 10, Character: 18},
+		},
+	}
+	h.SetGetSelectionCallback(func() *SelectionResult {
+		return expected
+	})
+
+	params, _ := json.Marshal(ToolCallParams{Name: "getCurrentSelection"})
+	req := &Request{
+		JSONRPC: "2.0",
+		ID:      testID(),
+		Method:  "tools/call",
+		Params:  params,
+	}
+
+	send, ch := collectSend()
+	h.HandleMessage(req, send)
+
+	resp := <-ch
+	data, _ := json.Marshal(resp.Result)
+	var mcpResult MCPResult
+	if err := json.Unmarshal(data, &mcpResult); err != nil {
+		t.Fatalf("failed to unmarshal MCP result: %v", err)
+	}
+
+	var selResult SelectionResult
+	if err := json.Unmarshal([]byte(mcpResult.Content[0].Text), &selResult); err != nil {
+		t.Fatalf("failed to unmarshal selection result: %v", err)
+	}
+	if !selResult.Success {
+		t.Fatal("expected success=true")
+	}
+	if selResult.Text != "selected text" {
+		t.Fatalf("expected 'selected text', got %q", selResult.Text)
+	}
+	if selResult.FilePath != "/workspace/main.go" {
+		t.Fatalf("expected '/workspace/main.go', got %q", selResult.FilePath)
+	}
+	if selResult.Selection.Start.Line != 10 || selResult.Selection.Start.Character != 5 {
+		t.Fatalf("unexpected start position: %+v", selResult.Selection.Start)
+	}
+	if selResult.Selection.End.Line != 10 || selResult.Selection.End.Character != 18 {
+		t.Fatalf("unexpected end position: %+v", selResult.Selection.End)
+	}
+}
+
+func TestGetLatestSelection_NoSelection(t *testing.T) {
+	h := NewHandler([]string{"/workspace"})
+
+	h.SetGetSelectionCallback(func() *SelectionResult {
+		return nil
+	})
+
+	params, _ := json.Marshal(ToolCallParams{Name: "getLatestSelection"})
+	req := &Request{
+		JSONRPC: "2.0",
+		ID:      testID(),
+		Method:  "tools/call",
+		Params:  params,
+	}
+
+	send, ch := collectSend()
+	h.HandleMessage(req, send)
+
+	resp := <-ch
+	data, _ := json.Marshal(resp.Result)
+	var mcpResult MCPResult
+	if err := json.Unmarshal(data, &mcpResult); err != nil {
+		t.Fatalf("failed to unmarshal MCP result: %v", err)
+	}
+
+	var selResult SelectionResult
+	if err := json.Unmarshal([]byte(mcpResult.Content[0].Text), &selResult); err != nil {
+		t.Fatalf("failed to unmarshal selection result: %v", err)
+	}
+	if selResult.Success {
+		t.Fatal("expected success=false when callback returns nil")
+	}
+	if selResult.Message != "No selection available" {
+		t.Fatalf("expected fallback message, got %q", selResult.Message)
+	}
+}
+
 func TestDiffResponder_ConcurrentSafety(t *testing.T) {
 	send, ch := collectSend()
 	r := &DiffResponder{
