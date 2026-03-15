@@ -17,25 +17,25 @@ const (
 // changedFileEntry represents a file with changes.
 type changedFileEntry struct {
 	name       string
+	baseName   string // filepath.Base(name), precomputed
+	dirName    string // filepath.Dir(name), precomputed
 	status     git.FileStatus
 	absPath    string
 	oldContent []string
 	newContent []string
 	binary     bool
 	category   fileCategory
-	baseName   string // filepath.Base(name)
-	dirName    string // filepath.Dir(name)
 }
 
 // gitVisualRow represents a visual row in the git panel.
 type gitVisualRow struct {
-	isHeader    bool
-	isDirHeader bool
+	isHeader    bool   // category header (e.g., "Staged Changes (2)")
+	isDirHeader bool   // directory header (e.g., "internal/tui/")
 	label       string // header text (header/dir header rows only)
 	entryIdx    int    // index into gitChangedFiles (file rows only)
 }
 
-// isFileRow returns true if this row represents a file entry.
+// isFileRow returns true if this row represents an actual file entry.
 func (r gitVisualRow) isFileRow() bool {
 	return !r.isHeader && !r.isDirHeader
 }

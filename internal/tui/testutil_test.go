@@ -58,6 +58,7 @@ func newTestModel(t *testing.T) *Model {
 		openFile:       newOpenFileOverlay(iconSymbol, darkTheme),
 		width:          120,
 		height:         40,
+		gitModeState:   make([]gitPanelState, len(gitDiffModes)),
 	}
 	return m
 }
