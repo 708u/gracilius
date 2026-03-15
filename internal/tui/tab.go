@@ -77,6 +77,7 @@ type tab struct {
 	diffCacheWidth      int
 	diffCacheTheme      string
 	diffRowVisualStarts []int // logical row → visual line offset
+	diffCachedCtx       *diffSideCtx
 
 	// search match cache (per-tab)
 	searchMatches     []searchMatch
@@ -386,7 +387,9 @@ func (t *tab) syncContent(lines []string) {
 // renderDiffContent pre-renders diff lines and updates viewport content.
 // Returns the hunk visual offsets for initial scroll positioning.
 func (t *tab) renderDiffContent(theme render.Theme, width int) []int {
-	result := renderAllDiffLines(t.diffViewData, theme, width, t.diffOldHighlights, t.diffNewHighlights, t.diffSearchMatches)
+	ctx := newDiffSideCtx(t.diffViewData, theme, width)
+	t.diffCachedCtx = &ctx
+	result := renderAllDiffLines(t.diffViewData, ctx, theme, width, t.diffOldHighlights, t.diffNewHighlights, t.diffSearchMatches)
 	sideWidth := (width - diffSeparatorWidth) / 2
 	result = t.interleaveCommentBlocks(result, sideWidth, width)
 	t.diffCachedLines = result.lines

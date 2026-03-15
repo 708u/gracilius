@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/708u/gracilius/internal/diff"
 	"github.com/708u/gracilius/internal/tui/render"
@@ -134,9 +135,7 @@ func renderSingleDiffRow(
 }
 
 // renderAllDiffLines pre-renders all diff rows into a flat visual line slice.
-func renderAllDiffLines(data *diff.Data, theme render.Theme, width int, oldHL, newHL []render.HighlightedLine, searchMatches []diffSearchMatch) diffRenderResult {
-	ctx := newDiffSideCtx(data, theme, width)
-
+func renderAllDiffLines(data *diff.Data, ctx diffSideCtx, theme render.Theme, width int, oldHL, newHL []render.HighlightedLine, searchMatches []diffSearchMatch) diffRenderResult {
 	// Index search matches by row (skip allocation when empty).
 	var oldSearchByRow, newSearchByRow map[int][]render.HighlightRange
 	if len(searchMatches) > 0 {
@@ -189,6 +188,65 @@ func diffSideBg(rowType diff.RowType, isOld bool, colors diffColors) (lineBg, wo
 	return "", ""
 }
 
+// prepareRuns normalises diff-side inputs into a uniform []StyledRun slice.
+// When merged=true, the returned runs have fg+bg already combined in ANSI
+// and tabs expanded (produced by wordDiffToStyledRuns).
+// When merged=false, ANSI contains fg only and tabs are unexpanded.
+func prepareRuns(
+	text string,
+	spans []diff.WordSpan,
+	syntaxRuns []render.StyledRun,
+	lineBg, wordBg string,
+) (runs []render.StyledRun, merged bool) {
+	switch {
+	case spans != nil:
+		return wordDiffToStyledRuns(spans, syntaxRuns, lineBg, wordBg), true
+	case syntaxRuns != nil:
+		return syntaxRuns, false
+	default:
+		return []render.StyledRun{{Text: text}}, false
+	}
+}
+
+// renderRuns is the unified render function for all diff-side content.
+// It writes styled, truncated, and padded text into sb.
+//   - merged=true: runs already have fg+bg in ANSI, tabs expanded
+//   - merged=false: runs have fg only, tabs need expanding, lineBg applied per-chunk
+//   - highlights: optional search highlight ranges (later wins)
+func renderRuns(
+	sb *strings.Builder,
+	runs []render.StyledRun,
+	textWidth int,
+	lineBg string,
+	merged bool,
+	highlights []render.HighlightRange,
+) {
+	var raw strings.Builder
+	switch {
+	case len(highlights) > 0:
+		render.RenderStyledLineWithHighlights(&raw, runs, highlights)
+	case merged:
+		for _, r := range runs {
+			render.WriteStyledText(&raw, r.ANSI, r.Text)
+		}
+	default:
+		for _, r := range runs {
+			render.WriteColoredChunk(&raw, r.ANSI, lineBg, render.ExpandTabs(r.Text))
+		}
+	}
+	truncated := ansi.Truncate(raw.String(), textWidth, "")
+	render.WritePaddedText(sb, truncated, textWidth, lineBg)
+}
+
+// runsText concatenates the raw text of all runs.
+func runsText(runs []render.StyledRun) string {
+	var sb strings.Builder
+	for _, r := range runs {
+		sb.WriteString(r.Text)
+	}
+	return sb.String()
+}
+
 // wrapDiffSide renders one side of a diff row, returning one string per
 // visual line. Long text is soft-wrapped at ctx.textWidth boundaries.
 func wrapDiffSide(
@@ -217,7 +275,14 @@ func wrapDiffSide(
 		gutterStyle = gutterBg + render.AnsiFaint
 	}
 
-	expanded := render.ExpandTabs(text)
+	runs, merged := prepareRuns(text, spans, syntaxRuns, lineBg, wordBg)
+
+	var expanded string
+	if merged {
+		expanded = runsText(runs)
+	} else {
+		expanded = render.ExpandTabs(text)
+	}
 	bp := render.WrapBreakpoints(expanded, ctx.textWidth)
 
 	// No soft-wrap: single visual line.
@@ -225,102 +290,27 @@ func wrapDiffSide(
 		var sb strings.Builder
 		numStr := fmt.Sprintf("%*d ", digits, lineNum)
 		render.WriteStyledText(&sb, gutterStyle, numStr)
-		switch {
-		case len(searchHL) > 0 && syntaxRuns != nil && spans == nil:
-			// Search highlight with syntax: merge search bg into syntax runs.
-			renderSyntaxWithBgAndHighlights(&sb, syntaxRuns, lineBg, ctx.textWidth, searchHL)
-		case spans != nil:
-			renderWordDiffWithSyntax(&sb, spans, syntaxRuns, lineBg, wordBg, ctx.textWidth)
-		case syntaxRuns != nil:
-			renderSyntaxWithBg(&sb, syntaxRuns, lineBg, ctx.textWidth)
-		case len(searchHL) > 0:
-			// Plain text with search highlights.
-			runs := []render.StyledRun{{Text: text}}
-			renderSyntaxWithBgAndHighlights(&sb, runs, lineBg, ctx.textWidth, searchHL)
-		default:
-			truncated := ansi.Truncate(expanded, ctx.textWidth, "")
-			render.WritePaddedText(&sb, truncated, ctx.textWidth, lineBg)
-		}
+		renderRuns(&sb, runs, ctx.textWidth, lineBg, merged, searchHL)
 		return []string{sb.String()}
 	}
 
-	// Soft-wrapped with syntax or word-diff styling.
-	if syntaxRuns != nil || spans != nil {
-		var runs []render.StyledRun
-		if spans != nil {
-			runs = wordDiffToStyledRuns(spans, syntaxRuns, lineBg, wordBg)
-		} else {
-			runs = expandStyledRuns(syntaxRuns)
-		}
-		renderFn := renderMergedRuns
-		if spans == nil {
-			renderFn = renderSyntaxWithBg
-		}
-		if len(searchHL) > 0 && spans == nil {
-			return renderWrappedSegmentsWithHighlights(runs, bp, digits, lineNum, gutterStyle, lineBg, ctx, searchHL)
-		}
-		return renderWrappedSegments(runs, bp, digits, lineNum, gutterStyle, lineBg, ctx, renderFn)
+	// Soft-wrap: expand tabs for non-merged runs, then split at breakpoints.
+	if !merged {
+		runs = expandStyledRuns(runs)
 	}
-
-	// Soft-wrapped without syntax: split into segments.
-	runes := []rune(expanded)
-	segments := make([]string, 0, len(bp)+1)
-	prev := 0
-	for si := 0; si <= len(bp); si++ {
-		end := len(runes)
-		if si < len(bp) {
-			end = bp[si]
-		}
-		seg := string(runes[prev:end])
-
-		var sb strings.Builder
-		if si == 0 {
-			numStr := fmt.Sprintf("%*d ", digits, lineNum)
-			render.WriteStyledText(&sb, gutterStyle, numStr)
-		} else {
-			render.WriteStyledText(&sb, gutterStyle, ctx.gutterPad)
-		}
-		render.WritePaddedText(&sb, seg, ctx.textWidth, lineBg)
-		segments = append(segments, sb.String())
-		prev = end
-	}
-	return segments
+	return renderWrappedLines(runs, bp, digits, lineNum, gutterStyle, lineBg, ctx, merged, searchHL)
 }
 
-// renderWrappedSegments builds visual lines from run segments split at
+// renderWrappedLines builds visual lines from run segments split at
 // breakpoints, prepending the gutter (line number or padding) to each.
-func renderWrappedSegments(
+// Search highlights are clamped per-segment when present.
+func renderWrappedLines(
 	runs []render.StyledRun,
 	bp []int,
 	digits, lineNum int,
 	gutterStyle, lineBg string,
 	ctx diffSideCtx,
-	renderFn func(sb *strings.Builder, runs []render.StyledRun, bg string, textWidth int),
-) []string {
-	runSegments := render.SplitRunsAtBreakpoints(runs, bp)
-	segments := make([]string, 0, len(runSegments))
-	for si, seg := range runSegments {
-		var sb strings.Builder
-		if si == 0 {
-			numStr := fmt.Sprintf("%*d ", digits, lineNum)
-			render.WriteStyledText(&sb, gutterStyle, numStr)
-		} else {
-			render.WriteStyledText(&sb, gutterStyle, ctx.gutterPad)
-		}
-		renderFn(&sb, seg, lineBg, ctx.textWidth)
-		segments = append(segments, sb.String())
-	}
-	return segments
-}
-
-// renderWrappedSegmentsWithHighlights is like renderWrappedSegments but
-// overlays search highlights on each segment.
-func renderWrappedSegmentsWithHighlights(
-	runs []render.StyledRun,
-	bp []int,
-	digits, lineNum int,
-	gutterStyle, lineBg string,
-	ctx diffSideCtx,
+	merged bool,
 	searchHL []render.HighlightRange,
 ) []string {
 	runSegments := render.SplitRunsAtBreakpoints(runs, bp)
@@ -336,10 +326,13 @@ func renderWrappedSegmentsWithHighlights(
 		}
 		segLen := 0
 		for _, r := range seg {
-			segLen += len([]rune(r.Text))
+			segLen += utf8.RuneCountInString(r.Text)
 		}
-		segHL := render.ClampHighlightsToSegment(searchHL, wrapOff, segLen)
-		renderSyntaxWithBgAndHighlights(&sb, seg, lineBg, ctx.textWidth, segHL)
+		var segHL []render.HighlightRange
+		if len(searchHL) > 0 {
+			segHL = render.ClampHighlightsToSegment(searchHL, wrapOff, segLen)
+		}
+		renderRuns(&sb, seg, ctx.textWidth, lineBg, merged, segHL)
 		wrapOff += segLen
 		segments = append(segments, sb.String())
 	}
@@ -364,34 +357,6 @@ func writeDiffFiller(sb *strings.Builder, lineNum int, rowType diff.RowType, isO
 	render.WritePaddedText(sb, "", ctx.textWidth, lineBg)
 }
 
-// renderWordDiffText renders word-level diff spans with background highlights.
-func renderWordDiffText(
-	sb *strings.Builder,
-	spans []diff.WordSpan,
-	lineBg string,
-	wordBg string,
-	textWidth int,
-) {
-	var raw strings.Builder
-	for _, s := range spans {
-		expanded := render.ExpandTabs(s.Text)
-		bg := lineBg
-		if s.Op == diff.OpInsert || s.Op == diff.OpDelete {
-			bg = wordBg
-		}
-		if bg != "" {
-			raw.WriteString(bg)
-			raw.WriteString(expanded)
-			raw.WriteString(render.AnsiReset)
-		} else {
-			raw.WriteString(expanded)
-		}
-	}
-
-	truncated := ansi.Truncate(raw.String(), textWidth, "")
-	render.WritePaddedText(sb, truncated, textWidth, lineBg)
-}
-
 // expandStyledRuns returns a copy of runs with tabs expanded to spaces.
 func expandStyledRuns(runs []render.StyledRun) []render.StyledRun {
 	out := make([]render.StyledRun, len(runs))
@@ -399,50 +364,6 @@ func expandStyledRuns(runs []render.StyledRun) []render.StyledRun {
 		out[i] = render.StyledRun{Text: render.ExpandTabs(r.Text), ANSI: r.ANSI}
 	}
 	return out
-}
-
-// renderSyntaxWithBgAndHighlights renders styledRuns with a diff background
-// and overlaid search highlights, truncating to textWidth and padding.
-func renderSyntaxWithBgAndHighlights(sb *strings.Builder, runs []render.StyledRun, bg string, textWidth int, highlights []render.HighlightRange) {
-	if len(highlights) == 0 {
-		renderSyntaxWithBg(sb, runs, bg, textWidth)
-		return
-	}
-	var raw strings.Builder
-	render.RenderStyledLineWithHighlights(&raw, runs, highlights)
-	truncated := ansi.Truncate(raw.String(), textWidth, "")
-	render.WritePaddedText(sb, truncated, textWidth, bg)
-}
-
-// renderSyntaxWithBg renders styledRuns with a diff background color,
-// truncating to textWidth and padding with spaces.
-func renderSyntaxWithBg(sb *strings.Builder, runs []render.StyledRun, bg string, textWidth int) {
-	var raw strings.Builder
-	for _, r := range runs {
-		expanded := render.ExpandTabs(r.Text)
-		render.WriteColoredChunk(&raw, r.ANSI, bg, expanded)
-	}
-	truncated := ansi.Truncate(raw.String(), textWidth, "")
-	render.WritePaddedText(sb, truncated, textWidth, bg)
-}
-
-// renderWordDiffWithSyntax merges word-diff spans with syntax runs,
-// applying both foreground (syntax) and background (diff) colors.
-// Falls back to renderWordDiffText when syntaxRuns is nil.
-func renderWordDiffWithSyntax(
-	sb *strings.Builder,
-	spans []diff.WordSpan,
-	syntaxRuns []render.StyledRun,
-	lineBg, wordBg string,
-	textWidth int,
-) {
-	if syntaxRuns == nil {
-		renderWordDiffText(sb, spans, lineBg, wordBg, textWidth)
-		return
-	}
-
-	runs := wordDiffToStyledRuns(spans, syntaxRuns, lineBg, wordBg)
-	renderMergedRuns(sb, runs, lineBg, textWidth)
 }
 
 // wordDiffToStyledRuns converts word-diff spans and optional syntax runs
@@ -614,16 +535,4 @@ func (t *tab) interleaveCommentBlocks(result diffRenderResult, sideWidth, width 
 		hunkVisualOffs:  hunkOffs,
 		rowVisualStarts: newRowStarts,
 	}
-}
-
-// renderMergedRuns renders styledRuns whose ANSI fields already contain
-// combined fg+bg codes. Unlike renderSyntaxWithBg, no additional bg
-// is applied per-run; padBg is used only for trailing padding.
-func renderMergedRuns(sb *strings.Builder, runs []render.StyledRun, padBg string, textWidth int) {
-	var raw strings.Builder
-	for _, r := range runs {
-		render.WriteStyledText(&raw, r.ANSI, r.Text)
-	}
-	truncated := ansi.Truncate(raw.String(), textWidth, "")
-	render.WritePaddedText(sb, truncated, textWidth, padBg)
 }

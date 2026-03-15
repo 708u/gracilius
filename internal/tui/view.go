@@ -418,12 +418,10 @@ func (m *Model) renderLeftPane(width, height int) []string {
 
 	var body []string
 	switch m.activePanel {
-	case panelFiles:
-		body = m.renderTree(width, bodyHeight)
 	case panelGitDiff:
 		body = m.renderGitPanel(width, bodyHeight)
 	default:
-		body = renderChangedFiles(nil, width, bodyHeight)
+		body = m.renderTree(width, bodyHeight)
 	}
 
 	return append([]string{header}, body...)
@@ -577,11 +575,11 @@ func (m *Model) overlayDiffTextarea(t *tab, diffLines []string, viewOff, width, 
 // applyDiffGutterHighlights re-renders diff rows that need cursor or selection
 // gutter highlighting within the visible window.
 func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, width int) {
-	if t.diffViewData == nil || len(t.diffRowVisualStarts) == 0 {
+	if t.diffViewData == nil || len(t.diffRowVisualStarts) == 0 || t.diffCachedCtx == nil {
 		return
 	}
 
-	ctx := newDiffSideCtx(t.diffViewData, m.theme, width)
+	ctx := *t.diffCachedCtx
 	highlightBg := m.theme.SelectionBgSeq()
 
 	startRow, endRow := t.diffCursor, t.diffCursor
