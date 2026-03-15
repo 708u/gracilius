@@ -50,25 +50,3 @@ func renderPanelHeader(label string, width int, theme render.Theme) string {
 		Foreground(lipgloss.Color(theme.TabActiveFg)).
 		Render(label), width)
 }
-
-// renderChangedFiles renders the changed file list for git/PR panels.
-func renderChangedFiles(entries []changedFileEntry, width, height int) []string {
-	lines := make([]string, 0, height)
-
-	if len(entries) == 0 {
-		lines = append(lines, render.PadRight("  No changed files", width))
-	} else {
-		for i := range entries {
-			if len(lines) >= height {
-				break
-			}
-			lines = append(lines, render.PadRight("  "+entries[i].status.String()+" "+entries[i].name, width))
-		}
-	}
-
-	for len(lines) < height {
-		lines = append(lines, render.PadRight("", width))
-	}
-
-	return lines
-}

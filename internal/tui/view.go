@@ -418,12 +418,10 @@ func (m *Model) renderLeftPane(width, height int) []string {
 
 	var body []string
 	switch m.activePanel {
-	case panelFiles:
-		body = m.renderTree(width, bodyHeight)
 	case panelGitDiff:
 		body = m.renderGitPanel(width, bodyHeight)
 	default:
-		body = renderChangedFiles(nil, width, bodyHeight)
+		body = m.renderTree(width, bodyHeight)
 	}
 
 	return append([]string{header}, body...)
