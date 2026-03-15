@@ -678,7 +678,7 @@ func (t *tab) diffCaptureSnippet(startLine, endLine int, side diffSide) string {
 		return ""
 	}
 	var parts []string
-	for _, row := range t.diffViewData.rows {
+	for _, row := range t.diffViewData.Rows {
 		ln := diffRowLineNumForSide(row, side)
 		if ln >= startLine && ln <= endLine {
 			parts = append(parts, diffRowTextForSide(row, side))

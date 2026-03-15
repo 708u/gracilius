@@ -521,7 +521,7 @@ func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 func (m *Model) overlayDiffTextarea(t *tab, diffLines []string, viewOff, width, height int) {
 	// Find the diff row where the input ends.
 	insertRowIdx := -1
-	for ri, row := range t.diffViewData.rows {
+	for ri, row := range t.diffViewData.Rows {
 		ln := diffRowLineNumForSide(row, t.diffInputSide)
 		if ln == t.inputEnd && diffRowAvailableSide(row, t.diffInputSide) == t.diffInputSide {
 			insertRowIdx = ri

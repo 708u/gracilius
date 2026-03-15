@@ -344,18 +344,18 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 		if t.diffViewData != nil {
 			t.inputMode = true
 			t.diffInputSide = diffRowAvailableSide(
-				t.diffViewData.rows[t.diffCursor], t.diffSide)
+				t.diffViewData.Rows[t.diffCursor], t.diffSide)
 
 			if t.diffSelecting {
 				startRow, endRow := t.diffNormalizedSelection()
 				t.inputStart = diffRowLineNumForSide(
-					t.diffViewData.rows[startRow], t.diffInputSide)
+					t.diffViewData.Rows[startRow], t.diffInputSide)
 				t.inputEnd = diffRowLineNumForSide(
-					t.diffViewData.rows[endRow], t.diffInputSide)
+					t.diffViewData.Rows[endRow], t.diffInputSide)
 				t.diffSelecting = false
 			} else {
 				ln := diffRowLineNumForSide(
-					t.diffViewData.rows[t.diffCursor], t.diffInputSide)
+					t.diffViewData.Rows[t.diffCursor], t.diffInputSide)
 				t.inputStart = ln
 				t.inputEnd = ln
 			}

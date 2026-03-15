@@ -578,7 +578,7 @@ func (t *tab) interleaveCommentBlocks(result diffRenderResult, sideWidth, width 
 		endLine := t.comments[ci].EndLine
 		// Find the diff row matching this endLine + side.
 		if t.diffViewData != nil {
-			for ri, row := range t.diffViewData.rows {
+			for ri, row := range t.diffViewData.Rows {
 				if diffRowLineNumForSide(row, side) == endLine &&
 					diffRowAvailableSide(row, side) == side {
 					rowComments[ri] = append(rowComments[ri], commentRef{idx: ci, side: side})
