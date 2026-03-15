@@ -78,7 +78,7 @@ func (s *StatusReader) ChangedFiles() ([]ChangedFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("git diff: %w", err)
 	}
-	return s.parseChangedFiles(out, s.unstaged)
+	return parseChangedFiles(s.dir, out, s.unstaged)
 }
 
 // StagedFiles returns staged (cached) changed files.
@@ -87,7 +87,7 @@ func (s *StatusReader) StagedFiles() ([]ChangedFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("git diff --cached: %w", err)
 	}
-	return s.parseChangedFiles(out, s.staged)
+	return parseChangedFiles(s.dir, out, s.staged)
 }
 
 // UntrackedFiles returns untracked files.
@@ -125,9 +125,53 @@ func (s *StatusReader) UntrackedFiles() ([]ChangedFile, error) {
 	return files, nil
 }
 
+// BranchDiff returns files changed between baseRef and HEAD.
+func BranchDiff(dir, baseRef string) ([]ChangedFile, error) {
+	if baseRef == "" {
+		return nil, fmt.Errorf("baseRef must not be empty")
+	}
+	out, err := gitCmd(dir, "diff", baseRef+"..HEAD", "--name-status")
+	if err != nil {
+		return nil, fmt.Errorf("git diff %s..HEAD: %w", baseRef, err)
+	}
+	readers := diffReader{
+		readOld: func(d, path string) ([]string, bool, error) {
+			return readCommitBlob(d, baseRef, path)
+		},
+		readNew: readHEADBlob,
+	}
+	return parseChangedFiles(dir, out, readers)
+}
+
+// MergeBase returns the merge-base commit between HEAD and ref.
+func MergeBase(dir, ref string) (string, error) {
+	out, err := gitCmd(dir, "merge-base", "HEAD", ref)
+	if err != nil {
+		return "", fmt.Errorf("git merge-base HEAD %s: %w", ref, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// DefaultBranch detects the default branch name for the repository.
+// It first tries symbolic-ref, then falls back to checking main and master.
+func DefaultBranch(dir string) (string, error) {
+	out, err := gitCmd(dir, "symbolic-ref", "refs/remotes/origin/HEAD")
+	if err == nil {
+		ref := strings.TrimSpace(string(out))
+		return strings.TrimPrefix(ref, "refs/remotes/origin/"), nil
+	}
+	for _, name := range []string{"main", "master"} {
+		if _, err := gitCmd(dir, "rev-parse", "--verify", name); err == nil {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("cannot detect default branch")
+}
+
 // parseChangedFiles parses git diff --name-status output
 // using the provided diffReader for old and new content.
-func (s *StatusReader) parseChangedFiles(
+func parseChangedFiles(
+	dir string,
 	nameStatusOutput []byte,
 	readers diffReader,
 ) ([]ChangedFile, error) {
@@ -150,7 +194,7 @@ func (s *StatusReader) parseChangedFiles(
 		case status == StatusAdded:
 			cf.Status = StatusAdded
 			cf.Path = fields[1]
-			content, bin, readErr := readers.readNew(s.dir, cf.Path)
+			content, bin, readErr := readers.readNew(dir, cf.Path)
 			if readErr != nil {
 				return nil, readErr
 			}
@@ -162,11 +206,11 @@ func (s *StatusReader) parseChangedFiles(
 		case status == StatusModified:
 			cf.Status = StatusModified
 			cf.Path = fields[1]
-			old, oldBin, oldErr := readers.readOld(s.dir, cf.Path)
+			old, oldBin, oldErr := readers.readOld(dir, cf.Path)
 			if oldErr != nil {
 				return nil, oldErr
 			}
-			new_, newBin, newErr := readers.readNew(s.dir, cf.Path)
+			new_, newBin, newErr := readers.readNew(dir, cf.Path)
 			if newErr != nil {
 				return nil, newErr
 			}
@@ -179,7 +223,7 @@ func (s *StatusReader) parseChangedFiles(
 		case status == StatusDeleted:
 			cf.Status = StatusDeleted
 			cf.Path = fields[1]
-			old, bin, oldErr := readers.readOld(s.dir, cf.Path)
+			old, bin, oldErr := readers.readOld(dir, cf.Path)
 			if oldErr != nil {
 				return nil, oldErr
 			}
@@ -196,11 +240,11 @@ func (s *StatusReader) parseChangedFiles(
 			oldPath := fields[1]
 			newPath := fields[2]
 			cf.Path = newPath
-			old, oldBin, oldErr := readers.readOld(s.dir, oldPath)
+			old, oldBin, oldErr := readers.readOld(dir, oldPath)
 			if oldErr != nil {
 				return nil, oldErr
 			}
-			new_, newBin, newErr := readers.readNew(s.dir, newPath)
+			new_, newBin, newErr := readers.readNew(dir, newPath)
 			if newErr != nil {
 				return nil, newErr
 			}
@@ -232,6 +276,19 @@ func readWorkFile(root, relPath string) ([]string, bool, error) {
 	return splitLines(data), false, nil
 }
 
+// readCommitBlob reads a file from a specific commit ref.
+func readCommitBlob(dir, ref, path string) ([]string, bool, error) {
+	data, err := gitCmd(dir, "show", ref+":"+path)
+	if err != nil {
+		return nil, false, fmt.Errorf("git show %s:%s: %w", ref, path, err)
+	}
+	if isBinaryContent(data) {
+		return nil, true, nil
+	}
+	return splitLines(data), false, nil
+}
+
+// readGitBlob reads a file from the index (staging area).
 func readGitBlob(dir, path string) ([]string, bool, error) {
 	data, err := gitCmd(dir, "show", ":"+path)
 	if err != nil {

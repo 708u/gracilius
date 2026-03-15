@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -435,5 +436,121 @@ func TestUntrackedFiles_RespectsGitignore(t *testing.T) {
 	}
 	if files[0].Path != "readme.txt" {
 		t.Fatalf("expected readme.txt, got %s", files[0].Path)
+	}
+}
+
+func TestBranchDiff(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, dir, "hello.txt", "hello\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "init")
+	run(t, dir, "git", "branch", "-m", "main")
+
+	// Create a feature branch with changes.
+	run(t, dir, "git", "checkout", "-b", "feature")
+	writeFile(t, dir, "hello.txt", "hello world\n")
+	writeFile(t, dir, "new.txt", "new file\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "feature changes")
+
+	base, err := MergeBase(dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := BranchDiff(dir, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("expected 2 files, got %d", len(files))
+	}
+
+	// Files are sorted by git diff output order.
+	var modified, added ChangedFile
+	for _, f := range files {
+		switch f.Path {
+		case "hello.txt":
+			modified = f
+		case "new.txt":
+			added = f
+		}
+	}
+
+	if modified.Status != StatusModified {
+		t.Fatalf("expected status M for hello.txt, got %s", modified.Status)
+	}
+	if len(modified.OldContent) != 1 || modified.OldContent[0] != "hello" {
+		t.Fatalf("unexpected old content: %v", modified.OldContent)
+	}
+	if len(modified.NewContent) != 1 || modified.NewContent[0] != "hello world" {
+		t.Fatalf("unexpected new content: %v", modified.NewContent)
+	}
+
+	if added.Status != StatusAdded {
+		t.Fatalf("expected status A for new.txt, got %s", added.Status)
+	}
+	if len(added.NewContent) != 1 || added.NewContent[0] != "new file" {
+		t.Fatalf("unexpected new content: %v", added.NewContent)
+	}
+}
+
+func TestBranchDiff_MissingBaseRef(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, dir, "hello.txt", "hello\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "init")
+
+	_, err := BranchDiff(dir, "")
+	if err == nil {
+		t.Fatal("expected error for empty baseRef")
+	}
+}
+
+func TestDefaultBranch(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, dir, "hello.txt", "hello\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "init")
+
+	// Default branch created by git init is typically "main".
+	// Rename to "trunk" and create "master" to test fallback.
+	run(t, dir, "git", "branch", "-m", "trunk")
+	run(t, dir, "git", "checkout", "-b", "master")
+
+	branch, err := DefaultBranch(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if branch != "master" {
+		t.Fatalf("expected master, got %s", branch)
+	}
+}
+
+func TestMergeBase(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, dir, "hello.txt", "hello\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "init")
+	run(t, dir, "git", "branch", "-m", "main")
+
+	// Record the base commit.
+	baseOut, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedBase := strings.TrimSpace(string(baseOut))
+
+	run(t, dir, "git", "checkout", "-b", "feature")
+	writeFile(t, dir, "hello.txt", "changed\n")
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-m", "feature commit")
+
+	got, err := MergeBase(dir, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != expectedBase {
+		t.Fatalf("expected %s, got %s", expectedBase, got)
 	}
 }
