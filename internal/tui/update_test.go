@@ -801,37 +801,90 @@ func TestDiffSide_SelectionTextMatchesSide(t *testing.T) {
 	}
 }
 
-func TestDiffSide_ChangeJumpPreservesSide(t *testing.T) {
-	// Block: [modified, modified, added]
-	// Pressing ] from first modified row with old side should land at
-	// blockEnd (added row) but keep old side.
+func TestDiffSide_ChangeJumpSkipsWrongSide(t *testing.T) {
+	// old: [same, old1, old2]  →  deleted block + added block
+	// new: [same, new1, new2]
+	// Two change blocks: one with modified rows, then done.
+	// But a more targeted test: block has [modified, added].
+	// On old side, ] from the modified row should stay on the
+	// modified row (last matching row), not jump to the added row.
 	m := newTestModelWithDiff(t,
 		[]string{"old1", "old2"},
 		[]string{"new1", "new2", "added"},
 	)
 	tab := m.tabs[0]
-
-	// Start on first modified row, old side.
-	tab.diffCursor = 0
-	tab.diffSide = diffSideOld
-
-	// Find block end.
 	rows := tab.diffViewData.rows
-	blockEnd := len(rows) - 1
 
-	// Verify the last row is an added row (only has new side).
-	if rows[blockEnd].rowType != diffRowAdded {
-		t.Fatalf("expected last row to be added, got %d", rows[blockEnd].rowType)
+	// Find first modified row and the added row.
+	modIdx := -1
+	addedIdx := -1
+	for i, row := range rows {
+		if row.rowType == diffRowModified && modIdx < 0 {
+			modIdx = i
+		}
+		if row.rowType == diffRowAdded {
+			addedIdx = i
+		}
+	}
+	if modIdx < 0 || addedIdx < 0 {
+		t.Fatalf("expected modified and added rows, got mod=%d added=%d", modIdx, addedIdx)
 	}
 
-	// Press ] to jump to block end.
+	// Start on first modified row, old side.
+	tab.diffCursor = modIdx
+	tab.diffSide = diffSideOld
+
+	// Press ] — should land on last modified row, NOT the added row.
 	m.Update(tea.KeyPressMsg{Code: ']', Text: "]"})
 
 	if tab.diffSide != diffSideOld {
 		t.Errorf("expected diffSideOld preserved after ], got %d", tab.diffSide)
 	}
-	if tab.diffCursor != blockEnd {
-		t.Errorf("expected cursor at blockEnd=%d, got %d", blockEnd, tab.diffCursor)
+	if tab.diffCursor == addedIdx {
+		t.Errorf("cursor should not land on added-only row %d when on old side", addedIdx)
+	}
+	// Verify cursor is on a row that has old-side content.
+	if diffRowAvailableSide(rows[tab.diffCursor], diffSideOld) != diffSideOld {
+		t.Errorf("cursor row %d does not have old-side content", tab.diffCursor)
+	}
+}
+
+func TestDiffSide_ChangeJumpSkipsAddedOnlyBlock(t *testing.T) {
+	// old: [same1, old1, same2]
+	// new: [same1, new1, same2, added1, added2]
+	// Block 1: modified (old1→new1). Block 2: added-only (added1, added2).
+	// On old side, pressing ] from block 1's end should NOT land in block 2.
+	m := newTestModelWithDiff(t,
+		[]string{"same1", "old1", "same2"},
+		[]string{"same1", "new1", "same2", "added1", "added2"},
+	)
+	tab := m.tabs[0]
+	rows := tab.diffViewData.rows
+
+	// Find the modified row.
+	modIdx := -1
+	for i, row := range rows {
+		if row.rowType == diffRowModified {
+			modIdx = i
+			break
+		}
+	}
+	if modIdx < 0 {
+		t.Fatal("expected a modified row")
+	}
+
+	tab.diffCursor = modIdx
+	tab.diffSide = diffSideOld
+
+	// Press ] — should not move to the added-only block.
+	m.Update(tea.KeyPressMsg{Code: ']', Text: "]"})
+
+	// Cursor should stay on the modified row (no further matching block).
+	if tab.diffCursor != modIdx {
+		row := rows[tab.diffCursor]
+		if diffRowAvailableSide(row, diffSideOld) != diffSideOld {
+			t.Errorf("cursor landed on row %d which has no old-side content", tab.diffCursor)
+		}
 	}
 }
 
