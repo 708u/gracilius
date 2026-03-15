@@ -49,6 +49,7 @@ type MCPServer interface {
 		filePath, text string,
 		startLine, startChar, endLine, endChar int,
 	)
+	ResendSelection()
 }
 
 // CommentRepository is the interface for comment persistence.
@@ -88,12 +89,29 @@ type treeChangedMsg struct{}
 // commentsChangedMsg notifies the TUI that comments.json has changed on disk.
 type commentsChangedMsg struct{}
 
-// gitIndexChangedMsg notifies the TUI that .git/index has changed.
-type gitIndexChangedMsg struct{}
+// gitDirChangedMsg notifies the TUI that a file in .git/ has changed
+// (e.g. index, HEAD).
+type gitDirChangedMsg struct {
+	headChanged bool // true if HEAD changed (invalidates merge-base)
+}
 
 // gitSyncMsg fires after debounce delay to trigger git reload.
 type gitSyncMsg struct {
 	gen int
+}
+
+// gitChangedFilesMsg carries the result of loading git changed files.
+type gitChangedFilesMsg struct {
+	mode    gitDiffMode
+	entries []changedFileEntry
+	err     error
+}
+
+// gitBranchInfoMsg carries the result of async branch info resolution.
+type gitBranchInfoMsg struct {
+	mergeBase     string
+	defaultBranch string
+	err           string
 }
 
 // Model holds the entire TUI state.
@@ -169,26 +187,22 @@ type Model struct {
 	commentRepo    CommentRepository
 	commentWatcher *fsnotify.Watcher
 
-	// git index watcher
-	gitIndexWatcher *fsnotify.Watcher
+	// git directory watcher (.git/index, .git/HEAD)
+	gitDirWatcher *fsnotify.Watcher
 
-	// git panel state
-	gitChangedFiles     []changedFileEntry
-	gitVisualRows       []gitVisualRow
-	gitEntryToVisualIdx map[int]int // entryIdx → visual row index
-	gitCursor           int
-	gitScrollOffset     int
-	gitLoaded           bool
-	gitSyncGen          int // generation counter for debounced git sync
+	// git panel state (per-mode)
+	gitDiffMode      gitDiffMode
+	gitModeState     []gitPanelState
+	gitAnyLoaded     bool // true once any mode has been loaded
+	gitSyncGen       int  // generation counter for debounced git sync
+	gitMergeBase     string
+	gitDefaultBranch string
 
 	// file exclusion (gitignore-based when available)
 	excludeFunc ExcludeFunc
-}
 
-// gitChangedFilesMsg carries the result of loading git changed files.
-type gitChangedFilesMsg struct {
-	entries []changedFileEntry
-	err     error
+	// in-file search
+	search searchState
 }
 
 // lineKind distinguishes the type of a visual row.
@@ -274,8 +288,13 @@ func (m *Model) toggleTreeEntry(idx int) {
 	}
 }
 
+// gitState returns a pointer to the panel state for the active diff mode.
+func (m *Model) gitState() *gitPanelState {
+	return &m.gitModeState[m.gitDiffMode]
+}
+
 // NewModel creates a new TUI Model.
-func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher, gitIndexWatcher *fsnotify.Watcher, exclude ExcludeFunc) (*Model, error) {
+func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *fsnotify.Watcher, dirWatcher *fsnotify.Watcher, commentWatcher *fsnotify.Watcher, gitDirWatcher *fsnotify.Watcher, exclude ExcludeFunc) (*Model, error) {
 	absRootDir, err := filepath.Abs(rootDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root directory: %w", err)
@@ -285,26 +304,29 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 
 	im := detectIconMode()
 	return &Model{
-		server:          srv,
-		rootDir:         absRootDir,
-		fileTree:        ft,
-		treeCursor:      0,
-		focusPane:       paneTree,
-		watcher:         watcher,
-		dirWatcher:      dirWatcher,
-		tabs:            []*tab{},
-		treeWidth:       30,
-		activePanel:     panelFiles,
-		sidebarVisible:  true,
-		keys:            newKeyMap(),
-		help:            help.New(),
-		iconMode:        im,
-		openFile:        newOpenFileOverlay(im, darkTheme),
-		isDark:          true,
-		theme:           darkTheme,
-		commentRepo:     store,
-		commentWatcher:  commentWatcher,
-		gitIndexWatcher: gitIndexWatcher,
-		excludeFunc:     exclude,
+		server:         srv,
+		rootDir:        absRootDir,
+		fileTree:       ft,
+		treeCursor:     0,
+		focusPane:      paneTree,
+		watcher:        watcher,
+		dirWatcher:     dirWatcher,
+		tabs:           []*tab{},
+		treeWidth:      30,
+		activePanel:    panelFiles,
+		sidebarVisible: true,
+		keys:           newKeyMap(),
+		help:           help.New(),
+		iconMode:       im,
+		openFile:       newOpenFileOverlay(im, darkTheme),
+		isDark:         true,
+		theme:          darkTheme,
+		commentRepo:    store,
+		commentWatcher: commentWatcher,
+		gitDirWatcher:  gitDirWatcher,
+		gitDiffMode:    gitModeWorking,
+		gitModeState:   make([]gitPanelState, len(gitDiffModes)),
+		excludeFunc:    exclude,
+		search:         newSearchState(),
 	}, nil
 }

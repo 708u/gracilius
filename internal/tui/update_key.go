@@ -43,16 +43,24 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyInputMode(t, msg)
 	}
 
+	if m.search.active {
+		return m.handleKeySearch(msg)
+	}
+
 	if m.gPending {
 		m.gPending = false
 		if key.Matches(msg, m.keys.GoTop) {
 			switch {
 			case m.focusPane == paneTree && m.activePanel == panelGitDiff:
-				m.gitCursor = firstGitEntryIdx(m.gitVisualRows)
+				gs := m.gitState()
+				gs.cursor = firstGitEntryIdx(gs.visualRows)
 			case m.focusPane == paneTree:
 				m.treeCursor = 0
 			case hasTab && t.diffViewData != nil:
-				t.vp.SetYOffset(0)
+				t.diffCursor = 0
+				t.snapDiffSide()
+				t.syncDiffAnchor()
+				m.notifySelectionChanged()
 			case hasTab && len(t.lines) > 0:
 				t.cursorLine = 0
 				t.cursorChar = 0
@@ -197,30 +205,305 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 			return m, nil, true
 		}
 
-	// Viewport scrolling.
+	// Cursor movement.
 	case key.Matches(msg, m.keys.Up):
-		if t.vp.YOffset() > 0 {
-			t.vp.SetYOffset(t.vp.YOffset() - 1)
+		if t.diffViewData != nil && t.diffCursor > 0 {
+			t.diffCursor--
+			t.snapDiffSide()
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
 		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.Down):
-		t.vp.SetYOffset(t.vp.YOffset() + 1)
+		if t.diffViewData != nil && t.diffCursor < len(t.diffViewData.rows)-1 {
+			t.diffCursor++
+			t.snapDiffSide()
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
+		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.GoBottom):
-		t.vp.GotoBottom()
+		if t.diffViewData != nil && len(t.diffViewData.rows) > 0 {
+			t.diffCursor = len(t.diffViewData.rows) - 1
+			t.snapDiffSide()
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
+		}
+		return m, nil, true
+
+	// Selection toggle.
+	case key.Matches(msg, m.keys.Select):
+		if t.diffViewData != nil {
+			if t.diffSelecting {
+				t.diffSelecting = false
+				m.notifyClearSelection()
+			} else {
+				t.diffSelecting = true
+				t.diffAnchor = t.diffCursor
+				m.notifySelectionChanged()
+			}
+		}
+		return m, nil, true
+
+	// Blank-line boundary jump (same as file tab {/}).
+	case key.Matches(msg, m.keys.BlockUp):
+		m.diffJumpBlankLine(t, -1)
+		return m, nil, true
+	case key.Matches(msg, m.keys.BlockDown):
+		m.diffJumpBlankLine(t, 1)
+		return m, nil, true
+
+	// Change block jump ([/]).
+	case key.Matches(msg, m.keys.ChangeUp):
+		m.diffJumpChange(t, -1)
+		return m, nil, true
+	case key.Matches(msg, m.keys.ChangeDown):
+		m.diffJumpChange(t, 1)
+		return m, nil, true
+
+	// Copy selection.
+	case key.Matches(msg, m.keys.Copy):
+		if t.diffViewData != nil && t.diffSelecting {
+			text := t.diffSelectedText()
+			n := strings.Count(text, "\n") + 1
+			m.statusMsg = fmt.Sprintf("Copied %d lines", n)
+			return m, tea.Batch(
+				tea.SetClipboard(text),
+				statusTickCmd(),
+			), true
+		}
+		return m, nil, true
+
+	// Cancel selection.
+	case key.Matches(msg, m.keys.Cancel):
+		if t.diffSelecting {
+			t.diffSelecting = false
+			m.notifyClearSelection()
+			return m, nil, true
+		}
+
+	// Left/Right: switch diff side on unchanged/modified rows.
+	case key.Matches(msg, m.keys.Left):
+		m.setDiffSide(t, diffSideOld)
+		return m, nil, true
+	case key.Matches(msg, m.keys.Right):
+		m.setDiffSide(t, diffSideNew)
 		return m, nil, true
 
 	// No-op: suppress file-tab actions that should not fire on diff tabs.
-	case key.Matches(msg, m.keys.Left),
-		key.Matches(msg, m.keys.Right),
-		key.Matches(msg, m.keys.Select),
-		key.Matches(msg, m.keys.Comment),
-		key.Matches(msg, m.keys.BlockUp),
-		key.Matches(msg, m.keys.BlockDown):
+	// Search keys (/, n, N, Enter, Shift+Enter) are intentionally NOT
+	// listed here so they fall through to handleKeyNormal.
+	case key.Matches(msg, m.keys.Comment):
 		return m, nil, true
 	}
 
 	return m, nil, false
+}
+
+// setDiffSide switches the diff side on rows that have both sides.
+func (m *Model) setDiffSide(t *tab, side diffSide) {
+	if t.diffViewData == nil || t.diffCursor >= len(t.diffViewData.rows) {
+		return
+	}
+	row := t.diffViewData.rows[t.diffCursor]
+	if row.rowType == diffRowUnchanged || row.rowType == diffRowModified {
+		t.diffSide = side
+		m.notifySelectionChanged()
+	}
+}
+
+// diffJumpBlankLine moves the diff cursor to the next/previous blank-line
+// boundary, mirroring moveToParagraphBoundary for file tabs.
+func (m *Model) diffJumpBlankLine(t *tab, dir int) {
+	if t.diffViewData == nil {
+		return
+	}
+	rows := t.diffViewData.rows
+	cur := t.diffCursor
+	last := len(rows) - 1
+
+	inBounds := func(i int) bool {
+		if dir > 0 {
+			return i < last
+		}
+		return i > 0
+	}
+
+	isBlank := func(i int) bool {
+		side := diffRowAvailableSide(rows[i], t.diffSide)
+		return isBlankLine(diffRowTextForSide(rows[i], side))
+	}
+
+	line := cur
+	if inBounds(line) {
+		line += dir
+		for inBounds(line) && isBlank(line) {
+			line += dir
+		}
+		for inBounds(line) && !isBlank(line) {
+			line += dir
+		}
+	}
+
+	if line != cur {
+		t.diffCursor = line
+		t.syncDiffAnchor()
+		m.notifySelectionChanged()
+	}
+}
+
+// diffJumpChange moves the diff cursor stepwise through change blocks,
+// landing only on rows that have content on the current diffSide.
+//
+// For dir > 0 (]):
+//   - Inside a change block: jump to the last matching row in this block.
+//   - At the last matching row or on an unchanged row: jump to the next
+//     block's first matching row.
+//
+// For dir < 0 ([):
+//   - Inside a change block: jump to the first matching row in this block.
+//   - At the first matching row or on an unchanged row: jump to the
+//     previous block's last matching row.
+func (m *Model) diffJumpChange(t *tab, dir int) {
+	if t.diffViewData == nil {
+		return
+	}
+	rows := t.diffViewData.rows
+	if len(rows) == 0 {
+		return
+	}
+	cur := t.diffCursor
+	last := len(rows) - 1
+
+	isChanged := func(i int) bool {
+		return rows[i].rowType != diffRowUnchanged
+	}
+	matchesSide := func(i int) bool {
+		return diffRowAvailableSide(rows[i], t.diffSide) == t.diffSide
+	}
+
+	if !isChanged(cur) {
+		m.diffJumpToNextBlock(t, cur, dir)
+		return
+	}
+
+	// Find the boundaries of the current change block.
+	blockStart := cur
+	for blockStart > 0 && isChanged(blockStart-1) {
+		blockStart--
+	}
+	blockEnd := cur
+	for blockEnd < last && isChanged(blockEnd+1) {
+		blockEnd++
+	}
+
+	if dir > 0 {
+		// Find last matching row between cur+1 and blockEnd.
+		target := -1
+		for i := blockEnd; i > cur; i-- {
+			if matchesSide(i) {
+				target = i
+				break
+			}
+		}
+		if target >= 0 {
+			t.diffCursor = target
+		} else {
+			m.diffJumpToNextBlock(t, blockEnd, dir)
+			return
+		}
+	} else {
+		// Find first matching row between blockStart and cur-1.
+		target := -1
+		for i := blockStart; i < cur; i++ {
+			if matchesSide(i) {
+				target = i
+				break
+			}
+		}
+		if target >= 0 {
+			t.diffCursor = target
+		} else {
+			m.diffJumpToNextBlock(t, blockStart, dir)
+			return
+		}
+	}
+
+	t.syncDiffAnchor()
+	m.notifySelectionChanged()
+}
+
+// diffJumpToNextBlock moves the cursor to the next change block in dir,
+// landing on the first (dir>0) or last (dir<0) row that matches the
+// current diffSide. Blocks with no matching rows are skipped.
+func (m *Model) diffJumpToNextBlock(t *tab, from, dir int) {
+	rows := t.diffViewData.rows
+	last := len(rows) - 1
+
+	isChanged := func(i int) bool {
+		return rows[i].rowType != diffRowUnchanged
+	}
+	matchesSide := func(i int) bool {
+		return diffRowAvailableSide(rows[i], t.diffSide) == t.diffSide
+	}
+	expandBlock := func(pos int) (int, int) {
+		s, e := pos, pos
+		for s > 0 && isChanged(s-1) {
+			s--
+		}
+		for e < last && isChanged(e+1) {
+			e++
+		}
+		return s, e
+	}
+	// searchMatch scans [from, to] in steps of step for a matching row.
+	// Returns the index or -1.
+	searchMatch := func(from, to, step int) int {
+		for i := from; i != to+step; i += step {
+			if matchesSide(i) {
+				return i
+			}
+		}
+		return -1
+	}
+
+	line := from + dir
+	// Skip any remaining changed rows of the current block.
+	for line >= 0 && line <= last && isChanged(line) {
+		line += dir
+	}
+
+	// Search successive blocks until finding one with a matching row.
+	for {
+		for line >= 0 && line <= last && !isChanged(line) {
+			line += dir
+		}
+		if line < 0 || line > last || !isChanged(line) {
+			return
+		}
+
+		bStart, bEnd := expandBlock(line)
+
+		var target int
+		if dir > 0 {
+			target = searchMatch(bStart, bEnd, 1)
+		} else {
+			target = searchMatch(bEnd, bStart, -1)
+		}
+		if target >= 0 {
+			t.diffCursor = target
+			t.syncDiffAnchor()
+			m.notifySelectionChanged()
+			return
+		}
+
+		// No matching row in this block; skip past it.
+		if dir > 0 {
+			line = bEnd + 1
+		} else {
+			line = bStart - 1
+		}
+	}
 }
 
 // handleKeyNormal handles key events in normal (non-input, non-overlay) mode.
@@ -236,6 +519,11 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	switch {
 	case key.Matches(msg, m.keys.Cancel):
+		if m.search.query != "" {
+			m.search.query = ""
+			m.clearSearchMatches()
+			return m, nil
+		}
 		if hasTab && t.selecting {
 			t.selecting = false
 			m.notifyClearSelection()
@@ -245,9 +533,9 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.activePanel = (m.activePanel + 1) % panelCount
 		m.treeScrollOffset = 0
 		m.treeCursor = 0
-		if m.activePanel == panelGitDiff && !m.gitLoaded {
+		if m.activePanel == panelGitDiff && !m.gitState().loaded {
 			m.adjustScroll()
-			cmd := m.loadGitChanges()
+			cmd := m.loadGitChangesForMode(m.gitDiffMode)
 			return m, cmd
 		}
 	case key.Matches(msg, m.keys.ToggleSidebar):
@@ -269,8 +557,14 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.focusPane = paneTree
 			}
 		}
+	case msg.Code == tea.KeyEnter && msg.Mod.Contains(tea.ModShift):
+		if m.focusPane == paneEditor && m.search.query != "" {
+			m.prevMatch()
+		}
 	case key.Matches(msg, m.keys.Enter):
-		if m.focusPane == paneTree {
+		if m.focusPane == paneEditor && m.search.query != "" {
+			m.nextMatch()
+		} else if m.focusPane == paneTree {
 			switch m.activePanel {
 			case panelFiles:
 				if len(m.fileTree) > 0 {
@@ -281,14 +575,18 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case key.Matches(msg, m.keys.Left):
-		if m.focusPane == paneTree {
+		switch {
+		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
+			cmd := m.switchGitMode(-1)
+			return m, cmd
+		case m.focusPane == paneTree:
 			if len(m.fileTree) > 0 {
 				entry := m.fileTree[m.treeCursor]
 				if entry.isDir && entry.expanded {
 					m.fileTree = collapseDir(m.fileTree, m.treeCursor)
 				}
 			}
-		} else if hasTab {
+		case hasTab:
 			if t.cursorChar > 0 {
 				t.cursorChar--
 			} else if t.cursorLine > 0 {
@@ -299,14 +597,18 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.notifySelectionChanged()
 		}
 	case key.Matches(msg, m.keys.Right):
-		if m.focusPane == paneTree {
+		switch {
+		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
+			cmd := m.switchGitMode(1)
+			return m, cmd
+		case m.focusPane == paneTree:
 			if len(m.fileTree) > 0 {
 				entry := m.fileTree[m.treeCursor]
 				if entry.isDir && !entry.expanded {
 					m.fileTree = expandDir(m.fileTree, m.treeCursor)
 				}
 			}
-		} else if hasTab {
+		case hasTab:
 			if t.cursorChar < t.lineLen(t.cursorLine) {
 				t.cursorChar++
 			} else if t.cursorLine < len(t.lines)-1 {
@@ -412,8 +714,9 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.GoBottom):
 		switch {
 		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
-			if len(m.gitChangedFiles) > 0 {
-				m.gitCursor = lastGitEntryIdx(m.gitVisualRows)
+			gs := m.gitState()
+			if len(gs.entries) > 0 {
+				gs.cursor = lastGitEntryIdx(gs.visualRows)
 			}
 		case m.focusPane == paneTree:
 			if len(m.fileTree) > 0 {
@@ -437,6 +740,14 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.gPending = true
 	case key.Matches(msg, m.keys.OpenFile):
 		return m, m.openFile.open(m.rootDir, m.excludeFunc)
+	case key.Matches(msg, m.keys.Search):
+		if hasTab {
+			m.startSearch()
+		}
+	case key.Matches(msg, m.keys.SearchNext):
+		m.nextMatch()
+	case key.Matches(msg, m.keys.SearchPrev):
+		m.prevMatch()
 	}
 
 	m.adjustScroll()

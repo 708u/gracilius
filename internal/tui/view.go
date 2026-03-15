@@ -19,9 +19,12 @@ func tabLabel(t *tab) string {
 		name = filepath.Base(t.filePath)
 	}
 	if t.kind == diffTab {
-		if t.diff != nil {
+		switch {
+		case t.diff != nil:
 			name = "[review] " + name
-		} else {
+		case t.hasGitDiffModeTag:
+			name = t.gitDiffLabel + " " + name
+		default:
 			name = "[diff] " + name
 		}
 	}
@@ -72,6 +75,7 @@ func newView(content string) tea.View {
 	var v tea.View
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
+	v.ReportFocus = true
 	v.SetContent(content)
 	return v
 }
@@ -101,6 +105,23 @@ func (m *Model) View() tea.View {
 		editorLines = renderWelcome(lo.editorWidth, lo.contentHeight, m.theme)
 	} else {
 		editorLines = m.renderEditor(lo)
+	}
+
+	// Overlay search box on the top-right of the editor.
+	var searchBoxW int
+	if len(editorLines) > 0 && (m.search.active || m.search.query != "") {
+		boxLines := m.renderSearchOverlay(lo.editorWidth)
+		for _, l := range boxLines {
+			if w := ansi.StringWidth(l); w > searchBoxW {
+				searchBoxW = w
+			}
+		}
+		startX := max(lo.editorWidth-searchBoxW, 0)
+		for i, boxLine := range boxLines {
+			if i < len(editorLines) {
+				editorLines[i] = composeLine(editorLines[i], boxLine, startX)
+			}
+		}
 	}
 
 	var content string
@@ -154,6 +175,8 @@ func (m *Model) View() tea.View {
 	v := newView(base)
 	var cp cursorPosition
 	switch {
+	case m.search.active:
+		cp = m.searchCursorScreenPos(lo, searchBoxW)
 	case hasTab && t.inputMode:
 		cp = m.commentCursorScreenPos(lo)
 	case hasTab && t.diffViewData != nil:
@@ -274,7 +297,7 @@ func (m *Model) renderTabBar(offset int) string {
 
 	for i, t := range m.tabs {
 		label := tabLabel(t)
-		w := len([]rune(label))
+		w := ansi.StringWidth(label)
 		if i == m.activeTab {
 			labels = append(labels, styleActive.Render(label))
 			borders = append(borders, styleBorder.Render(
@@ -327,6 +350,16 @@ func (m *Model) renderFooter() string {
 			sb.WriteString("Open a file from the tree to begin")
 		case m.focusPane == paneEditor:
 			switch {
+			case t.diffViewData != nil && t.diffSelecting:
+				startRow, endRow := t.diffNormalizedSelection()
+				n := endRow - startRow + 1
+				fmt.Fprintf(&sb, "Selection: %d rows (%s)", n, t.diffSide)
+				if m.statusMsg != "" {
+					fmt.Fprintf(&sb, "  %s", m.statusMsg)
+				}
+			case t.diffViewData != nil:
+				lineNum := t.diffCursorLineNum() + 1
+				fmt.Fprintf(&sb, "Line %d (%s)", lineNum, t.diffSide)
 			case t.selecting:
 				sLine, sChar, eLine, eChar := t.normalizedSelection()
 				fmt.Fprintf(&sb, "Selection: %d:%d - %d:%d",
@@ -341,8 +374,9 @@ func (m *Model) renderFooter() string {
 				sb.WriteString(emptyStateMsg)
 			}
 		case m.focusPane == paneTree && m.activePanel == panelGitDiff:
-			if m.gitCursor < len(m.gitChangedFiles) {
-				sb.WriteString(m.gitChangedFiles[m.gitCursor].name)
+			gs := m.gitState()
+			if gs.cursor < len(gs.entries) {
+				sb.WriteString(gs.entries[gs.cursor].name)
 			}
 		case m.treeCursor < len(m.fileTree):
 			entry := m.fileTree[m.treeCursor]
@@ -374,7 +408,13 @@ func (m *Model) renderClearAllOverlay(bg string) string {
 
 // renderLeftPane generates the left pane lines with a header and panel body.
 func (m *Model) renderLeftPane(width, height int) []string {
-	header := renderPanelHeader(m.activePanel.label(), width, m.theme)
+	var header string
+	if m.activePanel == panelGitDiff {
+		label := m.activePanel.label() + " \u276e" + m.gitDiffMode.label(m.gitDefaultBranch) + "\u276f"
+		header = renderPanelHeader(label, width, m.theme)
+	} else {
+		header = renderPanelHeader(m.activePanel.label(), width, m.theme)
+	}
 	bodyHeight := height - 1
 
 	var body []string
@@ -446,11 +486,12 @@ func (m *Model) renderTree(width, height int) []string {
 
 // renderDiffEditor generates the editor pane lines for a diff tab.
 // The viewport owns scrolling; we slice cached rendered lines directly.
+// Cursor and selected rows are re-rendered with gutter highlights.
 func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 	width := lo.editorWidth
 	height := lo.contentHeight
 
-	t.ensureDiffContent(m.theme, width)
+	t.ensureDiffContent(m.theme, width, m.search.gen)
 	m.lastMapping = nil
 
 	off := t.vp.YOffset()
@@ -462,7 +503,62 @@ func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 	for len(diffLines) < height {
 		diffLines = append(diffLines, padRight("", width))
 	}
+
+	// Apply cursor/selection gutter highlights to visible rows.
+	if t.diffViewData != nil && len(t.diffRowVisualStarts) > 0 && m.focusPane == paneEditor {
+		m.applyDiffGutterHighlights(t, diffLines, off, width)
+	}
+
 	return diffLines
+}
+
+// applyDiffGutterHighlights re-renders diff rows that need cursor or selection
+// gutter highlighting within the visible window.
+func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, width int) {
+	if t.diffViewData == nil || len(t.diffRowVisualStarts) == 0 {
+		return
+	}
+
+	ctx := newDiffSideCtx(t.diffViewData, m.theme, width)
+	highlightBg := m.theme.selectionBgSeq()
+
+	startRow, endRow := t.diffCursor, t.diffCursor
+	if t.diffSelecting {
+		startRow, endRow = t.diffNormalizedSelection()
+	}
+
+	viewEnd := viewOff + len(diffLines)
+
+	// Only iterate cursor/selection rows instead of all rows.
+	for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.rows); rowIdx++ {
+		rowVisStart := t.diffRowVisualStarts[rowIdx]
+		rowVisEnd := len(t.diffCachedLines)
+		if rowIdx+1 < len(t.diffRowVisualStarts) {
+			rowVisEnd = t.diffRowVisualStarts[rowIdx+1]
+		}
+
+		// Skip if entirely outside visible window.
+		if rowVisEnd <= viewOff || rowVisStart >= viewEnd {
+			continue
+		}
+
+		row := t.diffViewData.rows[rowIdx]
+		activeSide := diffRowAvailableSide(row, t.diffSide)
+		oldCtx, newCtx := ctx, ctx
+		if activeSide == diffSideOld {
+			oldCtx.gutterHighlight = highlightBg
+		} else {
+			newCtx.gutterHighlight = highlightBg
+		}
+		reRendered := renderSingleDiffRow(row, t.diffOldHighlights, t.diffNewHighlights, oldCtx, newCtx, width, nil, nil)
+
+		for j, line := range reRendered {
+			visIdx := rowVisStart + j - viewOff
+			if visIdx >= 0 && visIdx < len(diffLines) {
+				diffLines[visIdx] = line
+			}
+		}
+	}
 }
 
 // renderEditor generates the editor pane lines.
@@ -494,6 +590,12 @@ func (m *Model) renderEditor(lo layout) []string {
 
 	startLine, startChar, endLine, endChar := t.normalizedSelection()
 	selBgSeq := m.theme.selectionBgSeq()
+	hasSearchMatches := len(t.searchMatches) > 0
+	var searchMatchBg, searchCurrentBg string
+	if hasSearchMatches {
+		searchMatchBg = m.theme.searchMatchBgSeq()
+		searchCurrentBg = m.theme.searchCurrentBgSeq()
+	}
 	offset := t.vp.YOffset()
 	commentBodyWidth := width - lnw - commentBlockMargin
 	total := len(t.lines)
@@ -510,20 +612,25 @@ func (m *Model) renderEditor(lo layout) []string {
 		// Build content and emit visual rows
 		isSelected := m.focusPane == paneEditor && t.selecting && i >= startLine && i <= endLine
 
+		// Collect highlight ranges: search matches first, then selection (later wins).
+		lineHighlights := m.searchHighlightsForLine(t, i, searchMatchBg, searchCurrentBg)
+		if isSelected {
+			sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
+			if sc < ec {
+				lineHighlights = append(lineHighlights, highlightRange{start: sc, end: ec, bgSeq: selBgSeq})
+			}
+		}
+		hasHighlights := len(lineHighlights) > 0
+
 		bp := wrapBreakpoints(lineContent, textWidth)
 		if bp != nil {
 			// Per-segment rendering: split runs at wrap breakpoints,
-			// then apply cursor/selection per segment independently.
+			// then apply highlights per segment independently.
 			var runs []styledRun
 			if hl := t.getHighlightedLine(i); hl != nil {
 				runs = hl.runs
 			} else {
 				runs = []styledRun{{Text: lineContent}}
-			}
-
-			var sc, ec int
-			if isSelected {
-				sc, ec = selRange(i, startLine, endLine, startChar, endChar, lineContent)
 			}
 
 			segRunsList := splitRunsAtBreakpoints(runs, bp)
@@ -542,22 +649,19 @@ func (m *Model) renderEditor(lo layout) []string {
 					segLen += len([]rune(r.Text))
 				}
 
-				// Clamp selection range to this segment.
-				segSC, segEC := 0, 0
-				if isSelected && sc < ec {
-					segSC = max(0, sc-wrapOff)
-					segEC = min(segLen, ec-wrapOff)
-					if segSC >= segEC {
-						segSC, segEC = 0, 0
-					}
-				}
-
 				// Render segment content.
 				var segSB strings.Builder
-				switch {
-				case segSC < segEC:
-					renderStyledLineWithSelection(&segSB, segRuns, segSC, segEC, selBgSeq)
-				default:
+				if hasHighlights {
+					// Clamp highlights to this segment.
+					segHL := clampHighlightsToSegment(lineHighlights, wrapOff, segLen)
+					if len(segHL) > 0 {
+						renderStyledLineWithHighlights(&segSB, segRuns, segHL)
+					} else {
+						for _, r := range segRuns {
+							writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
+						}
+					}
+				} else {
 					for _, r := range segRuns {
 						writeStyledText(&segSB, r.ANSI, expandTabs(r.Text))
 					}
@@ -580,15 +684,15 @@ func (m *Model) renderEditor(lo layout) []string {
 			// Non-wrapped: build full content then emit.
 			var contentSB strings.Builder
 
-			switch {
-			case isSelected:
-				sc, ec := selRange(i, startLine, endLine, startChar, endChar, lineContent)
+			if hasHighlights {
+				var runs []styledRun
 				if hl := t.getHighlightedLine(i); hl != nil {
-					renderStyledLineWithSelection(&contentSB, hl.runs, sc, ec, selBgSeq)
+					runs = hl.runs
 				} else {
-					renderLineWithCursorAndSelection(&contentSB, lineContent, sc, ec, selBgSeq)
+					runs = []styledRun{{Text: lineContent}}
 				}
-			default:
+				renderStyledLineWithHighlights(&contentSB, runs, lineHighlights)
+			} else {
 				if hl := t.getHighlightedLine(i); hl != nil {
 					contentSB.WriteString(hl.rendered)
 				} else {
@@ -689,10 +793,4 @@ func selRange(line, startLine, endLine, startChar, endChar int, content string) 
 		ec = endChar
 	}
 	return sc, ec
-}
-
-// renderLineWithCursorAndSelection renders a line with selection highlight.
-func renderLineWithCursorAndSelection(sb *strings.Builder, line string, selStart, selEnd int, selBgSeq string) {
-	runs := []styledRun{{Text: line}}
-	renderStyledLineWithSelection(sb, runs, selStart, selEnd, selBgSeq)
 }

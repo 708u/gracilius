@@ -24,7 +24,7 @@ type statusClearMsg struct{}
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.watchFile(), m.watchDir(), m.watchComments(), m.watchGitIndex(), tea.RequestBackgroundColor)
+	return tea.Batch(m.watchFile(), m.watchDir(), m.watchComments(), m.watchGitDir(), tea.RequestBackgroundColor)
 }
 
 type direction int
@@ -94,7 +94,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.openFile.active {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.MouseClickMsg,
-			tea.WindowSizeMsg,
+			tea.WindowSizeMsg, tea.FocusMsg,
 			fileChangedMsg, treeChangedMsg, commentsChangedMsg,
 			OpenDiffMsg, CloseDiffMsg,
 			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
@@ -105,7 +105,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Route non-key messages to search input when active.
+	if m.search.active {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.MouseClickMsg,
+			tea.WindowSizeMsg, tea.FocusMsg,
+			fileChangedMsg, treeChangedMsg, commentsChangedMsg,
+			OpenDiffMsg, CloseDiffMsg,
+			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg:
+			// Fall through to normal handling below.
+		default:
+			var cmd tea.Cmd
+			m.search.input, cmd = m.search.input.Update(msg)
+			return m, cmd
+		}
+	}
+
 	switch msg := msg.(type) {
+	case tea.FocusMsg:
+		m.server.ResendSelection()
+		return m, nil
 	case tea.KeyboardEnhancementsMsg:
 		m.enhancedKeyboard = msg.SupportsKeyDisambiguation()
 		return m, nil
@@ -146,8 +165,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleCommentsChanged()
 	case gitChangedFilesMsg:
 		return m.handleGitChangedFiles(msg)
-	case gitIndexChangedMsg:
-		return m.handleGitIndexChanged()
+	case gitBranchInfoMsg:
+		return m.handleGitBranchInfo(msg)
+	case gitDirChangedMsg:
+		return m.handleGitDirChanged(msg)
 	case gitSyncMsg:
 		return m.handleGitSync(msg)
 	case OpenDiffMsg:
@@ -193,15 +214,22 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 		targetLine = 0
 	}
 
-	targetChar := max(editorX, 0)
+	col := max(editorX, 0)
+	wrapOffset := 0
 	if editorY >= 0 && editorY < len(m.lastMapping) {
-		targetChar += m.lastMapping[editorY].wrapOffset
+		wrapOffset = m.lastMapping[editorY].wrapOffset
 	}
-	if targetLine < len(t.lines) {
-		runeLen := len([]rune(t.lines[targetLine]))
-		if targetChar > runeLen {
-			targetChar = runeLen
+	// Convert display column to rune offset within the visible segment.
+	// Walk runes directly to avoid intermediate string allocation.
+	runes := []rune(t.lines[targetLine])
+	w := 0
+	targetChar := len(runes)
+	for i := wrapOffset; i < len(runes); i++ {
+		if w >= col {
+			targetChar = i
+			break
 		}
+		w += runeWidth(runes[i])
 	}
 	return targetLine, targetChar
 }
@@ -209,7 +237,7 @@ func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 // closeTab removes the tab at idx and adjusts activeTab.
 func (m *Model) closeTab(idx int) {
 	t := m.tabs[idx]
-	if t.kind == diffTab {
+	if t.kind == diffTab && t.diff != nil {
 		t.rejectAndClear()
 	}
 	filePath := t.filePath
@@ -232,7 +260,7 @@ func (m *Model) closeDiffTabs() {
 	tabs := make([]*tab, 0, len(m.tabs))
 	var removedPaths []string
 	for _, t := range m.tabs {
-		if t.kind == diffTab {
+		if t.kind == diffTab && t.diff != nil {
 			t.rejectAndClear()
 			if t.filePath != "" {
 				removedPaths = append(removedPaths, t.filePath)

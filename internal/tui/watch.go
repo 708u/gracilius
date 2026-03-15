@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/fileutil"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -29,7 +30,7 @@ func (m *Model) watchFile() tea.Cmd {
 						log.Printf("Error reading file: %v", err)
 						continue
 					}
-					return fileChangedMsg{path: event.Name, lines: splitLines(content)}
+					return fileChangedMsg{path: event.Name, lines: fileutil.SplitLines(content)}
 				}
 			case err, ok := <-w.Errors:
 				if !ok {
@@ -72,9 +73,9 @@ func (m *Model) watchComments() tea.Cmd {
 	}
 }
 
-// watchGitIndex returns a tea.Cmd that watches .git/index for changes.
-func (m *Model) watchGitIndex() tea.Cmd {
-	w := m.gitIndexWatcher
+// watchGitDir returns a tea.Cmd that watches .git/ for index and HEAD changes.
+func (m *Model) watchGitDir() tea.Cmd {
+	w := m.gitDirWatcher
 	return func() tea.Msg {
 		if w == nil {
 			return nil
@@ -85,18 +86,23 @@ func (m *Model) watchGitIndex() tea.Cmd {
 				if !ok {
 					return nil
 				}
-				if filepath.Base(event.Name) != "index" {
+				if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
 					continue
 				}
-				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
+				base := filepath.Base(event.Name)
+				switch base {
+				case "index":
 					log.Printf("Git index changed: %s (%s)", event.Name, event.Op)
-					return gitIndexChangedMsg{}
+					return gitDirChangedMsg{headChanged: false}
+				case "HEAD":
+					log.Printf("Git HEAD changed: %s (%s)", event.Name, event.Op)
+					return gitDirChangedMsg{headChanged: true}
 				}
 			case err, ok := <-w.Errors:
 				if !ok {
 					return nil
 				}
-				log.Printf("Git index watcher error: %v", err)
+				log.Printf("Git dir watcher error: %v", err)
 			}
 		}
 	}

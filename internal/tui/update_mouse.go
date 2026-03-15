@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // tabIndexAtX returns the tab index at screen X coordinate, or -1 if none.
@@ -15,7 +16,7 @@ func (m *Model) tabIndexAtX(x int) int {
 			pos += tabSeparatorWidth
 		}
 		label := tabLabel(t)
-		w := len([]rune(label))
+		w := ansi.StringWidth(label)
 		if x >= pos && x < pos+w {
 			return i
 		}
@@ -59,25 +60,26 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 
 	borderX := lo.treeWidth
 	isBorderArea := m.sidebarVisible && msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= contentStartY
-
 	if isBorderArea && msg.Button == tea.MouseLeft {
 		m.resizingPane = true
 		return m, nil
 	}
 
-	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= contentStartY && msg.Button == tea.MouseLeft {
+	panelBodyY := contentStartY + 1 // +1 for panel header line
+	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= panelBodyY && msg.Button == tea.MouseLeft {
 		switch m.activePanel {
 		case panelGitDiff:
-			rowIdx := msg.Y - contentStartY + m.gitScrollOffset
-			if rowIdx >= 0 && rowIdx < len(m.gitVisualRows) {
-				row := m.gitVisualRows[rowIdx]
-				if !row.isHeader {
-					m.gitCursor = row.entryIdx
+			gs := m.gitState()
+			rowIdx := msg.Y - panelBodyY + gs.scrollOffset
+			if rowIdx >= 0 && rowIdx < len(gs.visualRows) {
+				row := gs.visualRows[rowIdx]
+				if row.isFileRow() {
+					gs.cursor = row.entryIdx
 					m.openGitDiffEntry()
 				}
 			}
 		default:
-			treeIdx := msg.Y - contentStartY + m.treeScrollOffset
+			treeIdx := msg.Y - panelBodyY + m.treeScrollOffset
 			if treeIdx >= 0 && treeIdx < len(m.fileTree) {
 				m.treeCursor = treeIdx
 				m.toggleTreeEntry(treeIdx)
@@ -86,7 +88,27 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if !hasTab || len(t.lines) == 0 {
+	if !hasTab {
+		return m, nil
+	}
+
+	// Diff tab click: set diff cursor by visual line → row mapping.
+	if t.diffViewData != nil && msg.Button == tea.MouseLeft && msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+		visualLine := msg.Y - contentStartY + t.vp.YOffset()
+		row := t.diffVisualLineToRow(visualLine)
+		m.focusPane = paneEditor
+		t.diffCursor = row
+		t.diffAnchor = row
+		t.diffSelecting = false
+		t.diffSide = m.diffSideFromX(lo, msg.X)
+		t.snapDiffSide()
+		m.mouseDown = true
+		m.lastMouseLine = row
+		m.notifySelectionChanged()
+		return m, nil
+	}
+
+	if len(t.lines) == 0 {
 		return m, nil
 	}
 
@@ -113,11 +135,28 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
 	}
 
 	t, hasTab := m.activeTabState()
-	if !hasTab || len(t.lines) == 0 || !m.mouseDown {
+	if !hasTab || !m.mouseDown {
 		return m, nil
 	}
 
 	lo := m.computeLayout()
+
+	// Diff tab drag: select rows.
+	if t.diffViewData != nil && msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+		visualLine := msg.Y - contentStartY + t.vp.YOffset()
+		row := t.diffVisualLineToRow(visualLine)
+		if row != m.lastMouseLine {
+			t.diffSelecting = true
+			t.diffCursor = row
+			m.lastMouseLine = row
+		}
+		return m, nil
+	}
+
+	if len(t.lines) == 0 {
+		return m, nil
+	}
+
 	if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
 		targetLine, targetChar := m.editorTarget(t, lo, msg.X, msg.Y)
 		if targetLine != m.lastMouseLine || targetChar != m.lastMouseChar {
@@ -148,7 +187,23 @@ func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) (tea.Model, tea.Cmd)
 	m.mouseDown = false
 
 	t, hasTab := m.activeTabState()
-	if !hasTab || len(t.lines) == 0 {
+	if !hasTab {
+		return m, nil
+	}
+
+	// Diff tab release: finalize selection and notify.
+	if wasDown && t.diffViewData != nil && t.diffSelecting {
+		lo := m.computeLayout()
+		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+			visualLine := msg.Y - contentStartY + t.vp.YOffset()
+			row := t.diffVisualLineToRow(visualLine)
+			t.diffCursor = row
+		}
+		m.notifySelectionChanged()
+		return m, nil
+	}
+
+	if len(t.lines) == 0 {
 		return m, nil
 	}
 
@@ -162,6 +217,15 @@ func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) (tea.Model, tea.Cmd)
 		m.notifySelectionChanged()
 	}
 	return m, nil
+}
+
+// diffSideFromX returns the diff side based on the mouse X coordinate.
+func (m *Model) diffSideFromX(lo layout, x int) diffSide {
+	sideWidth := (lo.editorWidth - diffSeparatorWidth) / 2
+	if x-lo.editorStartX < sideWidth {
+		return diffSideOld
+	}
+	return diffSideNew
 }
 
 // handleMouseWheel handles mouse scroll events.
@@ -183,9 +247,10 @@ func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 		bodyHeight := lo.contentHeight - 1 // -1 for panel header
 		switch m.activePanel {
 		case panelGitDiff:
-			m.gitScrollOffset = max(0, m.gitScrollOffset+delta)
-			maxOff := max(len(m.gitVisualRows)-bodyHeight, 0)
-			m.gitScrollOffset = min(m.gitScrollOffset, maxOff)
+			gs := m.gitState()
+			gs.scrollOffset = max(0, gs.scrollOffset+delta)
+			maxOff := max(len(gs.visualRows)-bodyHeight, 0)
+			gs.scrollOffset = min(gs.scrollOffset, maxOff)
 		default:
 			m.treeScrollOffset = max(0, m.treeScrollOffset+delta)
 			maxOff := max(len(m.fileTree)-bodyHeight, 0)

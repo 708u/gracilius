@@ -1,7 +1,7 @@
 .PHONY: build test vet lint fmt fix clean
 
 build:
-	go build -o gra ./cmd/gra/
+	go build -o out/gra ./cmd/gra/
 
 test:
 	go test ./...
@@ -19,4 +19,4 @@ fix:
 	go fix ./...
 
 clean:
-	rm -f gra
+	rm -rf out

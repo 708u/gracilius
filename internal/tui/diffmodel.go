@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"github.com/708u/gracilius/internal/diff"
 	diffmatchpatch "github.com/sergi/go-diff/diffmatchpatch"
 )
 
@@ -23,8 +24,8 @@ type diffRow struct {
 	oldText    string
 	newText    string
 	rowType    diffRowType
-	oldSpans   []wordSpan // word-level diff spans (modified rows only)
-	newSpans   []wordSpan
+	oldSpans   []diff.WordSpan // word-level diff spans (modified rows only)
+	newSpans   []diff.WordSpan
 }
 
 // diffHunk represents a contiguous range of changed rows with context.
@@ -164,7 +165,7 @@ func buildDiffData(oldLines, newLines []string) *diffData {
 			maxLine = rows[i].newLineNum
 		}
 		if rows[i].rowType == diffRowModified {
-			rows[i].oldSpans, rows[i].newSpans = computeWordDiff(rows[i].oldText, rows[i].newText)
+			rows[i].oldSpans, rows[i].newSpans = diff.ComputeWordDiff(rows[i].oldText, rows[i].newText)
 		}
 	}
 

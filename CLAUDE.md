@@ -13,7 +13,7 @@ The command name is `gra`.
 
 ```bash
 # Build
-go build -o gra ./cmd/gra/
+go build -o out/gra ./cmd/gra/
 
 # Run
 go run ./cmd/gra/

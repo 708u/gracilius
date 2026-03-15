@@ -339,14 +339,20 @@ func (s *openFileOverlay) selectedPath() string {
 
 // cursorPos returns the screen-space cursor position for the overlay's text input.
 func (s *openFileOverlay) cursorPos(width, height int) cursorPosition {
-	c := s.input.Cursor()
-	if c == nil {
+	if !s.input.Focused() {
 		return cursorPosition{}
 	}
 	g := s.computeLayout(width, height)
+	// Compute display width instead of using Cursor().X, which returns
+	// a rune index and is incorrect for wide characters (CJK).
+	// See: https://github.com/charmbracelet/bubbles/issues/906
+	val := s.input.Value()
+	pos := s.input.Position()
+	cursorCol := displayWidthRange(val, 0, pos)
+	promptW := ansi.StringWidth(s.input.Prompt)
 	return cursorPosition{
-		x: g.startX + overlayBorderW/2 + overlayPaddingW/2 + c.X,
-		y: g.startY + overlayBorderH/2 + c.Y,
+		x: g.startX + overlayBorderW/2 + overlayPaddingW/2 + promptW + cursorCol,
+		y: g.startY + overlayBorderH/2,
 	}
 }
 
