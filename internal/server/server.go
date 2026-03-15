@@ -29,6 +29,7 @@ const (
 )
 
 const commentPrefix = "[Comment]"
+const diffCommentPrefix = "[DiffComment"
 
 const debounceInterval = 100 * time.Millisecond
 
@@ -325,7 +326,7 @@ func (s *Server) NotifySelectionChanged(filePath, text string, startLine, startC
 	}
 
 	// Comment notifications are sent immediately
-	if strings.HasPrefix(text, commentPrefix) {
+	if strings.HasPrefix(text, commentPrefix) || strings.HasPrefix(text, diffCommentPrefix) {
 		s.mu.Lock()
 		if s.notifyTimer != nil {
 			s.notifyTimer.Stop()

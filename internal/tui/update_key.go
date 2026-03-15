@@ -30,7 +30,11 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.clearAllPending {
 		m.clearAllPending = false
 		if key.Matches(msg, m.keys.Confirm) {
-			if hasTab && t.filePath != "" {
+			if hasTab && t.kind == diffTab {
+				t.comments = nil
+				t.diffCommentSides = nil
+				t.diffCacheWidth = 0
+			} else if hasTab && t.filePath != "" {
 				if err := m.commentRepo.DeleteByFile(t.filePath); err != nil {
 					log.Printf("Failed to clear comments from store: %v", err)
 				}
@@ -123,6 +127,11 @@ func (t *tab) captureSnippet(startLine, endLine int) string {
 
 // submitComment persists the current comment input to the store.
 func (m *Model) submitComment(t *tab) {
+	if t.kind == diffTab {
+		m.submitDiffComment(t)
+		return
+	}
+
 	val := t.commentInput.Value()
 	idx := t.findComment(t.inputStart)
 	var oldID string
@@ -163,6 +172,45 @@ func (m *Model) submitComment(t *tab) {
 	if err := m.commentRepo.Add(sc); err != nil {
 		log.Printf("Failed to persist comment: %v", err)
 	}
+}
+
+// submitDiffComment handles comment submission for diff tabs (in-memory only).
+func (m *Model) submitDiffComment(t *tab) {
+	val := t.commentInput.Value()
+	side := t.diffInputSide
+	idx := t.findDiffComment(t.inputStart, side)
+
+	if val == "" && idx >= 0 {
+		t.comments = append(t.comments[:idx], t.comments[idx+1:]...)
+		t.diffCommentSides = append(t.diffCommentSides[:idx], t.diffCommentSides[idx+1:]...)
+		t.diffCacheWidth = 0
+		return
+	}
+	if val == "" {
+		return
+	}
+
+	id, err := uuid.NewV7()
+	if err != nil {
+		log.Printf("Failed to generate UUID: %v", err)
+	}
+	m.notifyDiffComment(side, t.inputStart, t.inputEnd, val)
+	sc := comment.Entry{
+		ID:        id.String(),
+		FilePath:  t.filePath,
+		StartLine: t.inputStart,
+		EndLine:   t.inputEnd,
+		Text:      val,
+		Snippet:   t.diffCaptureSnippet(t.inputStart, t.inputEnd, side),
+		CreatedAt: time.Now(),
+	}
+	if idx >= 0 {
+		t.comments[idx] = sc
+	} else {
+		t.comments = append(t.comments, sc)
+		t.diffCommentSides = append(t.diffCommentSides, side)
+	}
+	t.diffCacheWidth = 0
 }
 
 // handleKeyOpenFile handles key events when the open-file overlay is active.
@@ -290,10 +338,45 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 		m.setDiffSide(t, diffSideNew)
 		return m, nil, true
 
-	// No-op: suppress file-tab actions that should not fire on diff tabs.
-	// Search keys (/, n, N, Enter, Shift+Enter) are intentionally NOT
-	// listed here so they fall through to handleKeyNormal.
+	// Comment on diff view.
 	case key.Matches(msg, m.keys.Comment):
+		if t.diffViewData != nil {
+			t.inputMode = true
+			t.diffInputSide = diffRowAvailableSide(
+				t.diffViewData.rows[t.diffCursor], t.diffSide)
+
+			if t.diffSelecting {
+				startRow, endRow := t.diffNormalizedSelection()
+				t.inputStart = diffRowLineNumForSide(
+					t.diffViewData.rows[startRow], t.diffInputSide)
+				t.inputEnd = diffRowLineNumForSide(
+					t.diffViewData.rows[endRow], t.diffInputSide)
+				t.diffSelecting = false
+			} else {
+				ln := diffRowLineNumForSide(
+					t.diffViewData.rows[t.diffCursor], t.diffInputSide)
+				t.inputStart = ln
+				t.inputEnd = ln
+			}
+
+			lo := m.computeLayout()
+			sideWidth := (lo.editorWidth - diffSeparatorWidth) / 2
+			t.commentInput.SetWidth(
+				sideWidth - commentBlockMargin - commentBorderChars)
+			t.commentInput.SetHeight(3)
+			if m.enhancedKeyboard {
+				t.commentInput.KeyMap.InsertNewline = key.NewBinding(
+					key.WithKeys("shift+enter"),
+				)
+			}
+			t.commentInput.Reset()
+			if idx := t.findDiffComment(t.inputStart, t.diffInputSide); idx >= 0 {
+				t.inputStart = t.comments[idx].StartLine
+				t.inputEnd = t.comments[idx].EndLine
+				t.commentInput.SetValue(t.comments[idx].Text)
+			}
+			t.commentInput.Focus()
+		}
 		return m, nil, true
 	}
 

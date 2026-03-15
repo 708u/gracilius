@@ -58,6 +58,10 @@ type tab struct {
 	diffSelecting bool     // whether row-level selection is active
 	diffSide      diffSide // old/new side the cursor is on
 
+	// diff comments (in-memory only, not persisted)
+	diffCommentSides []diffSide // parallel to comments: which side each comment is on
+	diffInputSide    diffSide   // side during input mode
+
 	// diff render cache (invalidated on width/theme change)
 	diffCachedLines     []string // pre-rendered visual lines (same as viewport content)
 	diffCacheWidth      int
@@ -373,6 +377,8 @@ func (t *tab) syncContent(lines []string) {
 // Returns the hunk visual offsets for initial scroll positioning.
 func (t *tab) renderDiffContent(theme themeConfig, width int) []int {
 	result := renderAllDiffLines(t.diffViewData, theme, width, t.diffOldHighlights, t.diffNewHighlights, t.diffSearchMatches)
+	sideWidth := (width - diffSeparatorWidth) / 2
+	result = t.interleaveCommentBlocks(result, sideWidth, width)
 	t.diffCachedLines = result.lines
 	t.diffRowVisualStarts = result.rowVisualStarts
 	t.vp.SetContentLines(result.lines)
@@ -579,6 +585,7 @@ func (t *tab) resetEditorState() {
 	t.vp.SetYOffset(0)
 	t.selecting = false
 	t.comments = nil
+	t.diffCommentSides = nil
 	t.inputMode = false
 	t.commentInput.Reset()
 	t.commentInput.Blur()
@@ -649,4 +656,32 @@ func (t *tab) scrollOffsetFor(targetLine, targetVisualRow, textWidth int) int {
 // such that rendering from that line fills at least contentHeight visual rows.
 func (t *tab) maxScrollOffset(contentHeight, textWidth int) int {
 	return t.scrollOffsetFor(len(t.lines)-1, contentHeight, textWidth)
+}
+
+// findDiffComment returns the index of the diff comment covering line on the given side, or -1.
+func (t *tab) findDiffComment(line int, side diffSide) int {
+	for i := range t.comments {
+		if i < len(t.diffCommentSides) &&
+			t.diffCommentSides[i] == side &&
+			line >= t.comments[i].StartLine && line <= t.comments[i].EndLine {
+			return i
+		}
+	}
+	return -1
+}
+
+// diffCaptureSnippet returns the text of lines from startLine to endLine
+// on the given side, extracted from diffViewData rows.
+func (t *tab) diffCaptureSnippet(startLine, endLine int, side diffSide) string {
+	if t.diffViewData == nil {
+		return ""
+	}
+	var parts []string
+	for _, row := range t.diffViewData.rows {
+		ln := diffRowLineNumForSide(row, side)
+		if ln >= startLine && ln <= endLine {
+			parts = append(parts, diffRowTextForSide(row, side))
+		}
+	}
+	return strings.Join(parts, "\n")
 }

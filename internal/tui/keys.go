@@ -196,8 +196,8 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	editorFocus := hasTab && m.focusPane == paneEditor
 	km.Select.SetEnabled(editorFocus)
 	km.Copy.SetEnabled(editorFocus && ((isDiffView && t.diffSelecting) || (!isDiffView && t.selecting)))
-	km.Comment.SetEnabled(editorFocus && !isDiffView)
-	km.ClearAll.SetEnabled(editorFocus && !isDiffView)
+	km.Comment.SetEnabled(editorFocus)
+	km.ClearAll.SetEnabled(editorFocus)
 	km.BlockUp.SetEnabled(editorFocus)
 	km.BlockDown.SetEnabled(editorFocus)
 	km.ChangeUp.SetEnabled(editorFocus && isDiffView)
