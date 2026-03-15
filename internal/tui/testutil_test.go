@@ -63,6 +63,26 @@ func newTestModel(t *testing.T) *Model {
 	return m
 }
 
+// newTestModelWithDiff creates a Model with a diff tab containing
+// old and new lines. The tab has diffViewData built from the provided slices.
+func newTestModelWithDiff(t *testing.T, oldLines, newLines []string) *Model {
+	t.Helper()
+	m := newTestModel(t)
+
+	dt := &tab{
+		kind:         diffTab,
+		filePath:     "/workspace/file.go",
+		lines:        newLines,
+		commentInput: newTextarea(),
+		vp:           newViewport(),
+	}
+	dt.diffViewData = buildDiffData(oldLines, newLines)
+	m.tabs = append(m.tabs, dt)
+	m.activeTab = 0
+	m.focusPane = paneEditor
+	return m
+}
+
 // newTestModelWithFile creates a Model with a file tab loaded.
 func newTestModelWithFile(t *testing.T, content string) *Model {
 	t.Helper()
