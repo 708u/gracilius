@@ -329,45 +329,101 @@ func (m *Model) diffJumpBlankLine(t *tab, dir int) {
 	}
 }
 
-// diffJumpChange moves the diff cursor to the first changed row of
-// the next/previous change block, like vim's ]c / [c.
+// diffJumpChange moves the diff cursor stepwise through change blocks.
+//
+// For dir > 0 (]):
+//   - Inside a change block (not at its last row): jump to the last row.
+//   - At the last row of a change block, or on an unchanged row: jump to
+//     the first row of the next change block.
+//
+// For dir < 0 ([):
+//   - Inside a change block (not at its first row): jump to the first row.
+//   - At the first row of a change block, or on an unchanged row: jump to
+//     the last row of the previous change block.
 func (m *Model) diffJumpChange(t *tab, dir int) {
 	if t.diffViewData == nil {
 		return
 	}
 	rows := t.diffViewData.rows
+	if len(rows) == 0 {
+		return
+	}
 	cur := t.diffCursor
 	last := len(rows) - 1
-
-	inBounds := func(i int) bool {
-		if dir > 0 {
-			return i <= last
-		}
-		return i >= 0
-	}
 
 	isChanged := func(i int) bool {
 		return rows[i].rowType != diffRowUnchanged
 	}
 
-	line := cur + dir
-	// Skip remaining rows of the current change block.
-	for inBounds(line) && isChanged(line) {
-		line += dir
-	}
-	// Skip unchanged rows.
-	for inBounds(line) && !isChanged(line) {
-		line += dir
-	}
-
-	if !inBounds(line) || !isChanged(line) {
+	if !isChanged(cur) {
+		// On an unchanged row: find the nearest change block in dir.
+		m.diffJumpToNextBlock(t, cur, dir)
 		return
 	}
 
-	// When going backward, find the start of this change block.
+	// Find the boundaries of the current change block.
+	blockStart := cur
+	for blockStart > 0 && isChanged(blockStart-1) {
+		blockStart--
+	}
+	blockEnd := cur
+	for blockEnd < last && isChanged(blockEnd+1) {
+		blockEnd++
+	}
+
+	if dir > 0 {
+		if cur < blockEnd {
+			// Not at the last row: jump to end of this block.
+			t.diffCursor = blockEnd
+		} else {
+			// At the last row: jump to the next block's first row.
+			m.diffJumpToNextBlock(t, cur, dir)
+			return
+		}
+	} else {
+		if cur > blockStart {
+			// Not at the first row: jump to start of this block.
+			t.diffCursor = blockStart
+		} else {
+			// At the first row: jump to the previous block's last row.
+			m.diffJumpToNextBlock(t, cur, dir)
+			return
+		}
+	}
+
+	t.syncDiffAnchor()
+	m.notifySelectionChanged()
+}
+
+// diffJumpToNextBlock moves the cursor to the next change block in dir.
+// For dir > 0 it lands on the block's first row; for dir < 0 on its last row.
+func (m *Model) diffJumpToNextBlock(t *tab, from, dir int) {
+	rows := t.diffViewData.rows
+	last := len(rows) - 1
+
+	isChanged := func(i int) bool {
+		return rows[i].rowType != diffRowUnchanged
+	}
+
+	line := from + dir
+	// Skip any remaining changed rows of the current block.
+	for line >= 0 && line <= last && isChanged(line) {
+		line += dir
+	}
+	// Skip unchanged rows.
+	for line >= 0 && line <= last && !isChanged(line) {
+		line += dir
+	}
+
+	if line < 0 || line > last || !isChanged(line) {
+		return
+	}
+
+	// Going backward: the scan lands on the first changed row of the block;
+	// walk forward to find the last row so we land on the block's end.
 	if dir < 0 {
-		for line > 0 && isChanged(line-1) {
-			line--
+		for line < last && isChanged(line+1) {
+			line++
 		}
 	}
 

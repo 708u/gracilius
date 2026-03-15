@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestHandleOpenDiff(t *testing.T) {
@@ -290,6 +291,51 @@ func TestCloseDiffTabs_CallsOnReject(t *testing.T) {
 	}
 }
 
+func TestCloseDiffTabs_PreservesLocalDiffTabs(t *testing.T) {
+	m := newTestModel(t)
+
+	// File tab.
+	ft := newFileTab()
+	ft.filePath = "file.go"
+	ft.lines = []string{"hello"}
+	m.tabs = append(m.tabs, ft)
+
+	// MCP diff tab (has diff state).
+	var rejected bool
+	mcpDt := newDiffTab("/workspace/mcp.go",
+		[]string{"mcp1"},
+		func(string) {},
+		func() { rejected = true },
+	)
+	m.tabs = append(m.tabs, mcpDt)
+
+	// Git panel diff tab (no diff state, like openGitDiffEntry).
+	gitDt := &tab{
+		kind:         diffTab,
+		filePath:     "/workspace/local.go",
+		lines:        []string{"local1"},
+		commentInput: newTextarea(),
+		vp:           newViewport(),
+	}
+	m.tabs = append(m.tabs, gitDt)
+	m.activeTab = 0
+
+	m.Update(CloseDiffMsg{})
+
+	if !rejected {
+		t.Fatal("expected MCP diff tab onReject to be called")
+	}
+	if len(m.tabs) != 2 {
+		t.Fatalf("expected 2 tabs (file + local diff), got %d", len(m.tabs))
+	}
+	if m.tabs[0] != ft {
+		t.Error("expected first tab to be the file tab")
+	}
+	if m.tabs[1] != gitDt {
+		t.Error("expected second tab to be the git panel diff tab")
+	}
+}
+
 func TestCommentSubmit_EnterSavesComment_Enhanced(t *testing.T) {
 	content := "line1\nline2\nline3"
 	m := newTestModelWithFile(t, content)
@@ -459,7 +505,7 @@ func TestTabIndexAtX(t *testing.T) {
 	lo := m.computeLayout()
 	// Tab 0 label: " main.go " (9 runes), starts at editorStartX.
 	label0 := tabLabel(t1)
-	w0 := len([]rune(label0))
+	w0 := ansi.StringWidth(label0)
 
 	// Click on first tab start.
 	if got := m.tabIndexAtX(lo.editorStartX); got != 0 {
@@ -483,7 +529,7 @@ func TestTabIndexAtX(t *testing.T) {
 
 	// Click after all tabs.
 	label1 := tabLabel(t2)
-	w1 := len([]rune(label1))
+	w1 := ansi.StringWidth(label1)
 	afterAll := secondStart + w1
 	if got := m.tabIndexAtX(afterAll); got != -1 {
 		t.Errorf("after all tabs: expected -1, got %d", got)
@@ -504,7 +550,7 @@ func TestMouseClick_TabBar(t *testing.T) {
 
 	lo := m.computeLayout()
 	label0 := tabLabel(t1)
-	w0 := len([]rune(label0))
+	w0 := ansi.StringWidth(label0)
 	secondTabX := lo.editorStartX + w0 + 1
 
 	// Click on second tab (Y = headerHeight, the label row).
