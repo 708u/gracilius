@@ -52,104 +52,35 @@ Claude Code acts as the client.
 ### Package Layout
 
 ```txt
-cmd/gra/
-  main.go            Entry point, wiring,
-                     callback registration
+cmd/gra/         Entry point, wiring
 
 internal/
-  config/
-    config.go        DataDir() for data directory path
-  comment/
-    repository.go    Comment persistence (JSON file)
-  diff/
-    model.go         Row, Hunk, Data, Build,
-                     DetectHunks
-    worddiff.go      Word-level diff (Tokenize,
-                     ComputeWordDiff)
-  fileutil/
-    fileutil.go      IsBinary, SplitLines
-  git/
-    diff.go          StatusReader, BranchDiff,
-                     ChangedFile
-    exec.go          gitCmd, RepoRoot
-    ignore.go        CheckIgnored
-  tui/
-    model.go         MCPServer interface, Model,
-                     NewModel
-    update.go        Init(), Update()
-    update_key.go    Keyboard event handling
-    update_mouse.go  Mouse event handling
-    update_msg.go    Async message handling
-    view.go          View(), renderTree, renderEditor
-    diffrender.go    Diff view rendering helpers
-    filetree.go      fileEntry, buildFileTree,
-                     scanDir, WatchDirRecursive
-    fileio.go        loadFile
-    gitpanel.go      Git changes panel
-    gitmode.go       Git diff comparison modes
-    notify.go        notifySelectionChanged,
-                     notifyClearSelection,
-                     notifyComment
-    openfile.go      Open file overlay
-    panel.go         Panel layout management
-    search.go        In-file search
-    tab.go           Tab state, comments
-    watch.go         watchFile, watchDir
-    welcome.go       Welcome screen
-    keys.go          Key bindings
-    layout.go        Layout calculations
-    icons.go         File type icons
-    render/
-      display.go     PadRight, ExpandTabs,
-                     RuneWidth, WrapBreakpoints
-      highlight.go   Syntax highlighting (chroma),
-                     StyledRun, HighlightedLine
-      selection.go   HighlightRange,
-                     ClampHighlightsToSegment
-      style.go       ANSI styled text writers
-      theme.go       Theme definition
-  protocol/
-    jsonrpc.go       JSON-RPC 2.0 base types
-    types.go         MCP types, callbacks,
-                     MCPResult
-    handler.go       MCP method dispatcher
-    tools.go         Tool handlers
-                     (tools/list, tools/call)
-    responder.go     DiffResponder
-                     (blocking open/close)
-  server/
-    server.go        WebSocket server,
-                     client management
-    lockfile.go      Lock file management
-    token.go         Auth token persistence
+  config/        DataDir
+  fileutil/      IsBinary, SplitLines (shared)
+  comment/       Review comment persistence
+  diff/          Diff computation (Row, Data, Build)
+  git/           Git operations (status, diff, ignore)
+  protocol/      MCP/JSON-RPC protocol + handlers
+  server/        WebSocket server, lockfile, auth
+  tui/           TUI (Bubbletea Elm Architecture)
+    render/      Rendering primitives (theme,
+                 syntax highlight, display utils)
 ```
 
 ### Dependency Graph
 
 ```txt
-cmd/gra → internal/config
-cmd/gra → internal/comment
-cmd/gra → internal/git
-cmd/gra → internal/tui
-cmd/gra → internal/server
+cmd/gra → config, comment, git, server, tui
 
-internal/fileutil  → (nothing)
-internal/diff      → (go-diff)
-internal/comment   → internal/config
-internal/git       → internal/fileutil
-internal/server    → internal/config
-internal/server    → internal/protocol
-internal/tui/render → (chroma, termenv,
-                      go-runewidth, x/ansi)
-internal/tui       → internal/tui/render
-internal/tui       → internal/diff
-internal/tui       → internal/comment
-internal/tui       → internal/git
-internal/tui       → internal/fileutil
+server   → config, protocol
+tui      → tui/render, diff, comment,
+           git, fileutil
+comment  → config
+git      → fileutil
 ```
 
-There is no direct dependency between
-`tui` and `server`.
+`tui` and `server` have no direct dependency.
+They are bridged via callbacks in `cmd/gra`.
 
 ### cmd/gra/main.go
 
