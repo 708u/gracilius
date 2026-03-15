@@ -71,6 +71,10 @@ type tab struct {
 	diffRowVisualStarts []int // logical row → visual line offset
 	diffCachedCtx       *diffSideCtx
 
+	// gutter highlight cache (invalidated on cursor move)
+	diffGutterCacheKey   diffGutterKey
+	diffGutterCacheLines []string
+
 	// search match cache (per-tab)
 	searchMatches     []searchMatch
 	diffSearchMatches []diffSearchMatch
@@ -125,6 +129,14 @@ func diffRowTextForSide(row diff.Row, side diffSide) string {
 		return row.NewText
 	}
 	return row.OldText
+}
+
+// diffGutterKey is the cache key for gutter highlight results.
+// When selStart == selEnd the cursor is on a single row (no selection).
+type diffGutterKey struct {
+	selStart int
+	selEnd   int
+	side     diffSide
 }
 
 // diffState holds accept/reject callbacks for a diff review tab.
@@ -389,6 +401,7 @@ func (t *tab) renderDiffContent(theme render.Theme, width int) []int {
 	t.vp.SetContentLines(result.lines)
 	t.diffCacheWidth = width
 	t.diffCacheTheme = theme.Name
+	t.diffGutterCacheLines = nil
 	return result.hunkVisualOffs
 }
 

@@ -574,50 +574,67 @@ func (m *Model) overlayDiffTextarea(t *tab, diffLines []string, viewOff, width, 
 
 // applyDiffGutterHighlights re-renders diff rows that need cursor or selection
 // gutter highlighting within the visible window.
+// Results are cached so that redundant View() cycles (e.g. stale debounce
+// tick messages) skip the expensive renderSingleDiffRow calls.
 func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, width int) {
 	if t.diffViewData == nil || len(t.diffRowVisualStarts) == 0 || t.diffCachedCtx == nil {
 		return
 	}
-
-	ctx := *t.diffCachedCtx
-	highlightBg := m.theme.SelectionBgSeq()
 
 	startRow, endRow := t.diffCursor, t.diffCursor
 	if t.diffSelecting {
 		startRow, endRow = t.diffNormalizedSelection()
 	}
 
-	viewEnd := viewOff + len(diffLines)
+	// Check gutter highlight cache.
+	wantKey := diffGutterKey{selStart: startRow, selEnd: endRow, side: t.diffSide}
+	if t.diffGutterCacheLines == nil || t.diffGutterCacheKey != wantKey {
+		// Re-render and update cache.
+		ctx := *t.diffCachedCtx
+		highlightBg := m.theme.SelectionBgSeq()
 
-	// Only iterate cursor/selection rows instead of all rows.
+		var cached []string
+		for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.Rows); rowIdx++ {
+			row := t.diffViewData.Rows[rowIdx]
+			activeSide := diffRowAvailableSide(row, t.diffSide)
+			oldCtx, newCtx := ctx, ctx
+			if activeSide == diffSideOld {
+				oldCtx.gutterHighlight = highlightBg
+			} else {
+				newCtx.gutterHighlight = highlightBg
+			}
+			reRendered := renderSingleDiffRow(row, t.diffOldHighlights, t.diffNewHighlights, oldCtx, newCtx, width, nil, nil)
+			cached = append(cached, reRendered...)
+		}
+
+		t.diffGutterCacheLines = cached
+		t.diffGutterCacheKey = wantKey
+	}
+
+	// Apply cached lines to the visible window.
+	viewEnd := viewOff + len(diffLines)
+	cachedIdx := 0
 	for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.Rows); rowIdx++ {
 		rowVisStart := t.diffRowVisualStarts[rowIdx]
 		rowVisEnd := len(t.diffCachedLines)
 		if rowIdx+1 < len(t.diffRowVisualStarts) {
 			rowVisEnd = t.diffRowVisualStarts[rowIdx+1]
 		}
+		rowLineCount := rowVisEnd - rowVisStart
 
-		// Skip if entirely outside visible window.
-		if rowVisEnd <= viewOff || rowVisStart >= viewEnd {
-			continue
+		// diffRowVisualStarts is monotonically increasing; once past viewport, stop.
+		if rowVisStart >= viewEnd {
+			break
 		}
-
-		row := t.diffViewData.Rows[rowIdx]
-		activeSide := diffRowAvailableSide(row, t.diffSide)
-		oldCtx, newCtx := ctx, ctx
-		if activeSide == diffSideOld {
-			oldCtx.gutterHighlight = highlightBg
-		} else {
-			newCtx.gutterHighlight = highlightBg
-		}
-		reRendered := renderSingleDiffRow(row, t.diffOldHighlights, t.diffNewHighlights, oldCtx, newCtx, width, nil, nil)
-
-		for j, line := range reRendered {
-			visIdx := rowVisStart + j - viewOff
-			if visIdx >= 0 && visIdx < len(diffLines) {
-				diffLines[visIdx] = line
+		if rowVisEnd > viewOff {
+			for j := 0; j < rowLineCount && cachedIdx+j < len(t.diffGutterCacheLines); j++ {
+				visIdx := rowVisStart + j - viewOff
+				if visIdx >= 0 && visIdx < len(diffLines) {
+					diffLines[visIdx] = t.diffGutterCacheLines[cachedIdx+j]
+				}
 			}
 		}
+		cachedIdx += rowLineCount
 	}
 }
 
