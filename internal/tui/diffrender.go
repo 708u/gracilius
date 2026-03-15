@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/708u/gracilius/internal/diff"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 )
@@ -192,7 +193,7 @@ func diffSideBg(rowType diffRowType, isOld bool, colors diffColors) (lineBg, wor
 func wrapDiffSide(
 	lineNum int,
 	text string,
-	spans []wordSpan,
+	spans []diff.WordSpan,
 	syntaxRuns []styledRun,
 	rowType diffRowType,
 	isOld bool,
@@ -365,16 +366,16 @@ func writeDiffFiller(sb *strings.Builder, lineNum int, rowType diffRowType, isOl
 // renderWordDiffText renders word-level diff spans with background highlights.
 func renderWordDiffText(
 	sb *strings.Builder,
-	spans []wordSpan,
+	spans []diff.WordSpan,
 	lineBg string,
 	wordBg string,
 	textWidth int,
 ) {
 	var raw strings.Builder
 	for _, s := range spans {
-		expanded := expandTabs(s.text)
+		expanded := expandTabs(s.Text)
 		bg := lineBg
-		if s.op == diffOpInsert || s.op == diffOpDelete {
+		if s.Op == diff.OpInsert || s.Op == diff.OpDelete {
 			bg = wordBg
 		}
 		if bg != "" {
@@ -456,7 +457,7 @@ func renderSyntaxWithBg(sb *strings.Builder, runs []styledRun, bg string, textWi
 // Falls back to renderWordDiffText when syntaxRuns is nil.
 func renderWordDiffWithSyntax(
 	sb *strings.Builder,
-	spans []wordSpan,
+	spans []diff.WordSpan,
 	syntaxRuns []styledRun,
 	lineBg, wordBg string,
 	textWidth int,
@@ -474,7 +475,7 @@ func renderWordDiffWithSyntax(
 // into a flat slice of styledRuns with fg+bg merged into the ANSI field.
 // The returned runs have tabs expanded.
 func wordDiffToStyledRuns(
-	spans []wordSpan,
+	spans []diff.WordSpan,
 	syntaxRuns []styledRun,
 	lineBg, wordBg string,
 ) []styledRun {
@@ -489,13 +490,13 @@ func wordDiffToStyledRuns(
 	var out []styledRun
 	syntaxPos := 0
 	for _, span := range spans {
-		expanded := expandTabs(span.text)
+		expanded := expandTabs(span.Text)
 		bg := lineBg
-		if span.op == diffOpInsert || span.op == diffOpDelete {
+		if span.Op == diff.OpInsert || span.Op == diff.OpDelete {
 			bg = wordBg
 		}
 
-		spanRunes := []rune(span.text)
+		spanRunes := []rune(span.Text)
 		expandedRunes := []rune(expanded)
 
 		ei := 0
