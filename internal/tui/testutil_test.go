@@ -49,18 +49,19 @@ func newTestModel(t *testing.T) *Model {
 	tmpDir := t.TempDir()
 	srv := &mockServer{port: 18765}
 	m := &Model{
-		server:         srv,
-		commentRepo:    &mockCommentRepository{},
-		rootDir:        tmpDir,
-		tabs:           []*tab{},
-		treeWidth:      30,
-		sidebarVisible: true,
-		keys:           newKeyMap(),
-		iconMode:       iconSymbol,
-		openFile:       newOpenFileOverlay(iconSymbol, render.Dark),
-		width:          120,
-		height:         40,
-		gitModeState:   make([]gitPanelState, len(gitDiffModes)),
+		server:                srv,
+		commentRepo:           &mockCommentRepository{},
+		rootDir:               tmpDir,
+		tabs:                  []*tab{},
+		treeWidth:             30,
+		sidebarVisible:        true,
+		keys:                  newKeyMap(),
+		iconMode:              iconSymbol,
+		openFile:              newOpenFileOverlay(iconSymbol, render.Dark),
+		width:                 120,
+		height:                40,
+		gitModeState:          make([]gitPanelState, len(gitDiffModes)),
+		initialDiffAutoOpened: true,
 	}
 	return m
 }

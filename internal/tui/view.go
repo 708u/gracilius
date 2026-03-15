@@ -99,9 +99,16 @@ func (m *Model) View() tea.View {
 	lo := m.computeLayout()
 
 	var editorLines []string
-	if !hasTab {
+	switch {
+	case !hasTab && !m.initialDiffAutoOpened:
+		// Auto-open pending: show blank pane to avoid welcome flicker.
+		editorLines = make([]string, lo.contentHeight)
+		for i := range editorLines {
+			editorLines[i] = render.PadRight("", lo.editorWidth)
+		}
+	case !hasTab:
 		editorLines = renderWelcome(lo.editorWidth, lo.contentHeight, m.theme)
-	} else {
+	default:
 		editorLines = m.renderEditor(lo)
 	}
 
