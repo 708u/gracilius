@@ -134,9 +134,7 @@ func renderSingleDiffRow(
 }
 
 // renderAllDiffLines pre-renders all diff rows into a flat visual line slice.
-func renderAllDiffLines(data *diff.Data, theme render.Theme, width int, oldHL, newHL []render.HighlightedLine, searchMatches []diffSearchMatch) diffRenderResult {
-	ctx := newDiffSideCtx(data, theme, width)
-
+func renderAllDiffLines(data *diff.Data, ctx diffSideCtx, theme render.Theme, width int, oldHL, newHL []render.HighlightedLine, searchMatches []diffSearchMatch) diffRenderResult {
 	// Index search matches by row (skip allocation when empty).
 	var oldSearchByRow, newSearchByRow map[int][]render.HighlightRange
 	if len(searchMatches) > 0 {

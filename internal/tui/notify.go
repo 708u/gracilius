@@ -1,6 +1,22 @@
 package tui
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+)
+
+// scheduleSelectionNotify bumps the generation counter and returns a
+// tea.Cmd that fires after selectionDebounce. Only the latest generation
+// triggers the actual notification, coalescing rapid cursor movements.
+func (m *Model) scheduleSelectionNotify() tea.Cmd {
+	m.selectionGen++
+	gen := m.selectionGen
+	return tea.Tick(selectionDebounce, func(time.Time) tea.Msg {
+		return selectionDebounceMsg{gen: gen}
+	})
+}
 
 // notifySelectionChanged sends the current selection to the MCP server.
 func (m *Model) notifySelectionChanged() {
