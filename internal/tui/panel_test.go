@@ -13,7 +13,6 @@ func TestPanelLabel(t *testing.T) {
 	}{
 		{panelFiles, "Files"},
 		{panelGitDiff, "Git Changes"},
-		{panelPR, "PR Changes"},
 	}
 	for _, tt := range tests {
 		if got := tt.p.label(); got != tt.want {
@@ -36,13 +35,8 @@ func TestSwitchPanel(t *testing.T) {
 	}
 
 	m.Update(msg)
-	if m.activePanel != panelPR {
-		t.Errorf("after 2nd switch: panel = %d, want panelPR", m.activePanel)
-	}
-
-	m.Update(msg)
 	if m.activePanel != panelFiles {
-		t.Errorf("after 3rd switch: panel = %d, want panelFiles (wrap)", m.activePanel)
+		t.Errorf("after 2nd switch: panel = %d, want panelFiles (wrap)", m.activePanel)
 	}
 }
 
@@ -122,16 +116,6 @@ func TestSwitchPane_DisabledWhenHidden(t *testing.T) {
 
 	if m.focusPane != paneEditor {
 		t.Errorf("focusPane = %d, want paneEditor (Tab disabled when sidebar hidden)", m.focusPane)
-	}
-}
-
-func TestRenderChangedFiles_Empty(t *testing.T) {
-	lines := renderChangedFiles(nil, 40, 10)
-	if len(lines) != 10 {
-		t.Fatalf("len(lines) = %d, want 10", len(lines))
-	}
-	if lines[0] == "" {
-		t.Error("first line should contain placeholder text")
 	}
 }
 
