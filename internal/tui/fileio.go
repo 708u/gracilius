@@ -1,23 +1,12 @@
 package tui
 
 import (
-	"bufio"
-	"bytes"
 	"log"
 	"os"
 	"path/filepath"
-)
 
-// isBinary returns true if the content appears to be binary.
-func isBinary(content []byte) bool {
-	checkSize := min(len(content), 8192)
-	for i := range checkSize {
-		if content[i] == 0 {
-			return true
-		}
-	}
-	return false
-}
+	"github.com/708u/gracilius/internal/fileutil"
+)
 
 // sniffBinary reads the first bytes of a file to detect binary content.
 func sniffBinary(path string) bool {
@@ -29,7 +18,7 @@ func sniffBinary(path string) bool {
 
 	buf := make([]byte, 8192)
 	n, _ := f.Read(buf)
-	return isBinary(buf[:n])
+	return fileutil.IsBinary(buf[:n])
 }
 
 // loadFileIntoTab reads a file and loads it into the given tab.
@@ -54,7 +43,7 @@ func (m *Model) loadFileIntoTab(t *tab, filePath string) error {
 	t.filePath = absPath
 	t.resetEditorState()
 
-	if isBinary(content) {
+	if fileutil.IsBinary(content) {
 		t.lines = []string{"(Binary file)"}
 		return nil
 	}
@@ -65,7 +54,7 @@ func (m *Model) loadFileIntoTab(t *tab, filePath string) error {
 		}
 	}
 
-	t.lines = splitLines(content)
+	t.lines = fileutil.SplitLines(content)
 	t.syncContent(t.lines)
 	t.highlightedLines = highlightFile(absPath, string(content), m.theme)
 
@@ -77,15 +66,4 @@ func (m *Model) loadFileIntoTab(t *tab, filePath string) error {
 	t.comments = append(t.comments, stored...)
 
 	return nil
-}
-
-// splitLines splits content into lines.
-// Uses bufio.Scanner to handle \n, \r\n, and \r transparently.
-func splitLines(content []byte) []string {
-	scanner := bufio.NewScanner(bytes.NewReader(content))
-	var lines []string
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	return lines
 }

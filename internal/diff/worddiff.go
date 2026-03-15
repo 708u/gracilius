@@ -1,4 +1,4 @@
-package tui
+package diff
 
 import (
 	"strings"
@@ -6,22 +6,22 @@ import (
 	diffmatchpatch "github.com/sergi/go-diff/diffmatchpatch"
 )
 
-type diffOp int
+type Op int
 
 const (
-	diffOpEqual diffOp = iota
-	diffOpInsert
-	diffOpDelete
+	OpEqual Op = iota
+	OpInsert
+	OpDelete
 )
 
-type wordSpan struct {
-	text string
-	op   diffOp
+type WordSpan struct {
+	Text string
+	Op   Op
 }
 
-// tokenize splits a string into tokens at whitespace/non-whitespace boundaries.
+// Tokenize splits a string into tokens at whitespace/non-whitespace boundaries.
 // Concatenating all returned tokens reproduces the original string.
-func tokenize(s string) []string {
+func Tokenize(s string) []string {
 	if len(s) == 0 {
 		return nil
 	}
@@ -47,12 +47,12 @@ func isSpaceRune(r rune) bool {
 	return r == ' ' || r == '\t' || r == '\n' || r == '\r'
 }
 
-// computeWordDiff computes word-level diffs between oldLine and newLine.
+// ComputeWordDiff computes word-level diffs between oldLine and newLine.
 // It returns spans for both the old and new sides, where each span is
 // tagged with its diff operation (equal, insert, or delete).
-func computeWordDiff(oldLine, newLine string) (oldSpans []wordSpan, newSpans []wordSpan) {
-	oldTokens := tokenize(oldLine)
-	newTokens := tokenize(newLine)
+func ComputeWordDiff(oldLine, newLine string) (oldSpans []WordSpan, newSpans []WordSpan) {
+	oldTokens := Tokenize(oldLine)
+	newTokens := Tokenize(newLine)
 
 	dmp := diffmatchpatch.New()
 
@@ -73,12 +73,12 @@ func computeWordDiff(oldLine, newLine string) (oldSpans []wordSpan, newSpans []w
 		}
 		switch d.Type {
 		case diffmatchpatch.DiffEqual:
-			oldSpans = append(oldSpans, wordSpan{text: text, op: diffOpEqual})
-			newSpans = append(newSpans, wordSpan{text: text, op: diffOpEqual})
+			oldSpans = append(oldSpans, WordSpan{Text: text, Op: OpEqual})
+			newSpans = append(newSpans, WordSpan{Text: text, Op: OpEqual})
 		case diffmatchpatch.DiffDelete:
-			oldSpans = append(oldSpans, wordSpan{text: text, op: diffOpDelete})
+			oldSpans = append(oldSpans, WordSpan{Text: text, Op: OpDelete})
 		case diffmatchpatch.DiffInsert:
-			newSpans = append(newSpans, wordSpan{text: text, op: diffOpInsert})
+			newSpans = append(newSpans, WordSpan{Text: text, Op: OpInsert})
 		}
 	}
 	return oldSpans, newSpans
