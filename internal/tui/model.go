@@ -24,7 +24,6 @@ type panel int
 const (
 	panelFiles panel = iota
 	panelGitDiff
-	panelPR
 	panelCount // cycling sentinel
 )
 
@@ -35,8 +34,6 @@ func (p panel) label() string {
 		return "Files"
 	case panelGitDiff:
 		return "Git Changes"
-	case panelPR:
-		return "PR Changes"
 	default:
 		return "Files"
 	}
