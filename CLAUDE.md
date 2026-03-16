@@ -54,6 +54,9 @@ the caller's line number, not the helper's.
 
 - Test functions: `TestFunctionName` or
   `TestFunctionName_Scenario`
+- Struct methods: `TestTypeName_MethodName` or
+  `TestMethodName` when the type is obvious
+  from context
 - Subtests: concise descriptive name matching
   the scenario (e.g., `"EmptyInput"`, `"CJK_diff"`)
 - Table struct fields: `name` for subtest name,
