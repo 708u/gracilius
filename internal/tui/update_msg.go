@@ -62,35 +62,28 @@ func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
 // handleCommentsChanged reloads comments from the store for all open tabs.
 func (m *Model) handleCommentsChanged() (tea.Model, tea.Cmd) {
 	for _, t := range m.tabs {
-		if t.filePath == "" || t.kind != fileTab {
+		if t.filePath == "" {
 			continue
 		}
-		stored, err := m.commentRepo.List(t.filePath, false)
-		if err != nil {
-			log.Printf("Failed to reload comments for %s: %v", t.filePath, err)
-			continue
+		switch t.kind {
+		case fileTab:
+			stored, err := m.commentRepo.List(t.filePath, false)
+			if err != nil {
+				log.Printf("Failed to reload comments for %s: %v", t.filePath, err)
+				continue
+			}
+			t.comments = stored
+		case diffTab:
+			stored, err := m.commentRepo.ListByScope(t.diffScope, t.filePath, false)
+			if err != nil {
+				log.Printf("Failed to reload diff comments for %s: %v", t.filePath, err)
+				continue
+			}
+			t.comments = stored
+			t.diffCacheWidth = 0 // force re-render
 		}
-		t.comments = stored
 	}
 	cmd := m.watchComments()
-	return m, cmd
-}
-
-// handleDiffCommentsChanged reloads diff comments from the store for all open diff tabs.
-func (m *Model) handleDiffCommentsChanged() (tea.Model, tea.Cmd) {
-	for _, t := range m.tabs {
-		if t.filePath == "" || t.kind != diffTab {
-			continue
-		}
-		stored, err := m.diffCommentRepo.List(t.diffScope, t.filePath, false)
-		if err != nil {
-			log.Printf("Failed to reload diff comments for %s: %v", t.filePath, err)
-			continue
-		}
-		t.comments = stored
-		t.diffCacheWidth = 0 // force re-render
-	}
-	cmd := m.watchDiffComments()
 	return m, cmd
 }
 

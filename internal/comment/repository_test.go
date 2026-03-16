@@ -522,3 +522,163 @@ func TestAtomicWrite_NoTempFileLeftOver(t *testing.T) {
 		t.Fatal("temp file should not remain after successful write")
 	}
 }
+
+// --------------- Scope-aware operations ---------------
+
+func makeScopedEntry(id, filePath string, startLine, endLine int, text string, sc DiffScope) Entry {
+	e := makeEntry(id, filePath, startLine, endLine, text)
+	e.Side = "new"
+	e.Scope = sc
+	return e
+}
+
+var workingScope = DiffScope{Kind: "working"}
+var branchScope = DiffScope{Kind: "branch", Base: "main"}
+
+func TestListByScope_FiltersByScope(t *testing.T) {
+	repo := newTestRepo(t)
+	_ = repo.Add(makeEntry("f1", "/a.go", 1, 1, "file comment"))
+	_ = repo.Add(makeScopedEntry("d1", "/a.go", 1, 1, "working", workingScope))
+	_ = repo.Add(makeScopedEntry("d2", "/a.go", 1, 1, "branch", branchScope))
+
+	got, err := repo.ListByScope(workingScope, "", true)
+	if err != nil {
+		t.Fatalf("ListByScope: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "d1" {
+		t.Fatalf("expected d1, got %v", got)
+	}
+}
+
+func TestListByScope_FilePathFilter(t *testing.T) {
+	repo := newTestRepo(t)
+	_ = repo.Add(makeScopedEntry("d1", "/a.go", 1, 1, "a", workingScope))
+	_ = repo.Add(makeScopedEntry("d2", "/b.go", 1, 1, "b", workingScope))
+
+	got, err := repo.ListByScope(workingScope, "/a.go", true)
+	if err != nil {
+		t.Fatalf("ListByScope: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "d1" {
+		t.Fatalf("expected d1, got %v", got)
+	}
+}
+
+func TestList_ExcludesScopedComments(t *testing.T) {
+	repo := newTestRepo(t)
+	_ = repo.Add(makeEntry("f1", "/a.go", 1, 1, "file comment"))
+	_ = repo.Add(makeScopedEntry("d1", "/a.go", 1, 1, "diff comment", workingScope))
+
+	got, err := repo.List("", true)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "f1" {
+		t.Fatalf("expected only f1, got %v", got)
+	}
+}
+
+func TestDeleteByScope(t *testing.T) {
+	repo := newTestRepo(t)
+	_ = repo.Add(makeEntry("f1", "/a.go", 1, 1, "file"))
+	_ = repo.Add(makeScopedEntry("d1", "/a.go", 1, 1, "working", workingScope))
+	_ = repo.Add(makeScopedEntry("d2", "/a.go", 1, 1, "branch", branchScope))
+
+	if err := repo.DeleteByScope(workingScope); err != nil {
+		t.Fatalf("DeleteByScope: %v", err)
+	}
+
+	all, _ := repo.List("", true)
+	if len(all) != 1 || all[0].ID != "f1" {
+		t.Fatalf("file comment should remain, got %v", all)
+	}
+	working, _ := repo.ListByScope(workingScope, "", true)
+	if len(working) != 0 {
+		t.Fatalf("working scope should be empty, got %v", working)
+	}
+	branch, _ := repo.ListByScope(branchScope, "", true)
+	if len(branch) != 1 {
+		t.Fatalf("branch scope should remain, got %v", branch)
+	}
+}
+
+func TestDeleteByFileAndScope(t *testing.T) {
+	repo := newTestRepo(t)
+	_ = repo.Add(makeScopedEntry("d1", "/a.go", 1, 1, "a", workingScope))
+	_ = repo.Add(makeScopedEntry("d2", "/b.go", 1, 1, "b", workingScope))
+	_ = repo.Add(makeEntry("f1", "/a.go", 1, 1, "file"))
+
+	if err := repo.DeleteByFileAndScope(workingScope, "/a.go"); err != nil {
+		t.Fatalf("DeleteByFileAndScope: %v", err)
+	}
+
+	all, _ := repo.ListByScope(workingScope, "", true)
+	if len(all) != 1 || all[0].ID != "d2" {
+		t.Fatalf("expected d2, got %v", all)
+	}
+	files, _ := repo.List("", true)
+	if len(files) != 1 || files[0].ID != "f1" {
+		t.Fatalf("file comment should remain, got %v", files)
+	}
+}
+
+func TestEntry_Scope_JSONRoundTrip(t *testing.T) {
+	e := Entry{
+		ID:        "s1",
+		FilePath:  "/test.go",
+		StartLine: 1,
+		EndLine:   1,
+		Text:      "text",
+		Side:      "new",
+		Scope:     DiffScope{Kind: "branch", Base: "main"},
+		CreatedAt: time.Now().Truncate(time.Second),
+	}
+
+	data, err := json.Marshal(&e)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var decoded Entry
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if decoded.Scope.Kind != "branch" || decoded.Scope.Base != "main" {
+		t.Fatalf("expected scope branch/main, got %+v", decoded.Scope)
+	}
+}
+
+func TestEntry_Scope_OmittedWhenZero(t *testing.T) {
+	e := Entry{
+		ID:        "s2",
+		FilePath:  "/test.go",
+		StartLine: 1,
+		EndLine:   1,
+		Text:      "text",
+		CreatedAt: time.Now().Truncate(time.Second),
+	}
+
+	data, err := json.Marshal(&e)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("Unmarshal raw: %v", err)
+	}
+	if _, ok := raw["scope"]; ok {
+		t.Fatal("scope should be omitted when zero")
+	}
+}
+
+func TestEntry_Scope_BackwardCompatible(t *testing.T) {
+	jsonData := `{"id":"bc1","filePath":"/a.go","startLine":1,"endLine":1,"text":"old","snippet":"s","createdAt":"2024-01-01T00:00:00Z"}`
+	var e Entry
+	if err := json.Unmarshal([]byte(jsonData), &e); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if e.Scope.Kind != "" {
+		t.Fatalf("expected empty scope for backward compat, got %+v", e.Scope)
+	}
+}

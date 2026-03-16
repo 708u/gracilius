@@ -114,11 +114,11 @@ func (m *Model) initGitBranchInfoAsync() tea.Cmd {
 				return gitBranchInfoMsg{err: "No base branch found"}
 			}
 		}
-		base, err := git.MergeBase(dir, "origin/"+branch)
+		base, err := git.MergeBase(dir, branch)
 		if err != nil {
 			return gitBranchInfoMsg{
 				defaultBranch: branch,
-				err:           fmt.Sprintf("No merge-base with origin/%s", branch),
+				err:           fmt.Sprintf("No merge-base with %s", branch),
 			}
 		}
 		return gitBranchInfoMsg{mergeBase: base, defaultBranch: branch}
@@ -332,7 +332,7 @@ func (m *Model) openGitDiffEntry() {
 	dt.initDiffContent(m.theme, lo.editorWidth, lo.contentHeight)
 
 	// Load persisted diff comments.
-	if stored, err := m.diffCommentRepo.List(diffSc, entry.absPath, false); err != nil {
+	if stored, err := m.commentRepo.ListByScope(diffSc, entry.absPath, false); err != nil {
 		log.Printf("Failed to load diff comments for %s: %v", entry.absPath, err)
 	} else if len(stored) > 0 {
 		dt.comments = stored

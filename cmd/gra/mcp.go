@@ -16,7 +16,7 @@ type listCommentsInput struct {
 }
 
 type diffScopeInput struct {
-	Kind      string `json:"kind" jsonschema:"diff context kind: working, branch, or review"`
+	Kind      string `json:"kind" jsonschema:"diff scope kind: working, branch, or review"`
 	Base      string `json:"base,omitempty" jsonschema:"base branch name (for branch kind)"`
 	SessionID string `json:"sessionId,omitempty" jsonschema:"session UUID (for review kind)"`
 }
@@ -35,11 +35,6 @@ type commentIDInput struct {
 	ID string `json:"id" jsonschema:"comment ID"`
 }
 
-type diffCommentIDInput struct {
-	diffScopeInput
-	ID string `json:"id" jsonschema:"comment ID"`
-}
-
 type McpCmd struct {
 	pathArg
 }
@@ -54,8 +49,6 @@ func (c *McpCmd) Run() error {
 	if err != nil {
 		return fmt.Errorf("failed to create comment repository: %w", err)
 	}
-
-	diffStore := comment.NewDiffRepository(store)
 
 	server := mcp.NewServer(
 		&mcp.Implementation{Name: "gracilius", Version: "0.1.0"},
@@ -83,9 +76,9 @@ func (c *McpCmd) Run() error {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_diff_comments",
-		Description: "List diff review comments from gracilius TUI for a specific diff context",
+		Description: "List diff review comments from gracilius TUI for a specific diff scope",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input listDiffCommentsInput) (*mcp.CallToolResult, any, error) {
-		comments, err := diffStore.List(input.toScope(), input.FilePath, input.IncludeResolved)
+		comments, err := store.ListByScope(input.toScope(), input.FilePath, input.IncludeResolved)
 		if err != nil {
 			return nil, nil, fmt.Errorf("list diff comments: %w", err)
 		}
@@ -124,20 +117,6 @@ func (c *McpCmd) Run() error {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Deleted comment %s", input.ID)},
-			},
-		}, nil, nil
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "delete_diff_comment",
-		Description: "Delete a diff review comment",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input diffCommentIDInput) (*mcp.CallToolResult, any, error) {
-		if err := diffStore.Delete(input.toScope(), input.ID); err != nil {
-			return nil, nil, fmt.Errorf("delete diff comment: %w", err)
-		}
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: fmt.Sprintf("Deleted diff comment %s", input.ID)},
 			},
 		}, nil, nil
 	})

@@ -20,21 +20,23 @@ type Entry struct {
 	Text       string
 	Snippet    string
 	Side       string    // "old", "new", or "" (file comment)
+	Scope      DiffScope // zero value for file comments
 	ResolvedAt time.Time // zero value = unresolved
 	CreatedAt  time.Time
 }
 
 // commentJSON is the JSON serialization format for Entry.
 type commentJSON struct {
-	ID         string `json:"id"`
-	FilePath   string `json:"filePath"`
-	StartLine  int    `json:"startLine"`
-	EndLine    int    `json:"endLine"`
-	Text       string `json:"text"`
-	Snippet    string `json:"snippet"`
-	Side       string `json:"side,omitempty"`
-	ResolvedAt string `json:"resolvedAt,omitempty"`
-	CreatedAt  string `json:"createdAt"`
+	ID         string     `json:"id"`
+	FilePath   string     `json:"filePath"`
+	StartLine  int        `json:"startLine"`
+	EndLine    int        `json:"endLine"`
+	Text       string     `json:"text"`
+	Snippet    string     `json:"snippet"`
+	Side       string     `json:"side,omitempty"`
+	Scope      *DiffScope `json:"scope,omitempty"`
+	ResolvedAt string     `json:"resolvedAt,omitempty"`
+	CreatedAt  string     `json:"createdAt"`
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -48,6 +50,9 @@ func (c *Entry) MarshalJSON() ([]byte, error) {
 		Snippet:   c.Snippet,
 		Side:      c.Side,
 		CreatedAt: c.CreatedAt.Format(time.RFC3339),
+	}
+	if c.Scope.Kind != "" {
+		j.Scope = &c.Scope
 	}
 	if !c.ResolvedAt.IsZero() {
 		j.ResolvedAt = c.ResolvedAt.Format(time.RFC3339)
@@ -68,6 +73,9 @@ func (c *Entry) UnmarshalJSON(data []byte) error {
 	c.Text = j.Text
 	c.Snippet = j.Snippet
 	c.Side = j.Side
+	if j.Scope != nil {
+		c.Scope = *j.Scope
+	}
 	if j.CreatedAt != "" {
 		t, err := time.Parse(time.RFC3339, j.CreatedAt)
 		if err != nil {
@@ -105,46 +113,6 @@ func purgeResolved(comments []Entry) []Entry {
 		kept = append(kept, comments[i])
 	}
 	return kept
-}
-
-// commentsFileI is a constraint for types that have a Comments field.
-type commentsFileI interface {
-	CommentsFile | DiffCommentsFile
-	comments() []Entry
-}
-
-func (cf CommentsFile) comments() []Entry     { return cf.Comments }
-func (cf DiffCommentsFile) comments() []Entry { return cf.Comments }
-
-// loadJSON reads and unmarshals a comments file, returning nil on not-found.
-func loadJSON[T commentsFileI](path string) ([]Entry, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var cf T
-	if err := json.Unmarshal(data, &cf); err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
-	}
-	return cf.comments(), nil
-}
-
-// filterComments returns comments matching the given filters.
-func filterComments(comments []Entry, filePath string, includeResolved bool) []Entry {
-	var result []Entry
-	for i := range comments {
-		if filePath != "" && comments[i].FilePath != filePath {
-			continue
-		}
-		if !includeResolved && !comments[i].ResolvedAt.IsZero() {
-			continue
-		}
-		result = append(result, comments[i])
-	}
-	return result
 }
 
 // atomicWriteJSON writes data to path atomically via a temp file and rename.
@@ -199,7 +167,18 @@ func (s *Repository) DataPath() string {
 }
 
 func (s *Repository) load() ([]Entry, error) {
-	return loadJSON[CommentsFile](s.DataPath())
+	data, err := os.ReadFile(s.DataPath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var cf CommentsFile
+	if err := json.Unmarshal(data, &cf); err != nil {
+		return nil, fmt.Errorf("decode comments: %w", err)
+	}
+	return cf.Comments, nil
 }
 
 func (s *Repository) save(comments []Entry) error {
@@ -282,11 +261,77 @@ func (s *Repository) DeleteByFile(filePath string) error {
 	return s.save(kept)
 }
 
-// List returns comments filtered by file path and resolved status.
+// List returns file comments (Scope.Kind == "") filtered by file path and resolved status.
 func (s *Repository) List(filePath string, includeResolved bool) ([]Entry, error) {
 	comments, err := s.load()
 	if err != nil {
 		return nil, err
 	}
-	return filterComments(comments, filePath, includeResolved), nil
+	var result []Entry
+	for i := range comments {
+		if comments[i].Scope.Kind != "" {
+			continue
+		}
+		if filePath != "" && comments[i].FilePath != filePath {
+			continue
+		}
+		if !includeResolved && !comments[i].ResolvedAt.IsZero() {
+			continue
+		}
+		result = append(result, comments[i])
+	}
+	return result, nil
+}
+
+// ListByScope returns diff comments matching the given scope, file path, and resolved status.
+func (s *Repository) ListByScope(sc DiffScope, filePath string, includeResolved bool) ([]Entry, error) {
+	comments, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	var result []Entry
+	for i := range comments {
+		if comments[i].Scope != sc {
+			continue
+		}
+		if filePath != "" && comments[i].FilePath != filePath {
+			continue
+		}
+		if !includeResolved && !comments[i].ResolvedAt.IsZero() {
+			continue
+		}
+		result = append(result, comments[i])
+	}
+	return result, nil
+}
+
+// DeleteByScope removes all comments matching the given scope.
+func (s *Repository) DeleteByScope(sc DiffScope) error {
+	comments, err := s.load()
+	if err != nil {
+		return err
+	}
+	var kept []Entry
+	for i := range comments {
+		if comments[i].Scope != sc {
+			kept = append(kept, comments[i])
+		}
+	}
+	return s.save(kept)
+}
+
+// DeleteByFileAndScope removes all comments for a specific file within a scope.
+func (s *Repository) DeleteByFileAndScope(sc DiffScope, filePath string) error {
+	comments, err := s.load()
+	if err != nil {
+		return err
+	}
+	var kept []Entry
+	for i := range comments {
+		if comments[i].Scope == sc && comments[i].FilePath == filePath {
+			continue
+		}
+		kept = append(kept, comments[i])
+	}
+	return s.save(kept)
 }

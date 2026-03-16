@@ -32,7 +32,7 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.clearAllPending = false
 		if key.Matches(msg, m.keys.Confirm) {
 			if hasTab && t.kind == diffTab {
-				if err := m.diffCommentRepo.DeleteByFile(t.diffScope, t.filePath); err != nil {
+				if err := m.commentRepo.DeleteByFileAndScope(t.diffScope, t.filePath); err != nil {
 					log.Printf("Failed to clear diff comments from store: %v", err)
 				}
 				t.comments = nil
@@ -184,8 +184,7 @@ func (m *Model) submitDiffComment(t *tab) {
 	idx := t.findDiffComment(t.inputStart, side)
 
 	if val == "" && idx >= 0 {
-		oldID := t.comments[idx].ID
-		if err := m.diffCommentRepo.Delete(t.diffScope, oldID); err != nil {
+		if err := m.commentRepo.Delete(t.comments[idx].ID); err != nil {
 			log.Printf("Failed to delete diff comment: %v", err)
 		}
 		t.comments = append(t.comments[:idx], t.comments[idx+1:]...)
@@ -201,7 +200,7 @@ func (m *Model) submitDiffComment(t *tab) {
 		log.Printf("Failed to generate UUID: %v", err)
 	}
 	m.notifyDiffComment(side, t.inputStart, t.inputEnd, val)
-	sc := comment.Entry{
+	entry := comment.Entry{
 		ID:        id.String(),
 		FilePath:  t.filePath,
 		StartLine: t.inputStart,
@@ -209,19 +208,19 @@ func (m *Model) submitDiffComment(t *tab) {
 		Text:      val,
 		Snippet:   t.diffCaptureSnippet(t.inputStart, t.inputEnd, side),
 		Side:      side.String(),
+		Scope:     t.diffScope,
 		CreatedAt: time.Now(),
 	}
 	if idx >= 0 {
-		oldID := t.comments[idx].ID
-		if err := m.diffCommentRepo.Replace(t.diffScope, oldID, sc); err != nil {
+		if err := m.commentRepo.Replace(t.comments[idx].ID, entry); err != nil {
 			log.Printf("Failed to update diff comment: %v", err)
 		}
-		t.comments[idx] = sc
+		t.comments[idx] = entry
 	} else {
-		if err := m.diffCommentRepo.Add(t.diffScope, sc); err != nil {
+		if err := m.commentRepo.Add(entry); err != nil {
 			log.Printf("Failed to persist diff comment: %v", err)
 		}
-		t.comments = append(t.comments, sc)
+		t.comments = append(t.comments, entry)
 	}
 	t.diffCacheWidth = 0
 }

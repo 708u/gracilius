@@ -73,33 +73,6 @@ func (m *Model) watchComments() tea.Cmd {
 	}
 }
 
-// watchDiffComments returns a tea.Cmd that watches the diff/ directory for changes.
-func (m *Model) watchDiffComments() tea.Cmd {
-	w := m.diffCommentWatcher
-	return func() tea.Msg {
-		if w == nil {
-			return nil
-		}
-		for {
-			select {
-			case event, ok := <-w.Events:
-				if !ok {
-					return nil
-				}
-				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
-					log.Printf("Diff comments file changed: %s (%s)", event.Name, event.Op)
-					return diffCommentsChangedMsg{}
-				}
-			case err, ok := <-w.Errors:
-				if !ok {
-					return nil
-				}
-				log.Printf("Diff comment watcher error: %v", err)
-			}
-		}
-	}
-}
-
 // watchGitDir returns a tea.Cmd that watches .git/ for index and HEAD changes.
 func (m *Model) watchGitDir() tea.Cmd {
 	w := m.gitDirWatcher
