@@ -205,6 +205,9 @@ type Model struct {
 	// in-file search
 	search searchState
 
+	// project-wide search
+	projectSearch projectSearchOverlay
+
 	// selection notification debounce
 	selectionGen int
 }
@@ -270,6 +273,17 @@ func (m *Model) openFileByPath(absPath string) {
 	m.notifySelectionChanged()
 }
 
+// openFileAtLine opens a file and jumps to the specified 0-based line.
+func (m *Model) openFileAtLine(absPath string, line int) {
+	m.openFileByPath(absPath)
+	if t, ok := m.activeTabState(); ok && len(t.lines) > 0 {
+		t.cursorLine = min(line, len(t.lines)-1)
+		t.cursorChar = 0
+		t.syncAnchorToCursor()
+		m.adjustScroll()
+	}
+}
+
 // toggleTreeEntry handles expanding/collapsing dirs or loading files.
 func (m *Model) toggleTreeEntry(idx int) {
 	if idx < 0 || idx >= len(m.fileTree) {
@@ -323,6 +337,7 @@ func NewModel(srv MCPServer, store CommentRepository, rootDir string, watcher *f
 		help:           help.New(),
 		iconMode:       im,
 		openFile:       newOpenFileOverlay(im, render.Dark),
+		projectSearch:  newProjectSearchOverlay(render.Dark),
 		isDark:         true,
 		theme:          render.Dark,
 		commentRepo:    store,

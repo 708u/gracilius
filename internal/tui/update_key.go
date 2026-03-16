@@ -76,6 +76,10 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.projectSearch.active {
+		return m.handleKeyProjectSearch(msg)
+	}
+
 	if m.openFile.active {
 		return m.handleKeyOpenFile(msg)
 	}
@@ -211,6 +215,32 @@ func (m *Model) submitDiffComment(t *tab) {
 		t.diffCommentSides = append(t.diffCommentSides, side)
 	}
 	t.diffCacheWidth = 0
+}
+
+// handleKeyProjectSearch handles key events when the project search overlay is active.
+func (m *Model) handleKeyProjectSearch(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Cancel):
+		m.projectSearch.close()
+		return m, nil
+	case msg.Code == tea.KeyEnter:
+		if m.projectSearch.input.Focused() {
+			// Confirm query and start search.
+			m.projectSearch.input.Blur()
+			cmd := m.projectSearch.startSearch(m.rootDir, m.excludeFunc)
+			return m, cmd
+		}
+		// Select result and open file.
+		absPath, line := m.projectSearch.selectedResult()
+		if absPath != "" {
+			m.projectSearch.close()
+			m.openFileAtLine(absPath, line)
+		}
+		return m, nil
+	default:
+		cmd := m.projectSearch.update(msg)
+		return m, cmd
+	}
 }
 
 // handleKeyOpenFile handles key events when the open-file overlay is active.
@@ -843,6 +873,8 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.gPending = true
 	case key.Matches(msg, m.keys.OpenFile):
 		return m, m.openFile.open(m.rootDir, m.excludeFunc)
+	case key.Matches(msg, m.keys.ProjectSearch):
+		return m, m.projectSearch.open()
 	case key.Matches(msg, m.keys.Search):
 		if hasTab {
 			m.startSearch()

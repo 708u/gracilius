@@ -29,6 +29,19 @@ func (m *Model) tabIndexAtX(x int) int {
 func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	t, hasTab := m.activeTabState()
 
+	if m.projectSearch.active {
+		if msg.Button == tea.MouseLeft {
+			absPath, line, closeOverlay := m.projectSearch.handleClick(msg.X, msg.Y, m.width, m.height)
+			if absPath != "" {
+				m.projectSearch.close()
+				m.openFileAtLine(absPath, line)
+			} else if closeOverlay {
+				m.projectSearch.close()
+			}
+		}
+		return m, nil
+	}
+
 	if m.openFile.active {
 		if msg.Button == tea.MouseLeft {
 			path, closeOverlay := m.openFile.handleClick(msg.X, msg.Y, m.width, m.height)
