@@ -253,18 +253,18 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 			return m, nil, true
 		}
 
-	// Cursor movement.
+	// Cursor movement — skip rows without content on current side.
 	case key.Matches(msg, m.keys.Up):
-		if t.diffViewData != nil && t.diffCursor > 0 {
-			t.diffCursor--
+		if next := t.diffNextRow(-1); next >= 0 {
+			t.diffCursor = next
 			t.syncDiffAnchor()
 			cmd := m.scheduleSelectionNotify()
 			return m, cmd, true
 		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.Down):
-		if t.diffViewData != nil && t.diffCursor < len(t.diffViewData.Rows)-1 {
-			t.diffCursor++
+		if next := t.diffNextRow(1); next >= 0 {
+			t.diffCursor = next
 			t.syncDiffAnchor()
 			cmd := m.scheduleSelectionNotify()
 			return m, cmd, true

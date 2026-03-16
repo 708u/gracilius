@@ -113,6 +113,21 @@ func (t *tab) snapDiffSide() {
 	t.diffSide = diffRowAvailableSide(t.diffViewData.Rows[t.diffCursor], t.diffSide)
 }
 
+// diffNextRow returns the next row index in the given direction (+1/-1)
+// that has content on the current diffSide. Returns -1 if none found.
+func (t *tab) diffNextRow(dir int) int {
+	if t.diffViewData == nil {
+		return -1
+	}
+	rows := t.diffViewData.Rows
+	for i := t.diffCursor + dir; i >= 0 && i < len(rows); i += dir {
+		if diffRowAvailableSide(rows[i], t.diffSide) == t.diffSide {
+			return i
+		}
+	}
+	return -1
+}
+
 // diffRowTextForSide returns the text for the given side of a diff row.
 func diffRowTextForSide(row diff.Row, side diffSide) string {
 	if side == diffSideOld {

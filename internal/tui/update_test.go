@@ -893,33 +893,58 @@ func TestDiffSide_ChangeJumpSkipsAddedOnlyBlock(t *testing.T) {
 	}
 }
 
-func TestDiffSide_JKPreservesSide(t *testing.T) {
-	// j/k navigation should preserve diffSide even when crossing
-	// single-sided rows (RowAdded/RowDeleted).
+func TestDiffSide_JKSkipsOppositeSideRows(t *testing.T) {
+	// j/k on old side should skip RowAdded rows entirely.
+	// Rows: unchanged(ctx), added(added), unchanged(end)
 	m := newTestModelWithDiff(t,
 		[]string{"ctx", "end"},
 		[]string{"ctx", "added", "end"},
 	)
 	tab := m.tabs[0]
+	rows := tab.diffViewData.Rows
+
+	// Find row indices by type.
+	firstUnchanged := -1
+	addedIdx := -1
+	lastUnchanged := -1
+	for i, row := range rows {
+		switch row.Type {
+		case diff.RowUnchanged:
+			if firstUnchanged < 0 {
+				firstUnchanged = i
+			}
+			lastUnchanged = i
+		case diff.RowAdded:
+			addedIdx = i
+		}
+	}
+	if addedIdx < 0 {
+		t.Fatal("expected an added row")
+	}
 
 	// Start on first unchanged row, old side.
-	tab.diffCursor = 0
+	tab.diffCursor = firstUnchanged
 	tab.diffSide = diffSideOld
 
-	// Move down through added row — side should stay old.
-	for i := 0; i < len(tab.diffViewData.Rows)-1; i++ {
-		m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	// Press j — should skip added row and land on last unchanged.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if tab.diffCursor == addedIdx {
+		t.Errorf("j should skip added row %d on old side", addedIdx)
+	}
+	if tab.diffCursor != lastUnchanged {
+		t.Errorf("expected cursor at %d (last unchanged), got %d", lastUnchanged, tab.diffCursor)
 	}
 	if tab.diffSide != diffSideOld {
-		t.Errorf("expected diffSideOld preserved after j through added row, got %d", tab.diffSide)
+		t.Errorf("expected diffSideOld preserved, got %d", tab.diffSide)
 	}
 
-	// Move back up — side should still stay old.
-	for i := 0; i < len(tab.diffViewData.Rows)-1; i++ {
-		m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	// Press k — should skip back over added row.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if tab.diffCursor == addedIdx {
+		t.Errorf("k should skip added row %d on old side", addedIdx)
 	}
-	if tab.diffSide != diffSideOld {
-		t.Errorf("expected diffSideOld preserved after k through added row, got %d", tab.diffSide)
+	if tab.diffCursor != firstUnchanged {
+		t.Errorf("expected cursor at %d (first unchanged), got %d", firstUnchanged, tab.diffCursor)
 	}
 }
 
