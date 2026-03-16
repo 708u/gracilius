@@ -44,6 +44,22 @@ are straightforward to express declaratively.
 Call `t.Parallel()` at the top of every test function.
 Also call `t.Parallel()` inside each `t.Run` subtest.
 
+### t.Helper()
+
+Call `t.Helper()` at the top of every test helper
+function. This ensures failure messages report
+the caller's line number, not the helper's.
+
+### Naming
+
+- Test functions: `TestFunctionName` or
+  `TestFunctionName_Scenario`
+- Subtests: concise descriptive name matching
+  the scenario (e.g., `"EmptyInput"`, `"CJK_diff"`)
+- Test helpers: unexported, prefixed with purpose
+  (e.g., `newTestModel`, `setupServer`,
+  `assertTokens`)
+
 ### Context
 
 When a test needs `context.Context`, use `t.Context()`
