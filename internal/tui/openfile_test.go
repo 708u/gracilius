@@ -10,6 +10,7 @@ import (
 )
 
 func TestScanAllFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	// Create directory structure:
@@ -41,6 +42,7 @@ func TestScanAllFiles(t *testing.T) {
 }
 
 func TestScanAllFiles_ExcludesHidden(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	// Create directory structure:
@@ -102,6 +104,7 @@ func newTestOverlay(items []fileItem) openFileOverlay {
 }
 
 func TestApplyFilter_EmptyTerm(t *testing.T) {
+	t.Parallel()
 	items := []fileItem{
 		{path: "main.go"},
 		{path: "util.go"},
@@ -119,6 +122,7 @@ func TestApplyFilter_EmptyTerm(t *testing.T) {
 }
 
 func TestApplyFilter_FuzzyMatch(t *testing.T) {
+	t.Parallel()
 	items := []fileItem{
 		{path: "main.go"},
 		{path: "model.go"},
@@ -143,6 +147,7 @@ func TestApplyFilter_FuzzyMatch(t *testing.T) {
 }
 
 func TestApplyFilter_NoMatch(t *testing.T) {
+	t.Parallel()
 	items := []fileItem{
 		{path: "main.go"},
 		{path: "util.go"},
@@ -159,6 +164,7 @@ func TestApplyFilter_NoMatch(t *testing.T) {
 }
 
 func TestComputeLayout_WideTerminal(t *testing.T) {
+	t.Parallel()
 	items := []fileItem{
 		{path: "a.go"},
 		{path: "b.go"},
@@ -187,6 +193,7 @@ func TestComputeLayout_WideTerminal(t *testing.T) {
 }
 
 func TestComputeLayout_NarrowTerminal(t *testing.T) {
+	t.Parallel()
 	items := []fileItem{{path: "a.go"}}
 	s := newTestOverlay(items)
 
@@ -200,6 +207,7 @@ func TestComputeLayout_NarrowTerminal(t *testing.T) {
 }
 
 func TestComputeLayout_ShortTerminal(t *testing.T) {
+	t.Parallel()
 	items := []fileItem{
 		{path: "a.go"},
 		{path: "b.go"},
@@ -225,6 +233,7 @@ func TestComputeLayout_ShortTerminal(t *testing.T) {
 }
 
 func TestHandleClick_OutsideOverlay(t *testing.T) {
+	t.Parallel()
 	items := []fileItem{{path: "a.go"}, {path: "b.go"}}
 	s := newTestOverlay(items)
 
@@ -257,6 +266,7 @@ func TestHandleClick_OutsideOverlay(t *testing.T) {
 }
 
 func TestHandleClick_InsideNonListArea(t *testing.T) {
+	t.Parallel()
 	items := []fileItem{{path: "a.go"}}
 	s := newTestOverlay(items)
 
@@ -274,6 +284,7 @@ func TestHandleClick_InsideNonListArea(t *testing.T) {
 }
 
 func TestHandleClick_OnListItem(t *testing.T) {
+	t.Parallel()
 	items := []fileItem{{path: "first.go"}, {path: "second.go"}}
 	s := newTestOverlay(items)
 
@@ -293,6 +304,7 @@ func TestHandleClick_OnListItem(t *testing.T) {
 }
 
 func TestSelectedPath_Empty(t *testing.T) {
+	t.Parallel()
 	s := newOpenFileOverlay(iconSymbol, render.Dark)
 	if p := s.selectedPath(); p != "" {
 		t.Errorf("expected empty, got %q", p)
@@ -300,6 +312,7 @@ func TestSelectedPath_Empty(t *testing.T) {
 }
 
 func TestSelectedPath_WithItems(t *testing.T) {
+	t.Parallel()
 	items := []fileItem{{path: "hello.go"}, {path: "world.go"}}
 	s := newTestOverlay(items)
 	s.list.SetSize(80, 10)

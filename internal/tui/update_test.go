@@ -9,6 +9,7 @@ import (
 )
 
 func TestHandleOpenDiff(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	msg := OpenDiffMsg{
@@ -37,6 +38,7 @@ func TestHandleOpenDiff(t *testing.T) {
 }
 
 func TestHandleCloseDiff(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	// Add a file tab and a diff tab.
@@ -60,6 +62,7 @@ func TestHandleCloseDiff(t *testing.T) {
 }
 
 func TestHandleFileChanged(t *testing.T) {
+	t.Parallel()
 	content := "line1\nline2\nline3"
 	m := newTestModelWithFile(t, content)
 
@@ -77,6 +80,7 @@ func TestHandleFileChanged(t *testing.T) {
 }
 
 func TestHandleFileChanged_UpdatesDiffTab(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	// Create a diff tab with known old/new content.
@@ -104,6 +108,7 @@ func TestHandleFileChanged_UpdatesDiffTab(t *testing.T) {
 }
 
 func TestHandleFileChanged_IgnoresUnrelatedPath(t *testing.T) {
+	t.Parallel()
 	content := "line1\nline2\nline3"
 	m := newTestModelWithFile(t, content)
 	tab := m.tabs[0]
@@ -121,6 +126,7 @@ func TestHandleFileChanged_IgnoresUnrelatedPath(t *testing.T) {
 }
 
 func TestHandleWindowSize(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.treeWidth = 80
 
@@ -140,6 +146,7 @@ func TestHandleWindowSize(t *testing.T) {
 }
 
 func TestKeyNavigation_UpDown(t *testing.T) {
+	t.Parallel()
 	content := "line1\nline2\nline3\nline4\nline5"
 	m := newTestModelWithFile(t, content)
 	tab := m.tabs[0]
@@ -169,6 +176,7 @@ func TestKeyNavigation_UpDown(t *testing.T) {
 }
 
 func TestMouseClick_TreeEntry(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.fileTree = []fileEntry{
 		{path: "dir1", name: "dir1", isDir: true, depth: 0},
@@ -190,6 +198,7 @@ func TestMouseClick_TreeEntry(t *testing.T) {
 }
 
 func TestAcceptDiff_CallsOnAccept(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	var accepted bool
@@ -221,6 +230,7 @@ func TestAcceptDiff_CallsOnAccept(t *testing.T) {
 }
 
 func TestRejectDiff_CallsOnReject(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	var rejected bool
@@ -245,6 +255,7 @@ func TestRejectDiff_CallsOnReject(t *testing.T) {
 }
 
 func TestCloseTab_CallsOnReject(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	var rejected bool
@@ -269,6 +280,7 @@ func TestCloseTab_CallsOnReject(t *testing.T) {
 }
 
 func TestCloseDiffTabs_CallsOnReject(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	var rejectCount int
@@ -293,6 +305,7 @@ func TestCloseDiffTabs_CallsOnReject(t *testing.T) {
 }
 
 func TestCloseDiffTabs_PreservesLocalDiffTabs(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	// File tab.
@@ -338,6 +351,7 @@ func TestCloseDiffTabs_PreservesLocalDiffTabs(t *testing.T) {
 }
 
 func TestCommentSubmit_EnterSavesComment_Enhanced(t *testing.T) {
+	t.Parallel()
 	content := "line1\nline2\nline3"
 	m := newTestModelWithFile(t, content)
 	m.enhancedKeyboard = true
@@ -369,6 +383,7 @@ func TestCommentSubmit_EnterSavesComment_Enhanced(t *testing.T) {
 }
 
 func TestCommentSubmit_EnterInsertsNewline_Basic(t *testing.T) {
+	t.Parallel()
 	content := "line1\nline2\nline3"
 	m := newTestModelWithFile(t, content)
 	m.enhancedKeyboard = false
@@ -389,6 +404,7 @@ func TestCommentSubmit_EnterInsertsNewline_Basic(t *testing.T) {
 }
 
 func TestCommentSubmit_ShiftEnterInsertsNewline_Enhanced(t *testing.T) {
+	t.Parallel()
 	content := "line1\nline2\nline3"
 	m := newTestModelWithFile(t, content)
 	m.enhancedKeyboard = true
@@ -420,6 +436,7 @@ func TestCommentSubmit_ShiftEnterInsertsNewline_Enhanced(t *testing.T) {
 }
 
 func TestCommentSubmit_CtrlDSavesComment(t *testing.T) {
+	t.Parallel()
 	content := "line1\nline2\nline3"
 	m := newTestModelWithFile(t, content)
 	tab := m.tabs[0]
@@ -450,6 +467,7 @@ func TestCommentSubmit_CtrlDSavesComment(t *testing.T) {
 }
 
 func TestAcceptDiff_NotCalledOnFileTab(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	ft := newFileTab()
@@ -467,6 +485,7 @@ func TestAcceptDiff_NotCalledOnFileTab(t *testing.T) {
 }
 
 func TestContextKeyMap_DiffReviewBindings(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	dt := newDiffTab("/workspace/file.go",
@@ -489,6 +508,7 @@ func TestContextKeyMap_DiffReviewBindings(t *testing.T) {
 }
 
 func TestTabIndexAtX(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	// No tabs: always -1.
@@ -538,6 +558,7 @@ func TestTabIndexAtX(t *testing.T) {
 }
 
 func TestMouseClick_TabBar(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	t1 := newFileTab()
@@ -578,6 +599,7 @@ func TestMouseClick_TabBar(t *testing.T) {
 }
 
 func TestContextKeyMap_NoDiffReviewOnFileTab(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	ft := newFileTab()
@@ -597,6 +619,7 @@ func TestContextKeyMap_NoDiffReviewOnFileTab(t *testing.T) {
 }
 
 func TestDiffSide_DefaultIsNew(t *testing.T) {
+	t.Parallel()
 	m := newTestModelWithDiff(t,
 		[]string{"same", "old"},
 		[]string{"same", "new"},
@@ -608,6 +631,7 @@ func TestDiffSide_DefaultIsNew(t *testing.T) {
 }
 
 func TestDiffSide_HLSwitchesSide(t *testing.T) {
+	t.Parallel()
 	// unchanged row: both sides available → h/l should switch.
 	m := newTestModelWithDiff(t,
 		[]string{"same line"},
@@ -632,6 +656,7 @@ func TestDiffSide_HLSwitchesSide(t *testing.T) {
 }
 
 func TestDiffSide_AutoSnapDeleted(t *testing.T) {
+	t.Parallel()
 	// old has "deleted", new does not → deleted row must snap to old.
 	m := newTestModelWithDiff(t,
 		[]string{"same", "deleted"},
@@ -662,6 +687,7 @@ func TestDiffSide_AutoSnapDeleted(t *testing.T) {
 }
 
 func TestDiffSide_AutoSnapAdded(t *testing.T) {
+	t.Parallel()
 	// new has "added", old does not → added row must snap to new.
 	m := newTestModelWithDiff(t,
 		[]string{"same"},
@@ -691,6 +717,7 @@ func TestDiffSide_AutoSnapAdded(t *testing.T) {
 }
 
 func TestDiffSide_NoSwitchOnDeletedRow(t *testing.T) {
+	t.Parallel()
 	// On a deleted row, pressing l (right) should jump to the nearest
 	// row with new-side content.
 	m := newTestModelWithDiff(t,
@@ -724,6 +751,7 @@ func TestDiffSide_NoSwitchOnDeletedRow(t *testing.T) {
 }
 
 func TestDiffSide_MouseClick_OldSide(t *testing.T) {
+	t.Parallel()
 	m := newTestModelWithDiff(t,
 		[]string{"same line"},
 		[]string{"same line"},
@@ -746,6 +774,7 @@ func TestDiffSide_MouseClick_OldSide(t *testing.T) {
 }
 
 func TestDiffSide_MouseClick_NewSide(t *testing.T) {
+	t.Parallel()
 	m := newTestModelWithDiff(t,
 		[]string{"same line"},
 		[]string{"same line"},
@@ -769,6 +798,7 @@ func TestDiffSide_MouseClick_NewSide(t *testing.T) {
 }
 
 func TestDiffSide_SelectionTextMatchesSide(t *testing.T) {
+	t.Parallel()
 	// Modified row: old="hello", new="world"
 	m := newTestModelWithDiff(t,
 		[]string{"hello"},
@@ -807,6 +837,7 @@ func TestDiffSide_SelectionTextMatchesSide(t *testing.T) {
 }
 
 func TestDiffSide_ChangeJumpSkipsWrongSide(t *testing.T) {
+	t.Parallel()
 	// old: [same, old1, old2]  →  deleted block + added block
 	// new: [same, new1, new2]
 	// Two change blocks: one with modified rows, then done.
@@ -855,6 +886,7 @@ func TestDiffSide_ChangeJumpSkipsWrongSide(t *testing.T) {
 }
 
 func TestDiffSide_ChangeJumpSkipsAddedOnlyBlock(t *testing.T) {
+	t.Parallel()
 	// old: [same1, old1, same2]
 	// new: [same1, new1, same2, added1, added2]
 	// Block 1: modified (old1→new1). Block 2: added-only (added1, added2).
@@ -894,6 +926,7 @@ func TestDiffSide_ChangeJumpSkipsAddedOnlyBlock(t *testing.T) {
 }
 
 func TestDiffSide_JKSkipsOppositeSideRows(t *testing.T) {
+	t.Parallel()
 	// j/k on old side should skip RowAdded rows entirely.
 	// Rows: unchanged(ctx), added(added), unchanged(end)
 	m := newTestModelWithDiff(t,
@@ -949,6 +982,7 @@ func TestDiffSide_JKSkipsOppositeSideRows(t *testing.T) {
 }
 
 func TestDiffSide_JKSkipsDeletedOnNewSide(t *testing.T) {
+	t.Parallel()
 	// j/k on new side should skip RowDeleted rows.
 	m := newTestModelWithDiff(t,
 		[]string{"ctx", "deleted", "end"},
@@ -989,6 +1023,7 @@ func TestDiffSide_JKSkipsDeletedOnNewSide(t *testing.T) {
 }
 
 func TestDiffSide_JKNoMoveWhenNoMoreRows(t *testing.T) {
+	t.Parallel()
 	// When no more rows with current side exist, cursor should not move.
 	m := newTestModelWithDiff(t,
 		[]string{"ctx", "end"},
@@ -1018,6 +1053,7 @@ func TestDiffSide_JKNoMoveWhenNoMoreRows(t *testing.T) {
 }
 
 func TestDiffSide_SameSideNoOp(t *testing.T) {
+	t.Parallel()
 	// Pressing h when already on old side should be a no-op.
 	m := newTestModelWithDiff(t,
 		[]string{"same line"},
@@ -1042,6 +1078,7 @@ func TestDiffSide_SameSideNoOp(t *testing.T) {
 }
 
 func TestDiffSide_JumpToNearestOldFromAdded(t *testing.T) {
+	t.Parallel()
 	// RowAdded で h → 最寄りの old 行にジャンプ
 	// Need multiple lines so diff detects unchanged rows correctly.
 	m := newTestModelWithDiff(t,
@@ -1076,6 +1113,7 @@ func TestDiffSide_JumpToNearestOldFromAdded(t *testing.T) {
 }
 
 func TestDiffSide_JumpToNearestNewFromDeleted(t *testing.T) {
+	t.Parallel()
 	// RowDeleted で l → 最寄りの new 行にジャンプ
 	m := newTestModelWithDiff(t,
 		[]string{"ctx", "deleted", "end"},
@@ -1108,6 +1146,7 @@ func TestDiffSide_JumpToNearestNewFromDeleted(t *testing.T) {
 }
 
 func TestDiffSide_JumpPrefersUpward(t *testing.T) {
+	t.Parallel()
 	// 同距離で上方向優先
 	// old: [same1, deleted, same2]
 	// new: [same1, same2]
@@ -1142,6 +1181,7 @@ func TestDiffSide_JumpPrefersUpward(t *testing.T) {
 }
 
 func TestDiffSide_NoJumpWhenNoTarget(t *testing.T) {
+	t.Parallel()
 	// 全行が added-only → h で対向行なし、no-op
 	m := newTestModelWithDiff(t,
 		[]string{},
@@ -1176,6 +1216,7 @@ func TestDiffSide_NoJumpWhenNoTarget(t *testing.T) {
 }
 
 func TestDiffSide_BlankLineJumpSnaps(t *testing.T) {
+	t.Parallel()
 	// } で RowAdded 行に着地 → side が snap される
 	// old: [line1, ""]
 	// new: [line1, "", added]
@@ -1202,6 +1243,7 @@ func TestDiffSide_BlankLineJumpSnaps(t *testing.T) {
 }
 
 func TestDiffSide_BlankLineJumpPreservesSide(t *testing.T) {
+	t.Parallel()
 	m := newTestModelWithDiff(t,
 		[]string{"line1", "", "line3"},
 		[]string{"line1", "", "line3-changed"},
