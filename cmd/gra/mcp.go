@@ -13,22 +13,9 @@ import (
 type listCommentsInput struct {
 	FilePath        string `json:"filePath,omitempty" jsonschema:"filter by file path"`
 	IncludeResolved bool   `json:"includeResolved,omitempty" jsonschema:"include resolved comments"`
-}
-
-type diffScopeInput struct {
-	Kind      string `json:"kind" jsonschema:"diff scope kind: working, branch, or review"`
-	Base      string `json:"base,omitempty" jsonschema:"base branch name (for branch kind)"`
-	SessionID string `json:"sessionId,omitempty" jsonschema:"session UUID (for review kind)"`
-}
-
-func (d diffScopeInput) toScope() comment.DiffScope {
-	return comment.DiffScope{Kind: d.Kind, Base: d.Base, SessionID: d.SessionID}
-}
-
-type listDiffCommentsInput struct {
-	diffScopeInput
-	FilePath        string `json:"filePath,omitempty" jsonschema:"filter by file path"`
-	IncludeResolved bool   `json:"includeResolved,omitempty" jsonschema:"include resolved comments"`
+	Kind            string `json:"kind,omitempty" jsonschema:"diff scope kind: working, branch, or review. If omitted, returns file comments only."`
+	Base            string `json:"base,omitempty" jsonschema:"base branch name (for branch kind)"`
+	SessionID       string `json:"sessionId,omitempty" jsonschema:"session UUID (for review kind)"`
 }
 
 type commentIDInput struct {
@@ -57,34 +44,22 @@ func (c *McpCmd) Run() error {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_comments",
-		Description: "List review comments from gracilius TUI",
+		Description: "List review comments from gracilius TUI. Without kind, returns file comments. With kind, returns diff comments for that scope.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input listCommentsInput) (*mcp.CallToolResult, any, error) {
-		comments, err := store.List(input.FilePath, input.IncludeResolved)
+		var comments []comment.Entry
+		var err error
+		if input.Kind != "" {
+			sc := comment.DiffScope{Kind: input.Kind, Base: input.Base, SessionID: input.SessionID}
+			comments, err = store.ListByScope(sc, input.FilePath, input.IncludeResolved)
+		} else {
+			comments, err = store.List(input.FilePath, input.IncludeResolved)
+		}
 		if err != nil {
 			return nil, nil, fmt.Errorf("list comments: %w", err)
 		}
 		data, err := json.Marshal(comments)
 		if err != nil {
 			return nil, nil, fmt.Errorf("marshal comments: %w", err)
-		}
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{Text: string(data)},
-			},
-		}, nil, nil
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        "list_diff_comments",
-		Description: "List diff review comments from gracilius TUI for a specific diff scope",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, input listDiffCommentsInput) (*mcp.CallToolResult, any, error) {
-		comments, err := store.ListByScope(input.toScope(), input.FilePath, input.IncludeResolved)
-		if err != nil {
-			return nil, nil, fmt.Errorf("list diff comments: %w", err)
-		}
-		data, err := json.Marshal(comments)
-		if err != nil {
-			return nil, nil, fmt.Errorf("marshal diff comments: %w", err)
 		}
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
