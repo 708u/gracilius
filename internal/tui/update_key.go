@@ -63,7 +63,6 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.treeCursor = 0
 			case hasTab && t.diffViewData != nil:
 				t.diffCursor = 0
-				t.snapDiffSide()
 				t.syncDiffAnchor()
 				m.notifySelectionChanged()
 			case hasTab && len(t.lines) > 0:
@@ -258,7 +257,6 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	case key.Matches(msg, m.keys.Up):
 		if t.diffViewData != nil && t.diffCursor > 0 {
 			t.diffCursor--
-			t.snapDiffSide()
 			t.syncDiffAnchor()
 			cmd := m.scheduleSelectionNotify()
 			return m, cmd, true
@@ -267,7 +265,6 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	case key.Matches(msg, m.keys.Down):
 		if t.diffViewData != nil && t.diffCursor < len(t.diffViewData.Rows)-1 {
 			t.diffCursor++
-			t.snapDiffSide()
 			t.syncDiffAnchor()
 			cmd := m.scheduleSelectionNotify()
 			return m, cmd, true
@@ -276,7 +273,6 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	case key.Matches(msg, m.keys.GoBottom):
 		if t.diffViewData != nil && len(t.diffViewData.Rows) > 0 {
 			t.diffCursor = len(t.diffViewData.Rows) - 1
-			t.snapDiffSide()
 			t.syncDiffAnchor()
 			cmd := m.scheduleSelectionNotify()
 			return m, cmd, true

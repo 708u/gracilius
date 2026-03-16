@@ -893,6 +893,36 @@ func TestDiffSide_ChangeJumpSkipsAddedOnlyBlock(t *testing.T) {
 	}
 }
 
+func TestDiffSide_JKPreservesSide(t *testing.T) {
+	// j/k navigation should preserve diffSide even when crossing
+	// single-sided rows (RowAdded/RowDeleted).
+	m := newTestModelWithDiff(t,
+		[]string{"ctx", "end"},
+		[]string{"ctx", "added", "end"},
+	)
+	tab := m.tabs[0]
+
+	// Start on first unchanged row, old side.
+	tab.diffCursor = 0
+	tab.diffSide = diffSideOld
+
+	// Move down through added row — side should stay old.
+	for i := 0; i < len(tab.diffViewData.Rows)-1; i++ {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	if tab.diffSide != diffSideOld {
+		t.Errorf("expected diffSideOld preserved after j through added row, got %d", tab.diffSide)
+	}
+
+	// Move back up — side should still stay old.
+	for i := 0; i < len(tab.diffViewData.Rows)-1; i++ {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	}
+	if tab.diffSide != diffSideOld {
+		t.Errorf("expected diffSideOld preserved after k through added row, got %d", tab.diffSide)
+	}
+}
+
 func TestDiffSide_JumpToNearestOldFromAdded(t *testing.T) {
 	// RowAdded で h → 最寄りの old 行にジャンプ
 	// Need multiple lines so diff detects unchanged rows correctly.
