@@ -65,7 +65,6 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.treeCursor = 0
 			case hasTab && t.diffViewData != nil:
 				t.diffCursor = 0
-				t.snapDiffSide()
 				t.syncDiffAnchor()
 				m.notifySelectionChanged()
 			case hasTab && len(t.lines) > 0:
@@ -265,20 +264,18 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 			return m, nil, true
 		}
 
-	// Cursor movement.
+	// Cursor movement — skip rows without content on current side.
 	case key.Matches(msg, m.keys.Up):
-		if t.diffViewData != nil && t.diffCursor > 0 {
-			t.diffCursor--
-			t.snapDiffSide()
+		if next := t.diffNextRow(-1); next >= 0 {
+			t.diffCursor = next
 			t.syncDiffAnchor()
 			cmd := m.scheduleSelectionNotify()
 			return m, cmd, true
 		}
 		return m, nil, true
 	case key.Matches(msg, m.keys.Down):
-		if t.diffViewData != nil && t.diffCursor < len(t.diffViewData.Rows)-1 {
-			t.diffCursor++
-			t.snapDiffSide()
+		if next := t.diffNextRow(1); next >= 0 {
+			t.diffCursor = next
 			t.syncDiffAnchor()
 			cmd := m.scheduleSelectionNotify()
 			return m, cmd, true
@@ -287,7 +284,6 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	case key.Matches(msg, m.keys.GoBottom):
 		if t.diffViewData != nil && len(t.diffViewData.Rows) > 0 {
 			t.diffCursor = len(t.diffViewData.Rows) - 1
-			t.snapDiffSide()
 			t.syncDiffAnchor()
 			cmd := m.scheduleSelectionNotify()
 			return m, cmd, true
@@ -402,16 +398,34 @@ func (m *Model) handleDiffKeyNormal(t *tab, msg tea.KeyPressMsg) (tea.Model, tea
 	return m, nil, false
 }
 
-// setDiffSide switches the diff side on rows that have both sides.
+// setDiffSide switches the diff side. On rows that have both sides
+// (unchanged/modified), the side is switched in place. On single-sided
+// rows (added/deleted), the cursor jumps to the nearest row that has
+// content on the requested side.
 func (m *Model) setDiffSide(t *tab, side diffSide) {
 	if t.diffViewData == nil || t.diffCursor >= len(t.diffViewData.Rows) {
 		return
 	}
 	row := t.diffViewData.Rows[t.diffCursor]
-	if row.Type == diff.RowUnchanged || row.Type == diff.RowModified {
+	// Row has the requested side → switch in place.
+	if diffRowAvailableSide(row, side) == side {
+		if t.diffSide == side {
+			return // already on requested side
+		}
 		t.diffSide = side
 		m.notifySelectionChanged()
+		return
 	}
+	// Current row is single-sided without the requested side.
+	// Jump to nearest row that has it.
+	target := findNearestRowForSide(t.diffViewData.Rows, t.diffCursor, side)
+	if target < 0 {
+		return
+	}
+	t.diffCursor = target
+	t.diffSide = side
+	t.syncDiffAnchor()
+	m.notifySelectionChanged()
 }
 
 // diffJumpBlankLine moves the diff cursor to the next/previous blank-line
@@ -449,6 +463,7 @@ func (m *Model) diffJumpBlankLine(t *tab, dir int) {
 
 	if line != cur {
 		t.diffCursor = line
+		t.snapDiffSide()
 		t.syncDiffAnchor()
 	}
 }
