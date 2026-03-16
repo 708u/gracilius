@@ -53,22 +53,13 @@ func TestNew(t *testing.T) {
 }
 
 func TestListenAndStop(t *testing.T) {
-	srv, err := New([]string{"/test"})
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
-
-	if err := srv.Listen(); err != nil {
-		t.Fatalf("Listen failed: %v", err)
-	}
+	srv := setupServer(t)
 
 	if srv.Port() <= 0 {
 		t.Fatalf("expected positive port, got %d", srv.Port())
 	}
 
 	lockPath := srv.LockFilePath()
-
-	go srv.Serve()
 
 	srv.Stop()
 

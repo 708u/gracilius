@@ -7,6 +7,7 @@ import (
 )
 
 func TestPanelLabel(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		p    panel
 		want string
@@ -22,6 +23,7 @@ func TestPanelLabel(t *testing.T) {
 }
 
 func TestSwitchPanel(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	if m.activePanel != panelFiles {
@@ -41,6 +43,7 @@ func TestSwitchPanel(t *testing.T) {
 }
 
 func TestToggleSidebar(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	if !m.sidebarVisible {
@@ -60,6 +63,7 @@ func TestToggleSidebar(t *testing.T) {
 }
 
 func TestToggleSidebar_ForcesEditorFocus(t *testing.T) {
+	t.Parallel()
 	m := newTestModelWithFile(t, "line1\nline2")
 	m.focusPane = paneTree
 
@@ -75,6 +79,7 @@ func TestToggleSidebar_ForcesEditorFocus(t *testing.T) {
 }
 
 func TestComputeLayout_SidebarHidden(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.sidebarVisible = false
 
@@ -91,6 +96,7 @@ func TestComputeLayout_SidebarHidden(t *testing.T) {
 }
 
 func TestComputeLayout_SidebarVisible(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.sidebarVisible = true
 
@@ -107,6 +113,7 @@ func TestComputeLayout_SidebarVisible(t *testing.T) {
 }
 
 func TestSwitchPane_DisabledWhenHidden(t *testing.T) {
+	t.Parallel()
 	m := newTestModelWithFile(t, "line1\nline2")
 	m.sidebarVisible = false
 	m.focusPane = paneEditor
@@ -120,6 +127,7 @@ func TestSwitchPane_DisabledWhenHidden(t *testing.T) {
 }
 
 func TestRenderLeftPane_LineCount(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.sidebarVisible = true
 

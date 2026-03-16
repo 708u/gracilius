@@ -32,6 +32,24 @@ Connection test with Claude Code:
 CLAUDE_CODE_SSE_PORT=18765 claude
 ```
 
+## Test Conventions
+
+### Table-Driven Tests
+
+入出力が明確なテストはtable-driven testで記述する。
+
+### t.Parallel()
+
+全テスト関数の先頭で `t.Parallel()` を呼ぶ。
+サブテスト (`t.Run`) 内でも `t.Parallel()` を呼ぶ。
+
+### Context
+
+テスト内で `context.Context` が必要な場合、
+`context.Background()` ではなく `t.Context()` を使う
+(Go 1.24+)。テストのライフサイクルに連動して
+自動キャンセルされる。
+
 ## Architecture
 
 ### Overall Structure

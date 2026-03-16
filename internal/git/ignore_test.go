@@ -24,6 +24,7 @@ func initGitRepo(t *testing.T, dir string) {
 }
 
 func TestCheckIgnored_MatchesFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	initGitRepo(t, dir)
 
@@ -58,6 +59,7 @@ func TestCheckIgnored_MatchesFiles(t *testing.T) {
 }
 
 func TestCheckIgnored_EmptyList(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	initGitRepo(t, dir)
 
@@ -73,6 +75,7 @@ func TestCheckIgnored_EmptyList(t *testing.T) {
 }
 
 func TestCheckIgnored_NoMatch(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	initGitRepo(t, dir)
 
@@ -91,6 +94,7 @@ func TestCheckIgnored_NoMatch(t *testing.T) {
 }
 
 func TestCheckIgnored_NonGitDir(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	// Should not panic or error — just returns nil.

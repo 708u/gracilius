@@ -9,6 +9,7 @@ import (
 )
 
 func TestLockFile_CreateAndRemove(t *testing.T) {
+	t.Parallel()
 	port := 19999
 	lf, err := NewLockFile(port, []string{"/test"}, "test-token")
 	if err != nil {
@@ -33,6 +34,7 @@ func TestLockFile_CreateAndRemove(t *testing.T) {
 }
 
 func TestLockFile_Content(t *testing.T) {
+	t.Parallel()
 	port := 19998
 	folders := []string{"/workspace/project"}
 	token := "test-auth-token"
@@ -79,6 +81,7 @@ func TestLockFile_Content(t *testing.T) {
 }
 
 func TestLockFile_AtomicWrite(t *testing.T) {
+	t.Parallel()
 	port := 19997
 	lf, err := NewLockFile(port, []string{"/test"}, "test-token")
 	if err != nil {
@@ -97,6 +100,7 @@ func TestLockFile_AtomicWrite(t *testing.T) {
 }
 
 func TestLockFile_Path(t *testing.T) {
+	t.Parallel()
 	port := 19996
 	lf, err := NewLockFile(port, []string{"/test"}, "test-token")
 	if err != nil {

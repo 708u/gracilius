@@ -7,6 +7,7 @@ import (
 )
 
 func TestComputeSearchMatches(t *testing.T) {
+	t.Parallel()
 	lines := []string{
 		"Hello world",
 		"hello World",
@@ -15,6 +16,7 @@ func TestComputeSearchMatches(t *testing.T) {
 	}
 
 	t.Run("basic case insensitive", func(t *testing.T) {
+		t.Parallel()
 		matches := computeSearchMatches(lines, "hello")
 		// "hello" is all lowercase → case insensitive → matches lines 0,1,2
 		if len(matches) != 3 {
@@ -31,6 +33,7 @@ func TestComputeSearchMatches(t *testing.T) {
 	})
 
 	t.Run("smartcase sensitive", func(t *testing.T) {
+		t.Parallel()
 		matches := computeSearchMatches(lines, "Hello")
 		// "Hello" has uppercase → case sensitive → only line 0
 		if len(matches) != 1 {
@@ -42,6 +45,7 @@ func TestComputeSearchMatches(t *testing.T) {
 	})
 
 	t.Run("multiple matches per line", func(t *testing.T) {
+		t.Parallel()
 		matches := computeSearchMatches(lines, "foo")
 		// line 3 "foobar foo" → matches at 0 and 7
 		if len(matches) != 2 {
@@ -56,6 +60,7 @@ func TestComputeSearchMatches(t *testing.T) {
 	})
 
 	t.Run("empty query", func(t *testing.T) {
+		t.Parallel()
 		matches := computeSearchMatches(lines, "")
 		if matches != nil {
 			t.Fatalf("expected nil, got %v", matches)
@@ -63,6 +68,7 @@ func TestComputeSearchMatches(t *testing.T) {
 	})
 
 	t.Run("no matches", func(t *testing.T) {
+		t.Parallel()
 		matches := computeSearchMatches(lines, "zzz")
 		if len(matches) != 0 {
 			t.Fatalf("expected 0 matches, got %d", len(matches))
@@ -71,6 +77,7 @@ func TestComputeSearchMatches(t *testing.T) {
 }
 
 func TestComputeDiffSearchMatches(t *testing.T) {
+	t.Parallel()
 	data := &diff.Data{
 		Rows: []diff.Row{
 			{OldLineNum: 1, NewLineNum: 1, OldText: "hello world", NewText: "hello world", Type: diff.RowUnchanged},
@@ -102,6 +109,7 @@ func TestComputeDiffSearchMatches(t *testing.T) {
 }
 
 func TestComputeDiffSearchMatches_nil(t *testing.T) {
+	t.Parallel()
 	matches := computeDiffSearchMatches(nil, "hello")
 	if matches != nil {
 		t.Fatalf("expected nil, got %v", matches)
@@ -109,6 +117,7 @@ func TestComputeDiffSearchMatches_nil(t *testing.T) {
 }
 
 func TestIsSmartCaseSensitive(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		query string
 		want  bool

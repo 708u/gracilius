@@ -58,6 +58,7 @@ func TestNewRepository_CreatesDirectory(t *testing.T) {
 }
 
 func TestNewRepository_ReturnsValidRepository(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	if repo.DataPath() == "" {
 		t.Fatal("DataPath should not be empty")
@@ -70,6 +71,7 @@ func TestNewRepository_ReturnsValidRepository(t *testing.T) {
 // --------------- Add / List ---------------
 
 func TestAdd_ThenList_ReturnsSingleComment(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	e := makeEntry("c1", "/a.go", 1, 5, "fix this")
 
@@ -90,6 +92,7 @@ func TestAdd_ThenList_ReturnsSingleComment(t *testing.T) {
 }
 
 func TestAdd_MultipleComments_ListReturnsAll(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	for _, id := range []string{"c1", "c2", "c3"} {
 		if err := repo.Add(makeEntry(id, "/a.go", 1, 1, id)); err != nil {
@@ -107,6 +110,7 @@ func TestAdd_MultipleComments_ListReturnsAll(t *testing.T) {
 }
 
 func TestList_FilePathFilter(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	_ = repo.Add(makeEntry("c1", "/a.go", 1, 1, "a"))
 	_ = repo.Add(makeEntry("c2", "/b.go", 1, 1, "b"))
@@ -127,6 +131,7 @@ func TestList_FilePathFilter(t *testing.T) {
 }
 
 func TestList_ExcludesResolved(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	_ = repo.Add(makeEntry("c1", "/a.go", 1, 1, "open"))
 
@@ -147,6 +152,7 @@ func TestList_ExcludesResolved(t *testing.T) {
 }
 
 func TestList_IncludesResolved(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	_ = repo.Add(makeEntry("c1", "/a.go", 1, 1, "open"))
 
@@ -166,6 +172,7 @@ func TestList_IncludesResolved(t *testing.T) {
 // --------------- Replace ---------------
 
 func TestReplace_ExistingComment(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	_ = repo.Add(makeEntry("c1", "/a.go", 1, 1, "old text"))
 	_ = repo.Add(makeEntry("c2", "/b.go", 1, 1, "other"))
@@ -199,6 +206,7 @@ func TestReplace_ExistingComment(t *testing.T) {
 }
 
 func TestReplace_NonExistentID_AddsWithoutRemoving(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	_ = repo.Add(makeEntry("c1", "/a.go", 1, 1, "existing"))
 
@@ -219,6 +227,7 @@ func TestReplace_NonExistentID_AddsWithoutRemoving(t *testing.T) {
 // --------------- Resolve ---------------
 
 func TestResolve_SetsResolvedAt(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	_ = repo.Add(makeEntry("c1", "/a.go", 1, 1, "fix"))
 
@@ -245,6 +254,7 @@ func TestResolve_SetsResolvedAt(t *testing.T) {
 }
 
 func TestResolve_NonExistentID_ReturnsError(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 
 	err := repo.Resolve("no-such-id")
@@ -256,6 +266,7 @@ func TestResolve_NonExistentID_ReturnsError(t *testing.T) {
 // --------------- Delete ---------------
 
 func TestDelete_RemovesComment(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	_ = repo.Add(makeEntry("c1", "/a.go", 1, 1, "to delete"))
 	_ = repo.Add(makeEntry("c2", "/a.go", 5, 5, "to keep"))
@@ -277,6 +288,7 @@ func TestDelete_RemovesComment(t *testing.T) {
 }
 
 func TestDelete_NonExistentID_ReturnsError(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 
 	err := repo.Delete("no-such-id")
@@ -288,6 +300,7 @@ func TestDelete_NonExistentID_ReturnsError(t *testing.T) {
 // --------------- DeleteByFile ---------------
 
 func TestDeleteByFile_RemovesMatchingFile(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	_ = repo.Add(makeEntry("c1", "/a.go", 1, 1, "a1"))
 	_ = repo.Add(makeEntry("c2", "/a.go", 5, 5, "a2"))
@@ -310,6 +323,7 @@ func TestDeleteByFile_RemovesMatchingFile(t *testing.T) {
 }
 
 func TestDeleteByFile_LeavesOtherFilesIntact(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	_ = repo.Add(makeEntry("c1", "/a.go", 1, 1, "a"))
 	_ = repo.Add(makeEntry("c2", "/b.go", 1, 1, "b"))
@@ -338,6 +352,7 @@ func TestDeleteByFile_LeavesOtherFilesIntact(t *testing.T) {
 // --------------- Purge logic ---------------
 
 func TestPurge_OldResolvedCommentsAreRemoved(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 
 	old := makeEntry("old", "/a.go", 1, 1, "old resolved")
@@ -360,6 +375,7 @@ func TestPurge_OldResolvedCommentsAreRemoved(t *testing.T) {
 }
 
 func TestPurge_RecentResolvedCommentsAreKept(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 
 	recent := makeEntry("recent", "/a.go", 1, 1, "recently resolved")
@@ -379,6 +395,7 @@ func TestPurge_RecentResolvedCommentsAreKept(t *testing.T) {
 }
 
 func TestPurge_UnresolvedCommentsNeverPurged(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 
 	// An unresolved comment with an old CreatedAt should survive purge.
@@ -408,6 +425,7 @@ func TestPurge_UnresolvedCommentsNeverPurged(t *testing.T) {
 // --------------- JSON round-trip ---------------
 
 func TestEntry_JSONRoundTrip_AllFields(t *testing.T) {
+	t.Parallel()
 	now := time.Now().Truncate(time.Second)
 	original := Entry{
 		ID:         "rt1",
@@ -464,6 +482,7 @@ func TestEntry_JSONRoundTrip_AllFields(t *testing.T) {
 }
 
 func TestEntry_JSON_ResolvedAtZeroOmitted(t *testing.T) {
+	t.Parallel()
 	e := Entry{
 		ID:        "rt2",
 		FilePath:  "/test.go",
@@ -490,6 +509,7 @@ func TestEntry_JSON_ResolvedAtZeroOmitted(t *testing.T) {
 // --------------- Atomic write ---------------
 
 func TestAtomicWrite_FileExistsAfterAdd(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	_ = repo.Add(makeEntry("c1", "/a.go", 1, 1, "text"))
 
@@ -514,6 +534,7 @@ func TestAtomicWrite_FileExistsAfterAdd(t *testing.T) {
 }
 
 func TestAtomicWrite_NoTempFileLeftOver(t *testing.T) {
+	t.Parallel()
 	repo := newTestRepo(t)
 	_ = repo.Add(makeEntry("c1", "/a.go", 1, 1, "text"))
 
