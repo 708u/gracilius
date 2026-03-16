@@ -32,6 +32,47 @@ Connection test with Claude Code:
 CLAUDE_CODE_SSE_PORT=18765 claude
 ```
 
+## Test Conventions
+
+### Table-Driven Tests
+
+Use table-driven tests when inputs and outputs
+are straightforward to express declaratively.
+
+### t.Parallel()
+
+Call `t.Parallel()` at the top of every test function.
+Also call `t.Parallel()` inside each `t.Run` subtest.
+
+### t.Helper()
+
+Call `t.Helper()` at the top of every test helper
+function. This ensures failure messages report
+the caller's line number, not the helper's.
+
+### Naming
+
+- Test functions: `TestFunctionName` or
+  `TestFunctionName_Scenario`
+- Struct methods: `TestTypeName_MethodName` or
+  `TestMethodName` when the type is obvious
+  from context
+- Subtests: concise descriptive name matching
+  the scenario (e.g., `"EmptyInput"`, `"CJK_diff"`)
+- Table struct fields: `name` for subtest name,
+  `want`/`wantErr` for expected values,
+  `verify` for complex assertions
+- Loop variable: `tt` (e.g., `for _, tt := range tests`)
+- Test helpers: unexported, prefixed with purpose
+  (e.g., `newTestModel`, `setupServer`,
+  `assertTokens`)
+
+### Context
+
+When a test needs `context.Context`, use `t.Context()`
+instead of `context.Background()` (Go 1.24+).
+It is automatically cancelled when the test finishes.
+
 ## Architecture
 
 ### Overall Structure
