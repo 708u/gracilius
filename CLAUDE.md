@@ -56,6 +56,10 @@ the caller's line number, not the helper's.
   `TestFunctionName_Scenario`
 - Subtests: concise descriptive name matching
   the scenario (e.g., `"EmptyInput"`, `"CJK_diff"`)
+- Table struct fields: `name` for subtest name,
+  `want`/`wantErr` for expected values,
+  `verify` for complex assertions
+- Loop variable: `tt` (e.g., `for _, tt := range tests`)
 - Test helpers: unexported, prefixed with purpose
   (e.g., `newTestModel`, `setupServer`,
   `assertTokens`)
