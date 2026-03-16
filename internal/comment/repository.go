@@ -246,19 +246,30 @@ func (s *Repository) Delete(id string) error {
 	return fmt.Errorf("comment not found: %s", id)
 }
 
-// DeleteByFile removes all comments for a specific file.
-func (s *Repository) DeleteByFile(filePath string) error {
+// listWhere returns entries matching the predicate.
+func listWhere(entries []Entry, match func(*Entry) bool) []Entry {
+	var result []Entry
+	for i := range entries {
+		if match(&entries[i]) {
+			result = append(result, entries[i])
+		}
+	}
+	return result
+}
+
+// deleteWhere removes entries matching the predicate and saves.
+func (s *Repository) deleteWhere(match func(*Entry) bool) error {
 	comments, err := s.load()
 	if err != nil {
 		return err
 	}
-	var kept []Entry
-	for i := range comments {
-		if comments[i].FilePath != filePath {
-			kept = append(kept, comments[i])
-		}
-	}
+	kept := listWhere(comments, func(e *Entry) bool { return !match(e) })
 	return s.save(kept)
+}
+
+// DeleteByFile removes all comments for a specific file.
+func (s *Repository) DeleteByFile(filePath string) error {
+	return s.deleteWhere(func(e *Entry) bool { return e.FilePath == filePath })
 }
 
 // List returns file comments (Scope.Kind == "") filtered by file path and resolved status.
@@ -267,20 +278,11 @@ func (s *Repository) List(filePath string, includeResolved bool) ([]Entry, error
 	if err != nil {
 		return nil, err
 	}
-	var result []Entry
-	for i := range comments {
-		if comments[i].Scope.Kind != "" {
-			continue
-		}
-		if filePath != "" && comments[i].FilePath != filePath {
-			continue
-		}
-		if !includeResolved && !comments[i].ResolvedAt.IsZero() {
-			continue
-		}
-		result = append(result, comments[i])
-	}
-	return result, nil
+	return listWhere(comments, func(e *Entry) bool {
+		return e.Scope.Kind == "" &&
+			(filePath == "" || e.FilePath == filePath) &&
+			(includeResolved || e.ResolvedAt.IsZero())
+	}), nil
 }
 
 // ListByScope returns diff comments matching the given scope, file path, and resolved status.
@@ -289,49 +291,19 @@ func (s *Repository) ListByScope(sc DiffScope, filePath string, includeResolved 
 	if err != nil {
 		return nil, err
 	}
-	var result []Entry
-	for i := range comments {
-		if comments[i].Scope != sc {
-			continue
-		}
-		if filePath != "" && comments[i].FilePath != filePath {
-			continue
-		}
-		if !includeResolved && !comments[i].ResolvedAt.IsZero() {
-			continue
-		}
-		result = append(result, comments[i])
-	}
-	return result, nil
+	return listWhere(comments, func(e *Entry) bool {
+		return e.Scope == sc &&
+			(filePath == "" || e.FilePath == filePath) &&
+			(includeResolved || e.ResolvedAt.IsZero())
+	}), nil
 }
 
 // DeleteByScope removes all comments matching the given scope.
 func (s *Repository) DeleteByScope(sc DiffScope) error {
-	comments, err := s.load()
-	if err != nil {
-		return err
-	}
-	var kept []Entry
-	for i := range comments {
-		if comments[i].Scope != sc {
-			kept = append(kept, comments[i])
-		}
-	}
-	return s.save(kept)
+	return s.deleteWhere(func(e *Entry) bool { return e.Scope == sc })
 }
 
 // DeleteByFileAndScope removes all comments for a specific file within a scope.
 func (s *Repository) DeleteByFileAndScope(sc DiffScope, filePath string) error {
-	comments, err := s.load()
-	if err != nil {
-		return err
-	}
-	var kept []Entry
-	for i := range comments {
-		if comments[i].Scope == sc && comments[i].FilePath == filePath {
-			continue
-		}
-		kept = append(kept, comments[i])
-	}
-	return s.save(kept)
+	return s.deleteWhere(func(e *Entry) bool { return e.Scope == sc && e.FilePath == filePath })
 }

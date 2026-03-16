@@ -114,11 +114,11 @@ func (m *Model) initGitBranchInfoAsync() tea.Cmd {
 				return gitBranchInfoMsg{err: "No base branch found"}
 			}
 		}
-		base, err := git.MergeBase(dir, branch)
+		base, err := git.MergeBase(dir, "origin/"+branch)
 		if err != nil {
 			return gitBranchInfoMsg{
 				defaultBranch: branch,
-				err:           fmt.Sprintf("No merge-base with %s", branch),
+				err:           fmt.Sprintf("No merge-base with origin/%s", branch),
 			}
 		}
 		return gitBranchInfoMsg{mergeBase: base, defaultBranch: branch}
