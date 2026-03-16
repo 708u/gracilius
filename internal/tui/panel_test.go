@@ -78,37 +78,56 @@ func TestToggleSidebar_ForcesEditorFocus(t *testing.T) {
 	}
 }
 
-func TestComputeLayout_SidebarHidden(t *testing.T) {
+func TestComputeLayout_Sidebar(t *testing.T) {
 	t.Parallel()
-	m := newTestModel(t)
-	m.sidebarVisible = false
 
-	lo := m.computeLayout()
-	if lo.treeWidth != 0 {
-		t.Errorf("treeWidth = %d, want 0", lo.treeWidth)
+	tests := []struct {
+		name    string
+		visible bool
+		verify  func(t *testing.T, m *Model, lo layout)
+	}{
+		{
+			name:    "Hidden",
+			visible: false,
+			verify: func(t *testing.T, m *Model, lo layout) {
+				t.Helper()
+				if lo.treeWidth != 0 {
+					t.Errorf("treeWidth = %d, want 0", lo.treeWidth)
+				}
+				if lo.editorStartX != 0 {
+					t.Errorf("editorStartX = %d, want 0", lo.editorStartX)
+				}
+				if lo.editorWidth != m.width {
+					t.Errorf("editorWidth = %d, want %d", lo.editorWidth, m.width)
+				}
+			},
+		},
+		{
+			name:    "Visible",
+			visible: true,
+			verify: func(t *testing.T, m *Model, lo layout) {
+				t.Helper()
+				if lo.treeWidth == 0 {
+					t.Error("treeWidth should be > 0 when sidebar visible")
+				}
+				if lo.editorStartX != lo.treeWidth+separatorWidth {
+					t.Errorf("editorStartX = %d, want %d", lo.editorStartX, lo.treeWidth+separatorWidth)
+				}
+				if lo.editorWidth != m.width-lo.treeWidth-separatorWidth {
+					t.Errorf("editorWidth = %d, want %d", lo.editorWidth, m.width-lo.treeWidth-separatorWidth)
+				}
+			},
+		},
 	}
-	if lo.editorStartX != 0 {
-		t.Errorf("editorStartX = %d, want 0", lo.editorStartX)
-	}
-	if lo.editorWidth != m.width {
-		t.Errorf("editorWidth = %d, want %d", lo.editorWidth, m.width)
-	}
-}
 
-func TestComputeLayout_SidebarVisible(t *testing.T) {
-	t.Parallel()
-	m := newTestModel(t)
-	m.sidebarVisible = true
-
-	lo := m.computeLayout()
-	if lo.treeWidth == 0 {
-		t.Error("treeWidth should be > 0 when sidebar visible")
-	}
-	if lo.editorStartX != lo.treeWidth+separatorWidth {
-		t.Errorf("editorStartX = %d, want %d", lo.editorStartX, lo.treeWidth+separatorWidth)
-	}
-	if lo.editorWidth != m.width-lo.treeWidth-separatorWidth {
-		t.Errorf("editorWidth = %d, want %d", lo.editorWidth, m.width-lo.treeWidth-separatorWidth)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			m := newTestModel(t)
+			m.sidebarVisible = tt.visible
+			lo := m.computeLayout()
+			tt.verify(t, m, lo)
+		})
 	}
 }
 

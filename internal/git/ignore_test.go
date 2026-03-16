@@ -23,83 +23,87 @@ func initGitRepo(t *testing.T, dir string) {
 	}
 }
 
-func TestCheckIgnored_MatchesFiles(t *testing.T) {
+func TestCheckIgnored(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	initGitRepo(t, dir)
 
-	// Write .gitignore that ignores *.log and build/ directory
-	if err := os.WriteFile(
-		filepath.Join(dir, ".gitignore"),
-		[]byte("*.log\nbuild/\n"),
-		0o644,
-	); err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name      string
+		gitignore string
+		paths     []string
+		wantMap   map[string]bool // nil means expect nil result
+	}{
+		{
+			name:      "MatchesFiles",
+			gitignore: "*.log\nbuild/\n",
+			paths:     []string{"app.log", "main.go", "build/", "src/"},
+			wantMap:   map[string]bool{"app.log": true, "build/": true},
+		},
+		{
+			name:    "EmptyNilInput",
+			paths:   nil,
+			wantMap: nil,
+		},
+		{
+			name:    "EmptySliceInput",
+			paths:   []string{},
+			wantMap: nil,
+		},
+		{
+			name:      "NoMatch",
+			gitignore: "*.log\n",
+			paths:     []string{"main.go", "README.md"},
+			wantMap:   map[string]bool{},
+		},
+		{
+			name:    "NonGitDir_no_init",
+			paths:   []string{"some/file.txt"},
+			wantMap: nil,
+		},
 	}
 
-	ignored := CheckIgnored(dir, []string{
-		"app.log",
-		"main.go",
-		"build/",
-		"src/",
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
 
-	if !ignored["app.log"] {
-		t.Error("app.log should be ignored")
-	}
-	if ignored["main.go"] {
-		t.Error("main.go should not be ignored")
-	}
-	if !ignored["build/"] {
-		t.Error("build/ should be ignored")
-	}
-	if ignored["src/"] {
-		t.Error("src/ should not be ignored")
-	}
-}
+			skipInit := tt.name == "NonGitDir_no_init"
+			if !skipInit {
+				initGitRepo(t, dir)
+			}
 
-func TestCheckIgnored_EmptyList(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	initGitRepo(t, dir)
+			if tt.gitignore != "" {
+				if err := os.WriteFile(
+					filepath.Join(dir, ".gitignore"),
+					[]byte(tt.gitignore),
+					0o644,
+				); err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	result := CheckIgnored(dir, nil)
-	if result != nil {
-		t.Errorf("expected nil for empty input, got %v", result)
-	}
+			result := CheckIgnored(dir, tt.paths)
 
-	result = CheckIgnored(dir, []string{})
-	if result != nil {
-		t.Errorf("expected nil for empty slice, got %v", result)
-	}
-}
+			if tt.wantMap == nil {
+				if result != nil {
+					t.Errorf("expected nil, got %v", result)
+				}
+				return
+			}
 
-func TestCheckIgnored_NoMatch(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	initGitRepo(t, dir)
+			for path, wantIgnored := range tt.wantMap {
+				if result[path] != wantIgnored {
+					t.Errorf("%s: expected ignored=%v, got %v", path, wantIgnored, result[path])
+				}
+			}
 
-	if err := os.WriteFile(
-		filepath.Join(dir, ".gitignore"),
-		[]byte("*.log\n"),
-		0o644,
-	); err != nil {
-		t.Fatal(err)
-	}
-
-	result := CheckIgnored(dir, []string{"main.go", "README.md"})
-	if len(result) != 0 {
-		t.Errorf("expected no matches, got %v", result)
-	}
-}
-
-func TestCheckIgnored_NonGitDir(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-
-	// Should not panic or error — just returns nil.
-	result := CheckIgnored(dir, []string{"some/file.txt"})
-	if result != nil {
-		t.Errorf("expected nil for non-git dir, got %v", result)
+			// Verify non-listed paths are not ignored.
+			for _, path := range tt.paths {
+				if _, listed := tt.wantMap[path]; !listed {
+					if result[path] {
+						t.Errorf("%s: should not be ignored", path)
+					}
+				}
+			}
+		})
 	}
 }

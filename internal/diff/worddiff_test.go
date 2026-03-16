@@ -201,7 +201,7 @@ func TestComputeWordDiff(t *testing.T) {
 			},
 		},
 		{
-			name: "CJK",
+			name: "CJK_identical",
 			old:  "hello world",
 			new:  "hello world",
 			verify: func(t *testing.T, oldSpans, newSpans []WordSpan) {
@@ -214,17 +214,23 @@ func TestComputeWordDiff(t *testing.T) {
 				if newJoined != "hello world" {
 					t.Errorf("new round-trip: expected %q, got %q", "hello world", newJoined)
 				}
-				// Diff between CJK content.
-				oldSpans2, newSpans2 := ComputeWordDiff("func", "func")
-				oldJoined2 := joinSpansFiltered(oldSpans2, OpInsert)
-				newJoined2 := joinSpansFiltered(newSpans2, OpDelete)
-				if oldJoined2 != "func" {
+			},
+		},
+		{
+			name: "CJK_diff",
+			old:  "func",
+			new:  "func",
+			verify: func(t *testing.T, oldSpans, newSpans []WordSpan) {
+				t.Helper()
+				oldJoined := joinSpansFiltered(oldSpans, OpInsert)
+				newJoined := joinSpansFiltered(newSpans, OpDelete)
+				if oldJoined != "func" {
 					t.Errorf("CJK diff old round-trip: expected %q, got %q",
-						"func", oldJoined2)
+						"func", oldJoined)
 				}
-				if newJoined2 != "func" {
+				if newJoined != "func" {
 					t.Errorf("CJK diff new round-trip: expected %q, got %q",
-						"func", newJoined2)
+						"func", newJoined)
 				}
 			},
 		},
@@ -313,71 +319,25 @@ func TestTokenize(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name   string
-		input  string
-		want   []string
-		verify func(t *testing.T, got []string)
+		name  string
+		input string
+		want  []string
 	}{
-		{
-			name:  "Basic",
-			input: "hello world",
-			want:  []string{"hello", " ", "world"},
-		},
-		{
-			name:  "MultipleSpaces",
-			input: "a  b",
-			want:  []string{"a", "  ", "b"},
-		},
-		{
-			name:  "LeadingWhitespace",
-			input: "  hello",
-			want:  []string{"  ", "hello"},
-		},
-		{
-			name:  "Empty",
-			input: "",
-			verify: func(t *testing.T, got []string) {
-				t.Helper()
-				if len(got) != 0 {
-					t.Fatalf("expected empty slice, got %v", got)
-				}
-			},
-		},
-		{
-			name:  "TabsAndSpaces",
-			input: "\thello world",
-			want:  []string{"\t", "hello", " ", "world"},
-		},
-		{
-			name:  "SingleWord",
-			input: "hello",
-			want:  []string{"hello"},
-		},
-		{
-			name:  "OnlySpaces",
-			input: "   ",
-			want:  []string{"   "},
-		},
-		{
-			name:  "MixedWhitespace",
-			input: "\t foo",
-			want:  []string{"\t ", "foo"},
-		},
-		{
-			name:  "MixedWhitespace_Separated",
-			input: "\ta b",
-			want:  []string{"\t", "a", " ", "b"},
-		},
+		{"Basic", "hello world", []string{"hello", " ", "world"}},
+		{"MultipleSpaces", "a  b", []string{"a", "  ", "b"}},
+		{"LeadingWhitespace", "  hello", []string{"  ", "hello"}},
+		{"Empty", "", nil},
+		{"TabsAndSpaces", "\thello world", []string{"\t", "hello", " ", "world"}},
+		{"SingleWord", "hello", []string{"hello"}},
+		{"OnlySpaces", "   ", []string{"   "}},
+		{"MixedWhitespace", "\t foo", []string{"\t ", "foo"}},
+		{"MixedWhitespace_Separated", "\ta b", []string{"\t", "a", " ", "b"}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got := Tokenize(tt.input)
-			if tt.verify != nil {
-				tt.verify(t, got)
-				return
-			}
 			assertTokens(t, got, tt.want)
 		})
 	}
