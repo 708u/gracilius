@@ -143,6 +143,7 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
 		if row != m.lastMouseLine {
 			t.diffSelecting = true
 			t.diffCursor = row
+			t.snapDiffSide()
 			m.lastMouseLine = row
 		}
 		return m, nil
@@ -190,6 +191,7 @@ func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) (tea.Model, tea.Cmd)
 			visualLine := msg.Y - contentStartY + t.vp.YOffset()
 			row := t.diffVisualLineToRow(visualLine)
 			t.diffCursor = row
+			t.snapDiffSide()
 		}
 		m.notifySelectionChanged()
 		return m, nil
