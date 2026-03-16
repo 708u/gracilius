@@ -25,11 +25,13 @@ CHECKS = {
         "when": "When new code or logic changes are added",
         "checks": [
             "Tests exist for all new/changed exported functions",
-            "Happy path: typical inputs produce expected outputs",
-            "Edge cases: nil, empty, zero values handled",
-            "Boundary values: range limits (0, 1, max-1, max)",
-            "Error paths: invalid input, missing resources, "
-            "permission errors",
+            "Happy path: representative success case is covered",
+            "Edge cases: unusual but valid inputs are considered",
+            "Boundary values: range limits are considered",
+            "Error paths: failures callers would reasonably "
+            "hit are tested",
+            "Irregular use: misuse or unexpected caller "
+            "behavior is considered",
         ],
     },
 }
