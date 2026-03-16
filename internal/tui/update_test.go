@@ -691,18 +691,18 @@ func TestDiffSide_AutoSnapAdded(t *testing.T) {
 }
 
 func TestDiffSide_NoSwitchOnDeletedRow(t *testing.T) {
-	// On a deleted row, pressing l (right) should be ignored.
+	// On a deleted row, pressing l (right) should jump to the nearest
+	// row with new-side content.
 	m := newTestModelWithDiff(t,
-		[]string{"same", "deleted"},
-		[]string{"same"},
+		[]string{"ctx", "deleted", "end"},
+		[]string{"ctx", "end"},
 	)
 	tab := m.tabs[0]
 
 	deletedIdx := -1
 	for i, row := range tab.diffViewData.Rows {
-		if row.Type == diff.RowDeleted {
+		if row.Type == diff.RowDeleted && deletedIdx < 0 {
 			deletedIdx = i
-			break
 		}
 	}
 	if deletedIdx < 0 {
@@ -712,10 +712,14 @@ func TestDiffSide_NoSwitchOnDeletedRow(t *testing.T) {
 	tab.diffCursor = deletedIdx
 	tab.diffSide = diffSideOld
 
-	// Press l → should not switch because deleted row has no new side.
+	// Press l → should jump to nearest row with new-side content.
 	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
-	if tab.diffSide != diffSideOld {
-		t.Errorf("expected diffSideOld unchanged on deleted row after l, got %d", tab.diffSide)
+	if tab.diffSide != diffSideNew {
+		t.Errorf("expected diffSideNew after l on deleted row, got %d", tab.diffSide)
+	}
+	row := tab.diffViewData.Rows[tab.diffCursor]
+	if diffRowAvailableSide(row, diffSideNew) != diffSideNew {
+		t.Errorf("cursor row %d has no new-side content", tab.diffCursor)
 	}
 }
 
@@ -885,6 +889,166 @@ func TestDiffSide_ChangeJumpSkipsAddedOnlyBlock(t *testing.T) {
 		row := rows[tab.diffCursor]
 		if diffRowAvailableSide(row, diffSideOld) != diffSideOld {
 			t.Errorf("cursor landed on row %d which has no old-side content", tab.diffCursor)
+		}
+	}
+}
+
+func TestDiffSide_JumpToNearestOldFromAdded(t *testing.T) {
+	// RowAdded で h → 最寄りの old 行にジャンプ
+	// Need multiple lines so diff detects unchanged rows correctly.
+	m := newTestModelWithDiff(t,
+		[]string{"ctx", "end"},
+		[]string{"ctx", "added", "end"},
+	)
+	tab := m.tabs[0]
+
+	addedIdx := -1
+	for i, row := range tab.diffViewData.Rows {
+		if row.Type == diff.RowAdded && addedIdx < 0 {
+			addedIdx = i
+		}
+	}
+	if addedIdx < 0 {
+		t.Fatal("expected an added row")
+	}
+
+	tab.diffCursor = addedIdx
+	tab.diffSide = diffSideNew
+
+	// Press h → should jump to nearest row with old-side content.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if tab.diffSide != diffSideOld {
+		t.Errorf("expected diffSideOld after h on added row, got %d", tab.diffSide)
+	}
+	// Cursor should have moved to a row with old-side content.
+	row := tab.diffViewData.Rows[tab.diffCursor]
+	if diffRowAvailableSide(row, diffSideOld) != diffSideOld {
+		t.Errorf("cursor row %d has no old-side content", tab.diffCursor)
+	}
+}
+
+func TestDiffSide_JumpToNearestNewFromDeleted(t *testing.T) {
+	// RowDeleted で l → 最寄りの new 行にジャンプ
+	m := newTestModelWithDiff(t,
+		[]string{"ctx", "deleted", "end"},
+		[]string{"ctx", "end"},
+	)
+	tab := m.tabs[0]
+
+	deletedIdx := -1
+	for i, row := range tab.diffViewData.Rows {
+		if row.Type == diff.RowDeleted && deletedIdx < 0 {
+			deletedIdx = i
+		}
+	}
+	if deletedIdx < 0 {
+		t.Fatal("expected a deleted row")
+	}
+
+	tab.diffCursor = deletedIdx
+	tab.diffSide = diffSideOld
+
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if tab.diffSide != diffSideNew {
+		t.Errorf("expected diffSideNew after l on deleted row, got %d", tab.diffSide)
+	}
+	// Cursor should have moved to a row with new-side content.
+	row := tab.diffViewData.Rows[tab.diffCursor]
+	if diffRowAvailableSide(row, diffSideNew) != diffSideNew {
+		t.Errorf("cursor row %d has no new-side content", tab.diffCursor)
+	}
+}
+
+func TestDiffSide_JumpPrefersUpward(t *testing.T) {
+	// 同距離で上方向優先
+	// old: [same1, deleted, same2]
+	// new: [same1, same2]
+	// deleted 行から l → same1 (上) と same2 (下) が等距離、上優先
+	m := newTestModelWithDiff(t,
+		[]string{"same1", "deleted", "same2"},
+		[]string{"same1", "same2"},
+	)
+	tab := m.tabs[0]
+
+	deletedIdx := -1
+	firstSameIdx := -1
+	for i, row := range tab.diffViewData.Rows {
+		if row.Type == diff.RowDeleted && deletedIdx < 0 {
+			deletedIdx = i
+		}
+		if row.Type == diff.RowUnchanged && firstSameIdx < 0 {
+			firstSameIdx = i
+		}
+	}
+	if deletedIdx < 0 {
+		t.Fatal("expected a deleted row")
+	}
+
+	tab.diffCursor = deletedIdx
+	tab.diffSide = diffSideOld
+
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if tab.diffCursor != firstSameIdx {
+		t.Errorf("expected upward preference: cursor at %d, got %d", firstSameIdx, tab.diffCursor)
+	}
+}
+
+func TestDiffSide_NoJumpWhenNoTarget(t *testing.T) {
+	// 全行が added-only → h で対向行なし、no-op
+	m := newTestModelWithDiff(t,
+		[]string{},
+		[]string{"added1", "added2"},
+	)
+	tab := m.tabs[0]
+
+	// Find an added row.
+	addedIdx := -1
+	for i, row := range tab.diffViewData.Rows {
+		if row.Type == diff.RowAdded {
+			addedIdx = i
+			break
+		}
+	}
+	if addedIdx < 0 {
+		t.Fatal("expected an added row")
+	}
+
+	tab.diffCursor = addedIdx
+	tab.diffSide = diffSideNew
+	origCursor := tab.diffCursor
+
+	// Press h → no old-side rows exist, should be no-op.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if tab.diffCursor != origCursor {
+		t.Errorf("expected cursor unchanged at %d, got %d", origCursor, tab.diffCursor)
+	}
+	if tab.diffSide != diffSideNew {
+		t.Errorf("expected side unchanged at diffSideNew, got %d", tab.diffSide)
+	}
+}
+
+func TestDiffSide_BlankLineJumpSnaps(t *testing.T) {
+	// } で RowAdded 行に着地 → side が snap される
+	// old: [line1, ""]
+	// new: [line1, "", added]
+	m := newTestModelWithDiff(t,
+		[]string{"line1", ""},
+		[]string{"line1", "", "added"},
+	)
+	tab := m.tabs[0]
+
+	tab.diffCursor = 0
+	tab.diffSide = diffSideOld
+
+	// Press } to jump to blank-line boundary.
+	m.Update(tea.KeyPressMsg{Code: '}', Text: "}"})
+
+	// If cursor landed on an added-only row, side must snap to new.
+	if tab.diffCursor < len(tab.diffViewData.Rows) {
+		row := tab.diffViewData.Rows[tab.diffCursor]
+		expected := diffRowAvailableSide(row, tab.diffSide)
+		if tab.diffSide != expected {
+			t.Errorf("expected side to snap to %v, got %v", expected, tab.diffSide)
 		}
 	}
 }

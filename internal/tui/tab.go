@@ -127,6 +127,23 @@ func diffRowTextForSide(row diff.Row, side diffSide) string {
 	return row.OldText
 }
 
+// findNearestRowForSide searches both directions from current for the nearest
+// row with content on the given side. Returns -1 if none found.
+// Ties prefer upward (the row before a change block is more natural context).
+func findNearestRowForSide(rows []diff.Row, current int, side diffSide) int {
+	for d := 1; d < len(rows); d++ {
+		up := current - d
+		if up >= 0 && diffRowAvailableSide(rows[up], side) == side {
+			return up
+		}
+		down := current + d
+		if down < len(rows) && diffRowAvailableSide(rows[down], side) == side {
+			return down
+		}
+	}
+	return -1
+}
+
 // diffState holds accept/reject callbacks for a diff review tab.
 type diffState struct {
 	onAccept func(string)
