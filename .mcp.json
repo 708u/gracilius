@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "gracilius": {
-      "command": "./out/gra",
+      "command": "gra",
       "args": ["mcp"]
     }
   }

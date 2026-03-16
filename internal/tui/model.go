@@ -54,6 +54,7 @@ type MCPServer interface {
 // comment.Repository satisfies this implicitly.
 type CommentRepository interface {
 	List(filePath string, includeResolved bool) ([]comment.Entry, error)
+	ListAll(filePath string, includeResolved bool) ([]comment.Entry, error)
 	ListByScope(sc comment.DiffScope, filePath string, includeResolved bool) ([]comment.Entry, error)
 	Add(c comment.Entry) error
 	Replace(oldID string, c comment.Entry) error

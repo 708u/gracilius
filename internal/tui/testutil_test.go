@@ -41,6 +41,9 @@ func (s *mockCommentRepository) Delete(id string) error {
 	return nil
 }
 func (s *mockCommentRepository) DeleteByFile(string) error { s.comments = nil; return nil }
+func (s *mockCommentRepository) ListAll(_ string, _ bool) ([]comment.Entry, error) {
+	return s.comments, nil
+}
 func (s *mockCommentRepository) ListByScope(sc comment.DiffScope, filePath string, _ bool) ([]comment.Entry, error) {
 	var result []comment.Entry
 	for _, c := range s.comments {

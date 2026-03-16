@@ -285,6 +285,18 @@ func (s *Repository) List(filePath string, includeResolved bool) ([]Entry, error
 	}), nil
 }
 
+// ListAll returns all comments (file and diff) filtered by file path and resolved status.
+func (s *Repository) ListAll(filePath string, includeResolved bool) ([]Entry, error) {
+	comments, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	return listWhere(comments, func(e *Entry) bool {
+		return (filePath == "" || e.FilePath == filePath) &&
+			(includeResolved || e.ResolvedAt.IsZero())
+	}), nil
+}
+
 // ListByScope returns diff comments matching the given scope, file path, and resolved status.
 func (s *Repository) ListByScope(sc DiffScope, filePath string, includeResolved bool) ([]Entry, error) {
 	comments, err := s.load()
