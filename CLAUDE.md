@@ -36,19 +36,19 @@ CLAUDE_CODE_SSE_PORT=18765 claude
 
 ### Table-Driven Tests
 
-入出力が明確なテストはtable-driven testで記述する。
+Use table-driven tests when inputs and outputs
+are straightforward to express declaratively.
 
 ### t.Parallel()
 
-全テスト関数の先頭で `t.Parallel()` を呼ぶ。
-サブテスト (`t.Run`) 内でも `t.Parallel()` を呼ぶ。
+Call `t.Parallel()` at the top of every test function.
+Also call `t.Parallel()` inside each `t.Run` subtest.
 
 ### Context
 
-テスト内で `context.Context` が必要な場合、
-`context.Background()` ではなく `t.Context()` を使う
-(Go 1.24+)。テストのライフサイクルに連動して
-自動キャンセルされる。
+When a test needs `context.Context`, use `t.Context()`
+instead of `context.Background()` (Go 1.24+).
+It is automatically cancelled when the test finishes.
 
 ## Architecture
 
