@@ -40,7 +40,7 @@ func (t Theme) SearchCurrentBgSeq() string {
 var Dark = Theme{
 	Name:                "github-dark",
 	SelectionBg:         "#264F78",
-	ListSelectionBg:     "#37373D",
+	ListSelectionBg:     "#505050",
 	ActiveFileBg:        "#2A2D2E",
 	TabActiveFg:         "#FFFFFF",
 	TabActiveBorder:     "#E8AB53",
