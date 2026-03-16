@@ -948,6 +948,99 @@ func TestDiffSide_JKSkipsOppositeSideRows(t *testing.T) {
 	}
 }
 
+func TestDiffSide_JKSkipsDeletedOnNewSide(t *testing.T) {
+	// j/k on new side should skip RowDeleted rows.
+	m := newTestModelWithDiff(t,
+		[]string{"ctx", "deleted", "end"},
+		[]string{"ctx", "end"},
+	)
+	tab := m.tabs[0]
+	rows := tab.diffViewData.Rows
+
+	firstUnchanged := -1
+	deletedIdx := -1
+	lastUnchanged := -1
+	for i, row := range rows {
+		switch row.Type {
+		case diff.RowUnchanged:
+			if firstUnchanged < 0 {
+				firstUnchanged = i
+			}
+			lastUnchanged = i
+		case diff.RowDeleted:
+			deletedIdx = i
+		}
+	}
+	if deletedIdx < 0 {
+		t.Fatal("expected a deleted row")
+	}
+
+	tab.diffCursor = firstUnchanged
+	tab.diffSide = diffSideNew
+
+	// Press j — should skip deleted row.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if tab.diffCursor == deletedIdx {
+		t.Errorf("j should skip deleted row %d on new side", deletedIdx)
+	}
+	if tab.diffCursor != lastUnchanged {
+		t.Errorf("expected cursor at %d, got %d", lastUnchanged, tab.diffCursor)
+	}
+}
+
+func TestDiffSide_JKNoMoveWhenNoMoreRows(t *testing.T) {
+	// When no more rows with current side exist, cursor should not move.
+	m := newTestModelWithDiff(t,
+		[]string{"ctx", "end"},
+		[]string{"ctx", "end", "added1", "added2"},
+	)
+	tab := m.tabs[0]
+
+	// Find the last row that has old-side content.
+	lastOldRow := -1
+	for i, row := range tab.diffViewData.Rows {
+		if diffRowAvailableSide(row, diffSideOld) == diffSideOld {
+			lastOldRow = i
+		}
+	}
+	if lastOldRow < 0 {
+		t.Fatal("expected a row with old-side content")
+	}
+
+	tab.diffCursor = lastOldRow
+	tab.diffSide = diffSideOld
+
+	// Press j — only added rows ahead, should not move.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if tab.diffCursor != lastOldRow {
+		t.Errorf("expected cursor unchanged at %d, got %d", lastOldRow, tab.diffCursor)
+	}
+}
+
+func TestDiffSide_SameSideNoOp(t *testing.T) {
+	// Pressing h when already on old side should be a no-op.
+	m := newTestModelWithDiff(t,
+		[]string{"same line"},
+		[]string{"same line"},
+	)
+	tab := m.tabs[0]
+	tab.diffCursor = 0
+	tab.diffSide = diffSideOld
+
+	srv := m.server.(*mockServer)
+	srv.notifications = nil
+
+	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+
+	if tab.diffSide != diffSideOld {
+		t.Errorf("expected diffSideOld unchanged, got %d", tab.diffSide)
+	}
+	// No notification should be sent for no-op.
+	if _, ok := srv.lastNotification(); ok {
+		t.Error("expected no notification for same-side no-op")
+	}
+}
+
 func TestDiffSide_JumpToNearestOldFromAdded(t *testing.T) {
 	// RowAdded で h → 最寄りの old 行にジャンプ
 	// Need multiple lines so diff detects unchanged rows correctly.
