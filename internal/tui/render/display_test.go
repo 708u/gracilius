@@ -1,8 +1,13 @@
 package render
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 )
 
 func TestPadRight_ASCII(t *testing.T) {
@@ -40,6 +45,96 @@ func TestPadRight_AlreadyWide(t *testing.T) {
 	result2 := PadRight("abcdefghijkl", 10)
 	if result2 == "" {
 		t.Error("expected non-empty result for over-width string")
+	}
+}
+
+func TestPadRightWithBg_PlainText(t *testing.T) {
+	t.Parallel()
+	bgSeq := "\033[48;2;80;80;80m"
+	reset := "\033[0m"
+
+	result := PadRightWithBg("hello", 10, bgSeq)
+
+	// Must start with bgSeq and end with reset.
+	if !strings.HasPrefix(result, bgSeq) {
+		t.Errorf("expected prefix %q, got %q", bgSeq, result)
+	}
+	if !strings.HasSuffix(result, reset) {
+		t.Errorf("expected suffix %q, got %q", reset, result)
+	}
+	// Content preserved.
+	if !strings.Contains(result, "hello") {
+		t.Error("content 'hello' not found in output")
+	}
+}
+
+func TestPadRightWithBg_InternalResetReappliesBg(t *testing.T) {
+	t.Parallel()
+	bgSeq := "\033[48;2;80;80;80m"
+
+	// SGR full-reset has multiple forms. All must be handled.
+	tests := []struct {
+		name  string
+		reset string
+	}{
+		{"explicit_reset_0m", "\033[0m"},
+		{"short_reset_m", "\033[m"},
+		{"double_zero_00m", "\033[00m"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			content := "\033[33mM" + tc.reset + " theme.go"
+			result := PadRightWithBg(content, 20, bgSeq)
+
+			reapplied := tc.reset + bgSeq
+			if !strings.Contains(result, reapplied) {
+				t.Errorf(
+					"background must be re-applied after internal %q;\n"+
+						"expected %q in output,\n"+
+						"got %q",
+					tc.reset, reapplied, result,
+				)
+			}
+		})
+	}
+}
+
+func TestPadRightWithBg_MultipleInternalResets(t *testing.T) {
+	t.Parallel()
+	bgSeq := "\033[48;2;80;80;80m"
+
+	// Content with mixed reset formats (both \033[0m and \033[m).
+	content := "\033[33mA\033[0m mid \033[32mB\033[m end"
+	result := PadRightWithBg(content, 30, bgSeq)
+
+	reapply0m := "\033[0m" + bgSeq
+	reapplyM := "\033[m" + bgSeq
+	total := strings.Count(result, reapply0m) + strings.Count(result, reapplyM)
+	if total < 2 {
+		t.Errorf(
+			"expected bgSeq re-applied at least 2 times after internal resets, got %d;\nresult: %q",
+			total, result,
+		)
+	}
+}
+
+func TestPadRightWithBg_NoInternalReset(t *testing.T) {
+	t.Parallel()
+	bgSeq := "\033[48;2;80;80;80m"
+	reset := "\033[0m"
+
+	// Content with only foreground color, no full reset.
+	content := "\033[33mhello"
+	result := PadRightWithBg(content, 10, bgSeq)
+
+	// Should start with bgSeq and end with reset,
+	// with no unnecessary re-application.
+	if !strings.HasPrefix(result, bgSeq) {
+		t.Errorf("expected prefix %q, got %q", bgSeq, result)
+	}
+	if !strings.HasSuffix(result, reset) {
+		t.Errorf("expected suffix %q, got %q", reset, result)
 	}
 }
 
@@ -268,5 +363,59 @@ func TestSplitRunsAtBreakpoints_NilBreakpoints(t *testing.T) {
 	}
 	if segments[0][0].Text != "hello" {
 		t.Errorf("expected 'hello', got %q", segments[0][0].Text)
+	}
+}
+
+// TestDiag_LipglossResetFormat inspects the exact ANSI sequences
+// lipgloss v2 emits, so we know what PadRightWithBg must handle.
+func TestDiag_LipglossResetFormat(t *testing.T) {
+	styled := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#D19A66")).Render("M")
+	t.Logf("lipgloss output bytes: %q", styled)
+	t.Logf("visual width: %d", ansi.StringWidth(styled))
+
+	reset0m := termenv.CSI + "0m"
+	resetM := termenv.CSI + "m"
+	t.Logf("contains \\033[0m: %v", strings.Contains(styled, reset0m))
+	t.Logf("contains \\033[m:  %v", strings.Contains(styled, resetM))
+
+	// Dump each byte for inspection.
+	var buf strings.Builder
+	for i, b := range []byte(styled) {
+		if i > 0 {
+			buf.WriteByte(' ')
+		}
+		_, _ = fmt.Fprintf(&buf, "%02x", b)
+	}
+	t.Logf("hex: %s", buf.String())
+}
+
+func TestDiag_PadRightWithBg_VisualWidth(t *testing.T) {
+	bgSeq := "\033[48;2;80;80;80m"
+	width := 30
+
+	// Build content exactly like the git panel does.
+	styledM := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#D19A66")).Render("M")
+	line := "      " + styledM + " " + "theme.go"
+
+	truncated := ansi.Truncate(line, width, "...")
+
+	padRight := PadRight(truncated, width)
+	withBg := PadRightWithBg(truncated, width, bgSeq)
+
+	padRightW := ansi.StringWidth(padRight)
+	withBgW := ansi.StringWidth(withBg)
+
+	t.Logf("line:      %q (vis=%d)", line, ansi.StringWidth(line))
+	t.Logf("truncated: %q (vis=%d)", truncated, ansi.StringWidth(truncated))
+	t.Logf("PadRight:      vis=%d, bytes=%q", padRightW, padRight)
+	t.Logf("PadRightWithBg: vis=%d, bytes=%q", withBgW, withBg)
+
+	if padRightW != width {
+		t.Errorf("PadRight visual width = %d, want %d", padRightW, width)
+	}
+	if withBgW != width {
+		t.Errorf("PadRightWithBg visual width = %d, want %d", withBgW, width)
 	}
 }
