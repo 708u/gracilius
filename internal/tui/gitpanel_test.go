@@ -635,6 +635,130 @@ func TestGitVisualRow_IsFileRow(t *testing.T) {
 	}
 }
 
+func TestAutoOpenFirstDiff(t *testing.T) {
+	m := newTestModel(t)
+	m.initialDiffAutoOpened = false
+	m.activePanel = panelGitDiff
+	m.gitDiffMode = gitModeBranch
+
+	entries := fillPathFields([]changedFileEntry{
+		{
+			name:       "main.go",
+			status:     git.StatusModified,
+			absPath:    "/tmp/main.go",
+			oldContent: []string{"old"},
+			newContent: []string{"new"},
+			category:   categoryUnstaged,
+		},
+	})
+
+	m.Update(gitChangedFilesMsg{mode: gitModeBranch, entries: entries})
+
+	if !m.initialDiffAutoOpened {
+		t.Fatal("expected initialDiffAutoOpened=true")
+	}
+	if len(m.tabs) != 1 {
+		t.Fatalf("expected 1 tab, got %d", len(m.tabs))
+	}
+	if m.tabs[0].kind != diffTab {
+		t.Errorf("expected diffTab, got %d", m.tabs[0].kind)
+	}
+	if m.focusPane != paneEditor {
+		t.Errorf("expected paneEditor, got %d", m.focusPane)
+	}
+}
+
+func TestAutoOpenFirstDiff_SkipsBinary(t *testing.T) {
+	m := newTestModel(t)
+	m.initialDiffAutoOpened = false
+	m.activePanel = panelGitDiff
+	m.gitDiffMode = gitModeBranch
+
+	entries := fillPathFields([]changedFileEntry{
+		{
+			name:    "image.png",
+			status:  git.StatusAdded,
+			absPath: "/tmp/image.png",
+			binary:  true,
+		},
+		{
+			name:       "util.go",
+			status:     git.StatusModified,
+			absPath:    "/tmp/util.go",
+			oldContent: []string{"old"},
+			newContent: []string{"new"},
+			category:   categoryUnstaged,
+		},
+	})
+
+	m.Update(gitChangedFilesMsg{mode: gitModeBranch, entries: entries})
+
+	if len(m.tabs) != 1 {
+		t.Fatalf("expected 1 tab (skipping binary), got %d", len(m.tabs))
+	}
+	if m.tabs[0].filePath != "/tmp/util.go" {
+		t.Errorf("expected util.go tab, got %s", m.tabs[0].filePath)
+	}
+}
+
+func TestAutoOpenFirstDiff_NoEntries(t *testing.T) {
+	m := newTestModel(t)
+	m.initialDiffAutoOpened = false
+	m.activePanel = panelGitDiff
+	m.gitDiffMode = gitModeBranch
+
+	m.Update(gitChangedFilesMsg{mode: gitModeBranch, entries: nil})
+
+	if !m.initialDiffAutoOpened {
+		t.Fatal("expected initialDiffAutoOpened=true even with no entries")
+	}
+	if len(m.tabs) != 0 {
+		t.Fatalf("expected 0 tabs for empty entries, got %d", len(m.tabs))
+	}
+}
+
+func TestAutoOpenFirstDiff_OnlyOnce(t *testing.T) {
+	m := newTestModel(t)
+	m.initialDiffAutoOpened = false
+	m.activePanel = panelGitDiff
+	m.gitDiffMode = gitModeBranch
+
+	entries := fillPathFields([]changedFileEntry{
+		{
+			name:       "a.go",
+			status:     git.StatusModified,
+			absPath:    "/tmp/a.go",
+			oldContent: []string{"old"},
+			newContent: []string{"new"},
+			category:   categoryUnstaged,
+		},
+	})
+
+	m.Update(gitChangedFilesMsg{mode: gitModeBranch, entries: entries})
+	if len(m.tabs) != 1 {
+		t.Fatalf("expected 1 tab after first load, got %d", len(m.tabs))
+	}
+
+	// Close the tab and send another branch result
+	m.tabs = m.tabs[:0]
+	m.activeTab = 0
+
+	entries2 := fillPathFields([]changedFileEntry{
+		{
+			name:       "b.go",
+			status:     git.StatusAdded,
+			absPath:    "/tmp/b.go",
+			newContent: []string{"new"},
+			category:   categoryUnstaged,
+		},
+	})
+	m.Update(gitChangedFilesMsg{mode: gitModeBranch, entries: entries2})
+
+	if len(m.tabs) != 0 {
+		t.Fatalf("expected 0 tabs (auto-open should not fire again), got %d", len(m.tabs))
+	}
+}
+
 func TestGitDiffModeTabPrefix(t *testing.T) {
 	tests := []struct {
 		mode          gitDiffMode
