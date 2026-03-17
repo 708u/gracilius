@@ -2,7 +2,7 @@ package tui
 
 // Screen geometry constants.
 const (
-	paneHeaderRows      = 2 // panel header + mode/tab underline rows
+	paneHeaderRows      = 2 // left: panel header + mode sel, right: tab labels + underline
 	footerHeight        = 4 // border-top + help + status
 	separatorWidth      = 3
 	minLineNumberWidth  = 4
@@ -28,7 +28,7 @@ const (
 //
 //	+-----------------------+ --
 //	| panel hdr | tab label |  2  paneHeaderRows
-//	| mode/stat | tab uline |
+//	| mode sel  | tab uline |
 //	+-----------------------+ --
 //	| tree | sep | editor   |  paneBodyHeight
 //	|      |     |          |
