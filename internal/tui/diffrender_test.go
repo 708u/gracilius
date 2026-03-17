@@ -472,6 +472,97 @@ func TestRenderSideBySide_SoftWrapWordDiffNoSyntax(t *testing.T) {
 	}
 }
 
+func TestSpliceGutter(t *testing.T) {
+	t.Parallel()
+	// Build diff with equal, modified, and added rows to cover all RowTypes.
+	data := diff.Build(
+		[]string{"aaa", "bbb", "ccc"},
+		[]string{"aaa", "BBB", "ccc", "ddd"},
+	)
+	width := 80
+	highlightBg := "\x1b[48;2;80;80;120m"
+	ctx := newDiffSideCtx(data, render.Dark, width)
+
+	// For every row and both sides, spliceGutter must produce visually
+	// identical output to a full renderSingleDiffRow with gutterHighlight.
+	// We compare stripped text and display width (not raw strings) because
+	// ansi.Truncate/TruncateLeft may leave residual ANSI at splice boundaries.
+	for rowIdx, row := range data.Rows {
+		for _, side := range []diffSide{diffSideOld, diffSideNew} {
+			activeSide := diffRowAvailableSide(row, side)
+
+			oldCtx, newCtx := ctx, ctx
+			if activeSide == diffSideOld {
+				oldCtx.gutterHighlight = highlightBg
+			} else {
+				newCtx.gutterHighlight = highlightBg
+			}
+			refLines := renderSingleDiffRow(row, nil, nil, oldCtx, newCtx, width, nil, nil)
+			baseLines := renderSingleDiffRow(row, nil, nil, ctx, ctx, width, nil, nil)
+
+			for j, baseLine := range baseLines {
+				spliced := spliceGutter(baseLine, activeSide, row, j, ctx, highlightBg)
+
+				if ansi.Strip(spliced) != ansi.Strip(refLines[j]) {
+					t.Errorf("row=%d side=%d line=%d: text mismatch\n  got:  %q\n  want: %q",
+						rowIdx, side, j, ansi.Strip(spliced), ansi.Strip(refLines[j]))
+				}
+				if ansi.StringWidth(spliced) != width {
+					t.Errorf("row=%d side=%d line=%d: width %d, want %d",
+						rowIdx, side, j, ansi.StringWidth(spliced), width)
+				}
+			}
+		}
+	}
+}
+
+func TestSpliceGutter_FillerUnchanged(t *testing.T) {
+	t.Parallel()
+	// Added-only diff: old side is filler (lineNum==0) on every row.
+	data := diff.Build(nil, []string{"aaa", "bbb"})
+	width := 80
+	highlightBg := "\x1b[48;2;80;80;120m"
+	ctx := newDiffSideCtx(data, render.Dark, width)
+
+	for _, row := range data.Rows {
+		baseLines := renderSingleDiffRow(row, nil, nil, ctx, ctx, width, nil, nil)
+		for j, baseLine := range baseLines {
+			spliced := spliceGutter(baseLine, diffSideOld, row, j, ctx, highlightBg)
+			if spliced != baseLine {
+				t.Errorf("filler side should be unchanged\n  got:  %q\n  base: %q", spliced, baseLine)
+			}
+		}
+	}
+}
+
+func TestSpliceGutter_SoftWrap(t *testing.T) {
+	t.Parallel()
+	// Narrow width forces soft-wrap, producing continuation lines (lineIdx > 0).
+	data := diff.Build(
+		[]string{"short"},
+		[]string{"this is a very long line that will definitely wrap in a narrow width"},
+	)
+	width := 40
+	highlightBg := "\x1b[48;2;80;80;120m"
+	ctx := newDiffSideCtx(data, render.Dark, width)
+	row := data.Rows[0]
+
+	baseLines := renderSingleDiffRow(row, nil, nil, ctx, ctx, width, nil, nil)
+	if len(baseLines) <= 1 {
+		t.Fatal("expected soft-wrap to produce multiple visual lines")
+	}
+
+	for j, baseLine := range baseLines {
+		spliced := spliceGutter(baseLine, diffSideNew, row, j, ctx, highlightBg)
+		if ansi.StringWidth(spliced) != width {
+			t.Errorf("line %d: width %d, want %d", j, ansi.StringWidth(spliced), width)
+		}
+		if !strings.Contains(spliced, highlightBg) {
+			t.Errorf("line %d: highlight bg missing", j)
+		}
+	}
+}
+
 func TestRenderSideBySide_NilSyntaxFallback(t *testing.T) {
 	t.Parallel()
 	old := []string{"aaa", "bbb"}
