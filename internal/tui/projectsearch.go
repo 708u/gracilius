@@ -280,18 +280,29 @@ func (s *projectSearchOverlay) computeLayout(width, height int) openFileLayout {
 }
 
 // cursorPos returns the screen-space cursor position for the overlay's text input.
+// It replicates placeOverlay's startY calculation using the actual rendered box
+// height, which may differ from computeLayout's boxH due to lipgloss expansion.
 func (s *projectSearchOverlay) cursorPos(width, height int) cursorPosition {
 	if !s.input.Focused() {
 		return cursorPosition{}
 	}
 	g := s.computeLayout(width, height)
+
+	// Match placeOverlay's startY calculation using actual box height.
+	fgH := g.innerH + overlayBorderH
+	maxBottom := height - footerHeight
+	startY := headerHeight + tabBarHeight
+	if startY+fgH > maxBottom {
+		startY = max(maxBottom-fgH, 0)
+	}
+
 	val := s.input.Value()
 	pos := s.input.Position()
 	cursorCol := render.DisplayWidthRange(val, 0, pos)
 	promptW := ansi.StringWidth(s.input.Prompt)
 	return cursorPosition{
 		x: g.startX + overlayBorderW/2 + overlayPaddingW/2 + promptW + cursorCol,
-		y: g.startY + overlayBorderH/2,
+		y: startY + overlayBorderH/2,
 	}
 }
 
