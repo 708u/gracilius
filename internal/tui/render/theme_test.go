@@ -6,31 +6,36 @@ import (
 	"testing"
 )
 
-func TestDarkTheme_AllFieldsNonEmpty(t *testing.T) {
-	v := reflect.ValueOf(Dark)
-	typ := v.Type()
-	for i := 0; i < v.NumField(); i++ {
-		field := typ.Field(i)
-		val := v.Field(i).String()
-		if val == "" {
-			t.Errorf("Dark.%s is empty", field.Name)
-		}
-	}
-}
+func TestTheme_AllFieldsNonEmpty(t *testing.T) {
+	t.Parallel()
 
-func TestLightTheme_AllFieldsNonEmpty(t *testing.T) {
-	v := reflect.ValueOf(Light)
-	typ := v.Type()
-	for i := 0; i < v.NumField(); i++ {
-		field := typ.Field(i)
-		val := v.Field(i).String()
-		if val == "" {
-			t.Errorf("Light.%s is empty", field.Name)
-		}
+	tests := []struct {
+		name  string
+		theme Theme
+	}{
+		{"Dark", Dark},
+		{"Light", Light},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			v := reflect.ValueOf(tt.theme)
+			typ := v.Type()
+			for i := 0; i < v.NumField(); i++ {
+				field := typ.Field(i)
+				val := v.Field(i).String()
+				if val == "" {
+					t.Errorf("%s.%s is empty", tt.name, field.Name)
+				}
+			}
+		})
 	}
 }
 
 func TestTheme_SelectionBgSeq(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name  string
 		theme Theme
@@ -39,6 +44,7 @@ func TestTheme_SelectionBgSeq(t *testing.T) {
 		{"Light", Light},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			seq := tc.theme.SelectionBgSeq()
 			if seq == "" {
 				t.Error("SelectionBgSeq() returned empty string")
@@ -54,6 +60,8 @@ func TestTheme_SelectionBgSeq(t *testing.T) {
 }
 
 func TestTheme_SearchMatchBgSeq(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name  string
 		theme Theme
@@ -62,6 +70,7 @@ func TestTheme_SearchMatchBgSeq(t *testing.T) {
 		{"Light", Light},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			seq := tc.theme.SearchMatchBgSeq()
 			if seq == "" {
 				t.Error("SearchMatchBgSeq() returned empty string")
@@ -77,6 +86,8 @@ func TestTheme_SearchMatchBgSeq(t *testing.T) {
 }
 
 func TestTheme_SearchCurrentBgSeq(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name  string
 		theme Theme
@@ -85,6 +96,7 @@ func TestTheme_SearchCurrentBgSeq(t *testing.T) {
 		{"Light", Light},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			seq := tc.theme.SearchCurrentBgSeq()
 			if seq == "" {
 				t.Error("SearchCurrentBgSeq() returned empty string")

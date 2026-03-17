@@ -7,6 +7,7 @@ import (
 )
 
 func TestScanDir_SymlinkToDirectory(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 
 	// Create a real directory with a file inside.
@@ -65,6 +66,7 @@ func TestScanDir_SymlinkToDirectory(t *testing.T) {
 }
 
 func TestScanDir_SymlinkToFile(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 
 	// Create a real file.
@@ -97,6 +99,7 @@ func TestScanDir_SymlinkToFile(t *testing.T) {
 }
 
 func TestScanDir_BrokenSymlink(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 
 	// Create a symlink pointing to a non-existent target.
@@ -126,6 +129,7 @@ func TestScanDir_BrokenSymlink(t *testing.T) {
 }
 
 func TestBuildFileTree_SymlinkLoop(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 
 	// Create a symlink loop: a -> b, b -> a
