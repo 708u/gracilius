@@ -67,8 +67,9 @@ var (
 			BorderStyle(separatorBorder)
 )
 
-func styleTreeCursor(theme render.Theme) lipgloss.Style {
-	return lipgloss.NewStyle().Background(lipgloss.Color(theme.ListSelectionBg))
+func renderTreeCursor(line string, width int, theme render.Theme) string {
+	truncated := ansi.Truncate(line, width, "...")
+	return render.PadRightWithBg(truncated, width, theme.ListSelectionBgSeq())
 }
 
 // newView returns a tea.View with the base terminal settings.
@@ -510,16 +511,16 @@ func (m *Model) renderTree(width, height int) []string {
 		icon := iconFor(m.iconMode, entry)
 
 		line := indent + arrow + icon.prefix() + entry.name
-		displayLine := ansi.Truncate(line, width, "...")
-		displayLine = render.PadRight(displayLine, width)
 
+		var displayLine string
 		switch {
 		case isCursor:
-			displayLine = styleTreeCursor(m.theme).Render(displayLine)
+			displayLine = renderTreeCursor(line, width, m.theme)
 		case isActiveFile:
-			displayLine = lipgloss.NewStyle().
-				Background(lipgloss.Color(m.theme.ActiveFileBg)).
-				Render(displayLine)
+			truncated := ansi.Truncate(line, width, "...")
+			displayLine = render.PadRightWithBg(truncated, width, m.theme.ActiveFileBgSeq())
+		default:
+			displayLine = render.PadRight(ansi.Truncate(line, width, "..."), width)
 		}
 
 		displayLine = icon.colorize(displayLine)

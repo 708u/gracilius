@@ -19,6 +19,7 @@ func fillPathFields(entries []changedFileEntry) []changedFileEntry {
 }
 
 func TestGitChangedFilesMsg_Populates(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	entries := fillPathFields([]changedFileEntry{
@@ -48,6 +49,7 @@ func TestGitChangedFilesMsg_Populates(t *testing.T) {
 }
 
 func TestGitChangedFilesMsg_Error(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	m.Update(gitChangedFilesMsg{mode: gitModeWorking, err: errTest})
@@ -77,6 +79,7 @@ func setGitEntries(m *Model, entries []changedFileEntry) {
 }
 
 func TestOpenGitDiffEntry_CreatesDiffTab(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.focusPane = paneTree
 	m.activePanel = panelGitDiff
@@ -115,6 +118,7 @@ func TestOpenGitDiffEntry_CreatesDiffTab(t *testing.T) {
 }
 
 func TestOpenGitDiffEntry_Binary(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.activePanel = panelGitDiff
 
@@ -133,6 +137,7 @@ func TestOpenGitDiffEntry_Binary(t *testing.T) {
 }
 
 func TestOpenGitDiffEntry_DeletedFile(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.activePanel = panelGitDiff
 
@@ -157,6 +162,7 @@ func TestOpenGitDiffEntry_DeletedFile(t *testing.T) {
 }
 
 func TestOpenGitDiffEntry_NewFile(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.activePanel = panelGitDiff
 
@@ -181,6 +187,7 @@ func TestOpenGitDiffEntry_NewFile(t *testing.T) {
 }
 
 func TestGitPanelNavigation(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.focusPane = paneTree
 	m.activePanel = panelGitDiff
@@ -217,7 +224,63 @@ func TestGitPanelNavigation(t *testing.T) {
 	}
 }
 
+func TestGitPanelNavigation_CrossDirectory(t *testing.T) {
+	m := newTestModel(t)
+	m.focusPane = paneTree
+	m.activePanel = panelGitDiff
+
+	// Entries where array order differs from visual order.
+	// Visual grouping by directory puts entries 0,2 together
+	// (internal/git/) and entry 1 separately (internal/tui/).
+	// Visual order: entry0, entry2, entry1.
+	setGitEntries(m, []changedFileEntry{
+		{name: "internal/git/a.go", status: git.StatusModified, category: categoryUnstaged},
+		{name: "internal/tui/b.go", status: git.StatusModified, category: categoryUnstaged},
+		{name: "internal/git/c.go", status: git.StatusModified, category: categoryUnstaged},
+	})
+
+	gs := m.gitState()
+	gs.cursor = firstGitEntryIdx(gs.visualRows) // entry 0
+
+	// Down from entry 0 → entry 2 (next in visual order, same dir)
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if gs.cursor != 2 {
+		t.Errorf("expected cursor=2 (next in visual order), got %d", gs.cursor)
+	}
+
+	// Down from entry 2 → entry 1 (crosses directory boundary)
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if gs.cursor != 1 {
+		t.Errorf("expected cursor=1 (cross-dir), got %d", gs.cursor)
+	}
+
+	// Down from entry 1 → still 1 (last file)
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if gs.cursor != 1 {
+		t.Errorf("expected cursor=1 (clamped at end), got %d", gs.cursor)
+	}
+
+	// Up from entry 1 → entry 2
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if gs.cursor != 2 {
+		t.Errorf("expected cursor=2 after up, got %d", gs.cursor)
+	}
+
+	// Up from entry 2 → entry 0
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if gs.cursor != 0 {
+		t.Errorf("expected cursor=0 after up, got %d", gs.cursor)
+	}
+
+	// Up from entry 0 → still 0 (first file)
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if gs.cursor != 0 {
+		t.Errorf("expected cursor=0 (clamped at start), got %d", gs.cursor)
+	}
+}
+
 func TestPanelSwitchTriggersLoad(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.focusPane = paneTree
 	m.activePanel = panelFiles
@@ -240,6 +303,7 @@ func TestPanelSwitchTriggersLoad(t *testing.T) {
 }
 
 func TestGitDiffView_ScrollWithKeys(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.activePanel = panelGitDiff
 
@@ -302,6 +366,7 @@ func TestGitDiffView_ScrollWithKeys(t *testing.T) {
 }
 
 func TestBuildGitVisualRows(t *testing.T) {
+	t.Parallel()
 	entries := fillPathFields([]changedFileEntry{
 		{name: "staged.go", status: git.StatusModified, category: categoryStaged},
 		{name: "unstaged.go", status: git.StatusModified, category: categoryUnstaged},
@@ -342,6 +407,7 @@ func TestBuildGitVisualRows(t *testing.T) {
 }
 
 func TestBuildGitVisualRows_EmptySection(t *testing.T) {
+	t.Parallel()
 	entries := fillPathFields([]changedFileEntry{
 		{name: "a.go", status: git.StatusModified, category: categoryUnstaged},
 	})
@@ -362,6 +428,7 @@ func TestBuildGitVisualRows_EmptySection(t *testing.T) {
 }
 
 func TestGitCursorHelpers(t *testing.T) {
+	t.Parallel()
 	rows := []gitVisualRow{
 		{isHeader: true, label: "Staged"},
 		{entryIdx: 0},
@@ -379,6 +446,7 @@ func TestGitCursorHelpers(t *testing.T) {
 }
 
 func TestGitChangedFilesMsg_Categories(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	entries := fillPathFields([]changedFileEntry{
@@ -397,6 +465,7 @@ func TestGitChangedFilesMsg_Categories(t *testing.T) {
 }
 
 func TestOpenGitDiffEntry_DuplicateTab(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.activePanel = panelGitDiff
 
@@ -424,6 +493,7 @@ func TestOpenGitDiffEntry_DuplicateTab(t *testing.T) {
 }
 
 func TestGitDiffModeSwitching(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.focusPane = paneTree
 	m.activePanel = panelGitDiff
@@ -453,6 +523,7 @@ func TestGitDiffModeSwitching(t *testing.T) {
 }
 
 func TestGitDiffModePerModeState(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.focusPane = paneTree
 	m.activePanel = panelGitDiff
@@ -483,6 +554,7 @@ func TestGitDiffModePerModeState(t *testing.T) {
 }
 
 func TestGitDiffModeLabel(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		mode          gitDiffMode
 		defaultBranch string
@@ -501,6 +573,7 @@ func TestGitDiffModeLabel(t *testing.T) {
 }
 
 func TestBuildGitVisualRows_DirGrouping(t *testing.T) {
+	t.Parallel()
 	entries := fillPathFields([]changedFileEntry{
 		{name: "internal/git/diff.go", status: git.StatusModified, category: categoryUnstaged},
 		{name: "internal/git/status.go", status: git.StatusModified, category: categoryUnstaged},
@@ -545,6 +618,7 @@ func TestBuildGitVisualRows_DirGrouping(t *testing.T) {
 }
 
 func TestBuildGitVisualRows_MixedRootAndDir(t *testing.T) {
+	t.Parallel()
 	entries := fillPathFields([]changedFileEntry{
 		{name: "go.mod", status: git.StatusModified, category: categoryUnstaged},
 		{name: "internal/tui/model.go", status: git.StatusModified, category: categoryUnstaged},
@@ -579,6 +653,7 @@ func TestBuildGitVisualRows_MixedRootAndDir(t *testing.T) {
 }
 
 func TestBuildGitVisualRows_DirGroupingMultiCategory(t *testing.T) {
+	t.Parallel()
 	entries := fillPathFields([]changedFileEntry{
 		{name: "internal/git/diff.go", status: git.StatusModified, category: categoryStaged},
 		{name: "internal/git/status.go", status: git.StatusModified, category: categoryUnstaged},
@@ -601,6 +676,7 @@ func TestBuildGitVisualRows_DirGroupingMultiCategory(t *testing.T) {
 }
 
 func TestGitCursorHelpers_WithDirHeaders(t *testing.T) {
+	t.Parallel()
 	rows := []gitVisualRow{
 		{isHeader: true, label: "Changes"},
 		{isDirHeader: true, label: "internal/git/"},
@@ -619,6 +695,7 @@ func TestGitCursorHelpers_WithDirHeaders(t *testing.T) {
 }
 
 func TestGitVisualRow_IsFileRow(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		row  gitVisualRow
@@ -636,6 +713,7 @@ func TestGitVisualRow_IsFileRow(t *testing.T) {
 }
 
 func TestAutoOpenFirstDiff(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.initialDiffAutoOpened = false
 	m.activePanel = panelGitDiff
@@ -669,6 +747,7 @@ func TestAutoOpenFirstDiff(t *testing.T) {
 }
 
 func TestAutoOpenFirstDiff_SkipsBinary(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.initialDiffAutoOpened = false
 	m.activePanel = panelGitDiff
@@ -702,6 +781,7 @@ func TestAutoOpenFirstDiff_SkipsBinary(t *testing.T) {
 }
 
 func TestAutoOpenFirstDiff_NoEntries(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.initialDiffAutoOpened = false
 	m.activePanel = panelGitDiff
@@ -718,6 +798,7 @@ func TestAutoOpenFirstDiff_NoEntries(t *testing.T) {
 }
 
 func TestAutoOpenFirstDiff_OnlyOnce(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.initialDiffAutoOpened = false
 	m.activePanel = panelGitDiff
@@ -979,6 +1060,7 @@ func TestViewedPersistsAcrossReload(t *testing.T) {
 }
 
 func TestGitDiffModeTabPrefix(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		mode          gitDiffMode
 		defaultBranch string
