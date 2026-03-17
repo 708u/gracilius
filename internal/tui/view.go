@@ -407,21 +407,14 @@ func (m *Model) renderFooter() string {
 
 // renderLeftPane generates the left pane lines with a header and panel body.
 func (m *Model) renderLeftPane(width, height int) []string {
-	var line0, line1 string
+	header := []string{renderPanelHeader(m.activePanel.label(), width, m.theme)}
 
-	switch m.activePanel {
-	case panelGitDiff:
-		line0 = renderPanelHeader(m.activePanel.label(), width, m.theme)
-
-		// Mode row: segmented control only.
+	if m.activePanel == panelGitDiff {
 		modeStr := renderModeSelector(m.gitDiffMode, m.gitDefaultBranch, m.theme)
-		line1 = render.PadRight(modeStr, width)
-	default:
-		line0 = renderPanelHeader(m.activePanel.label(), width, m.theme)
-		line1 = render.PadRight("", width)
+		header = append(header, render.PadRight(modeStr, width))
 	}
 
-	bodyHeight := height - paneHeaderRows
+	bodyHeight := height - m.leftPaneHeaderRows()
 	var body []string
 	switch m.activePanel {
 	case panelGitDiff:
@@ -430,7 +423,7 @@ func (m *Model) renderLeftPane(width, height int) []string {
 		body = m.renderTree(width, bodyHeight)
 	}
 
-	return append([]string{line0, line1}, body...)
+	return append(header, body...)
 }
 
 // renderTree generates the tree pane lines.

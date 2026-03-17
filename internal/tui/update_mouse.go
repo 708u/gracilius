@@ -60,7 +60,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	panelBodyY := paneHeaderRows
+	panelBodyY := m.leftPaneHeaderRows()
 	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= panelBodyY && msg.Button == tea.MouseLeft {
 		switch m.activePanel {
 		case panelGitDiff:
@@ -230,12 +230,12 @@ func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	lo := m.computeLayout()
 
 	// Left pane scrolling.
-	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= paneHeaderRows {
+	if m.sidebarVisible && msg.X < lo.treeWidth {
 		delta := 3
 		if msg.Button == tea.MouseWheelUp {
 			delta = -3
 		}
-		bodyHeight := lo.paneBodyHeight
+		bodyHeight := m.leftPaneBodyHeight(lo)
 		switch m.activePanel {
 		case panelGitDiff:
 			gs := m.gitState()

@@ -184,8 +184,8 @@ func TestMouseClick_TreeEntry(t *testing.T) {
 	}
 
 	// Click on second tree entry: panelBodyY + 1
-	// panelBodyY = paneHeaderRows (panel header is in the header rows)
-	panelBodyY := paneHeaderRows
+	// Files panel has 1-line header, so body starts at Y=1.
+	panelBodyY := 1
 	m.Update(tea.MouseClickMsg{
 		X:      5,
 		Y:      panelBodyY + 1,

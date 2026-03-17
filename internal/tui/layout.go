@@ -84,6 +84,20 @@ func lineNumWidthFor(n int) int {
 	return max(w, minLineNumberWidth)
 }
 
+// leftPaneHeaderRows returns the number of header rows for the active left pane.
+// Git panel has 2 (title + mode selector), Files panel has 1 (title only).
+func (m *Model) leftPaneHeaderRows() int {
+	if m.activePanel == panelGitDiff {
+		return 2
+	}
+	return 1
+}
+
+// leftPaneBodyHeight returns the body height for the left pane.
+func (m *Model) leftPaneBodyHeight(lo layout) int {
+	return lo.contentHeight - m.leftPaneHeaderRows()
+}
+
 func (m *Model) computeLayout() layout {
 	lnw := minLineNumberWidth
 	t, ok := m.activeTabState()

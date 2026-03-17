@@ -224,7 +224,7 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 func (m *Model) adjustScroll() {
 	lo := m.computeLayout()
 	if m.focusPane == paneTree {
-		h := lo.paneBodyHeight
+		h := m.leftPaneBodyHeight(lo)
 		switch m.activePanel {
 		case panelGitDiff:
 			gs := m.gitState()
