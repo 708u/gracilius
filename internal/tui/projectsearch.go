@@ -55,21 +55,20 @@ func (d *searchResultDelegate) Render(w io.Writer, m list.Model, index int, item
 	maxW := m.Width()
 
 	// Line 1: file path:lineNum (dim)
-	pathLine := fmt.Sprintf("%s:%d", ri.relPath, ri.line+1)
+	// Truncate plain text first, then apply styles to ensure consistent width.
+	pathLine := ansi.Truncate(fmt.Sprintf("%s:%d", ri.relPath, ri.line+1), maxW, "…")
 	if selected {
 		pathLine = d.selBgStyle.Render(d.dimStyle.Render(pathLine))
-	} else {
-		pathLine = d.dimStyle.Render(pathLine)
-	}
-	pathLine = ansi.Truncate(pathLine, maxW, "…")
-	if selected {
 		if lineW := ansi.StringWidth(pathLine); lineW < maxW {
 			pathLine += d.selBgStyle.Render(strings.Repeat(" ", maxW-lineW))
 		}
+	} else {
+		pathLine = d.dimStyle.Render(pathLine)
 	}
 
 	// Line 2: match line text with highlight
-	textLine := ri.text
+	// Truncate plain text first to fix layout shift between selected/unselected rows.
+	textLine := ansi.Truncate(ri.text, maxW, "…")
 	if ri.startChar < ri.endChar {
 		runes := []rune(textLine)
 		sc := min(ri.startChar, len(runes))
@@ -88,7 +87,6 @@ func (d *searchResultDelegate) Render(w io.Writer, m list.Model, index int, item
 	} else if selected {
 		textLine = d.selBgStyle.Render(textLine)
 	}
-	textLine = ansi.Truncate(textLine, maxW, "…")
 	if selected {
 		if lineW := ansi.StringWidth(textLine); lineW < maxW {
 			textLine += d.selBgStyle.Render(strings.Repeat(" ", maxW-lineW))
