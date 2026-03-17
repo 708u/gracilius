@@ -383,11 +383,12 @@ func (m *Model) renderGitPanel(width, height int) []string {
 		style := gitStatusStyles[e.status]
 		statusIcon := style.Render(e.status.String())
 		line := "      " + statusIcon + " " + e.baseName
-		displayLine := ansi.Truncate(line, width, "...")
-		displayLine = render.PadRight(displayLine, width)
 
+		var displayLine string
 		if isCursor {
-			displayLine = styleTreeCursor(m.theme).Render(displayLine)
+			displayLine = renderTreeCursor(line, width, m.theme)
+		} else {
+			displayLine = render.PadRight(ansi.Truncate(line, width, "..."), width)
 		}
 
 		lines = append(lines, displayLine)
