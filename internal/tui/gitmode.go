@@ -45,7 +45,39 @@ type gitPanelState struct {
 	cursor           int
 	scrollOffset     int
 	loaded           bool
-	stale            bool // needs reload on next access
+	stale            bool            // needs reload on next access
+	viewed           map[string]bool // relative path -> viewed flag
+	viewedCount      int             // cached count of viewed entries
+}
+
+// toggleViewed flips the viewed state for the given file name.
+func (gs *gitPanelState) toggleViewed(name string) {
+	if gs.viewed == nil {
+		gs.viewed = make(map[string]bool)
+	}
+	if gs.viewed[name] {
+		gs.viewed[name] = false
+		gs.viewedCount--
+	} else {
+		gs.viewed[name] = true
+		gs.viewedCount++
+	}
+}
+
+// recomputeViewedCount recalculates the cached viewed count from scratch.
+// Called when entries are replaced (e.g. after git reload).
+func (gs *gitPanelState) recomputeViewedCount() {
+	gs.viewedCount = 0
+	for i := range gs.entries {
+		if gs.viewed[gs.entries[i].name] {
+			gs.viewedCount++
+		}
+	}
+}
+
+// viewedCountTotal returns (viewed, total) counts for all entries.
+func (gs *gitPanelState) viewedCountTotal() (int, int) {
+	return gs.viewedCount, len(gs.entries)
 }
 
 // switchGitMode changes the active git diff mode by delta (-1 or +1).

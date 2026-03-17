@@ -71,7 +71,7 @@ func setGitEntries(m *Model, entries []changedFileEntry) {
 	fillPathFields(entries)
 	gs := m.gitState()
 	gs.entries = entries
-	gs.visualRows, gs.entryToVisualIdx = buildGitVisualRows(entries)
+	gs.visualRows, gs.entryToVisualIdx = buildGitVisualRows(entries, nil)
 	gs.cursor = 0
 	gs.loaded = true
 }
@@ -307,7 +307,7 @@ func TestBuildGitVisualRows(t *testing.T) {
 		{name: "unstaged.go", status: git.StatusModified, category: categoryUnstaged},
 		{name: "untracked.go", status: git.StatusUntracked, category: categoryUntracked},
 	})
-	rows, reverseMap := buildGitVisualRows(entries)
+	rows, reverseMap := buildGitVisualRows(entries, nil)
 
 	// 3 category headers + 3 dir headers (./) + 3 files = 9 rows
 	if len(rows) != 9 {
@@ -345,7 +345,7 @@ func TestBuildGitVisualRows_EmptySection(t *testing.T) {
 	entries := fillPathFields([]changedFileEntry{
 		{name: "a.go", status: git.StatusModified, category: categoryUnstaged},
 	})
-	rows, _ := buildGitVisualRows(entries)
+	rows, _ := buildGitVisualRows(entries, nil)
 	// Only unstaged: 1 category header + 1 dir header (./) + 1 file
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
@@ -506,7 +506,7 @@ func TestBuildGitVisualRows_DirGrouping(t *testing.T) {
 		{name: "internal/git/status.go", status: git.StatusModified, category: categoryUnstaged},
 		{name: "internal/tui/model.go", status: git.StatusModified, category: categoryUnstaged},
 	})
-	rows, reverseMap := buildGitVisualRows(entries)
+	rows, reverseMap := buildGitVisualRows(entries, nil)
 
 	// 1 category header + 2 dir headers + 3 files = 6 rows
 	if len(rows) != 6 {
@@ -549,7 +549,7 @@ func TestBuildGitVisualRows_MixedRootAndDir(t *testing.T) {
 		{name: "go.mod", status: git.StatusModified, category: categoryUnstaged},
 		{name: "internal/tui/model.go", status: git.StatusModified, category: categoryUnstaged},
 	})
-	rows, _ := buildGitVisualRows(entries)
+	rows, _ := buildGitVisualRows(entries, nil)
 
 	// 1 category header + 1 dir header (./) + 1 file + 1 dir header + 1 file = 5 rows
 	if len(rows) != 5 {
@@ -583,7 +583,7 @@ func TestBuildGitVisualRows_DirGroupingMultiCategory(t *testing.T) {
 		{name: "internal/git/diff.go", status: git.StatusModified, category: categoryStaged},
 		{name: "internal/git/status.go", status: git.StatusModified, category: categoryUnstaged},
 	})
-	rows, _ := buildGitVisualRows(entries)
+	rows, _ := buildGitVisualRows(entries, nil)
 
 	// Staged: 1 cat header + 1 dir header + 1 file = 3
 	// Unstaged: 1 cat header + 1 dir header + 1 file = 3
@@ -756,6 +756,225 @@ func TestAutoOpenFirstDiff_OnlyOnce(t *testing.T) {
 
 	if len(m.tabs) != 0 {
 		t.Fatalf("expected 0 tabs (auto-open should not fire again), got %d", len(m.tabs))
+	}
+}
+
+func TestToggleViewed(t *testing.T) {
+	m := newTestModel(t)
+	m.focusPane = paneTree
+	m.activePanel = panelGitDiff
+
+	setGitEntries(m, []changedFileEntry{
+		{name: "a.go", status: git.StatusModified, category: categoryUnstaged},
+		{name: "b.go", status: git.StatusAdded, category: categoryUnstaged},
+	})
+
+	gs := m.gitState()
+	gs.cursor = 0
+
+	// Toggle viewed on first file via V key.
+	m.Update(tea.KeyPressMsg{Code: 'V', Text: "V"})
+	if !gs.viewed["a.go"] {
+		t.Error("expected a.go to be viewed after toggle")
+	}
+
+	// Toggle again to unview.
+	m.Update(tea.KeyPressMsg{Code: 'V', Text: "V"})
+	if gs.viewed["a.go"] {
+		t.Error("expected a.go to be unviewed after second toggle")
+	}
+}
+
+func TestToggleViewed_LazyInit(t *testing.T) {
+	var gs gitPanelState
+	gs.entries = []changedFileEntry{{name: "x.go"}}
+	if gs.viewed != nil {
+		t.Fatal("expected nil viewed map initially")
+	}
+	gs.toggleViewed("x.go")
+	if gs.viewed == nil {
+		t.Fatal("expected viewed map to be initialized")
+	}
+	if !gs.viewed["x.go"] {
+		t.Error("expected x.go to be viewed")
+	}
+}
+
+func TestFindUnviewedEntry_Next(t *testing.T) {
+	gs := &gitPanelState{
+		entries: fillPathFields([]changedFileEntry{
+			{name: "a.go"}, {name: "b.go"}, {name: "c.go"},
+		}),
+		viewed: map[string]bool{"b.go": true},
+	}
+
+	// From 0, next unviewed should skip b.go (1) and return c.go (2).
+	if got := gs.findUnviewedEntry(0, 1); got != 2 {
+		t.Errorf("expected 2, got %d", got)
+	}
+
+	// From 2, next unviewed should wrap to a.go (0).
+	if got := gs.findUnviewedEntry(2, 1); got != 0 {
+		t.Errorf("expected 0 (wrap), got %d", got)
+	}
+}
+
+func TestFindUnviewedEntry_Prev(t *testing.T) {
+	gs := &gitPanelState{
+		entries: fillPathFields([]changedFileEntry{
+			{name: "a.go"}, {name: "b.go"}, {name: "c.go"},
+		}),
+		viewed: map[string]bool{"b.go": true},
+	}
+
+	// From 2, prev unviewed should skip b.go (1) and return a.go (0).
+	if got := gs.findUnviewedEntry(2, -1); got != 0 {
+		t.Errorf("expected 0, got %d", got)
+	}
+
+	// From 0, prev unviewed should wrap to c.go (2).
+	if got := gs.findUnviewedEntry(0, -1); got != 2 {
+		t.Errorf("expected 2 (wrap), got %d", got)
+	}
+}
+
+func TestFindUnviewedEntry_AllViewed(t *testing.T) {
+	gs := &gitPanelState{
+		entries: fillPathFields([]changedFileEntry{
+			{name: "a.go"}, {name: "b.go"},
+		}),
+		viewed: map[string]bool{"a.go": true, "b.go": true},
+	}
+	if got := gs.findUnviewedEntry(0, 1); got != -1 {
+		t.Errorf("expected -1 when all viewed, got %d", got)
+	}
+	if got := gs.findUnviewedEntry(0, -1); got != -1 {
+		t.Errorf("expected -1 when all viewed, got %d", got)
+	}
+}
+
+func TestViewedCountTotal(t *testing.T) {
+	gs := &gitPanelState{
+		entries: fillPathFields([]changedFileEntry{
+			{name: "a.go"}, {name: "b.go"}, {name: "c.go"},
+		}),
+	}
+	gs.toggleViewed("a.go")
+	gs.toggleViewed("c.go")
+	v, total := gs.viewedCountTotal()
+	if v != 2 || total != 3 {
+		t.Errorf("expected (2, 3), got (%d, %d)", v, total)
+	}
+}
+
+func TestBuildGitVisualRows_ViewedCount(t *testing.T) {
+	entries := fillPathFields([]changedFileEntry{
+		{name: "a.go", status: git.StatusModified, category: categoryUnstaged},
+		{name: "b.go", status: git.StatusAdded, category: categoryUnstaged},
+		{name: "c.go", status: git.StatusModified, category: categoryUnstaged},
+	})
+	viewed := map[string]bool{"a.go": true, "c.go": true}
+	rows, _ := buildGitVisualRows(entries, viewed)
+
+	// First row is category header with viewed count.
+	if !rows[0].isHeader {
+		t.Fatal("expected category header at row 0")
+	}
+	want := "  Changes (2/3)"
+	if rows[0].label != want {
+		t.Errorf("expected label %q, got %q", want, rows[0].label)
+	}
+}
+
+func TestNavigateUnviewed_FromGitPanel(t *testing.T) {
+	m := newTestModel(t)
+	m.focusPane = paneTree
+	m.activePanel = panelGitDiff
+
+	setGitEntries(m, []changedFileEntry{
+		{name: "a.go", status: git.StatusModified, absPath: "/tmp/a.go",
+			oldContent: []string{"old"}, newContent: []string{"new"}, category: categoryUnstaged},
+		{name: "b.go", status: git.StatusModified, absPath: "/tmp/b.go",
+			oldContent: []string{"old"}, newContent: []string{"new"}, category: categoryUnstaged},
+		{name: "c.go", status: git.StatusModified, absPath: "/tmp/c.go",
+			oldContent: []string{"old"}, newContent: []string{"new"}, category: categoryUnstaged},
+	})
+
+	gs := m.gitState()
+	gs.viewed = map[string]bool{"b.go": true}
+	gs.cursor = 0
+
+	// NextUnviewed from 0 should skip b.go and go to c.go (2).
+	m.navigateUnviewed(1)
+	if gs.cursor != 2 {
+		t.Errorf("expected cursor=2, got %d", gs.cursor)
+	}
+	if len(m.tabs) != 1 {
+		t.Fatalf("expected 1 tab opened, got %d", len(m.tabs))
+	}
+	if m.tabs[0].filePath != "/tmp/c.go" {
+		t.Errorf("expected tab for c.go, got %s", m.tabs[0].filePath)
+	}
+}
+
+func TestNavigateUnviewed_FromDiffView(t *testing.T) {
+	m := newTestModel(t)
+	m.activePanel = panelGitDiff
+
+	setGitEntries(m, []changedFileEntry{
+		{name: "a.go", status: git.StatusModified, absPath: "/tmp/a.go",
+			oldContent: []string{"old"}, newContent: []string{"new"}, category: categoryUnstaged},
+		{name: "b.go", status: git.StatusModified, absPath: "/tmp/b.go",
+			oldContent: []string{"old"}, newContent: []string{"new"}, category: categoryUnstaged},
+	})
+
+	// Open a diff tab for a.go to simulate being in diff view.
+	gs := m.gitState()
+	gs.cursor = 0
+	m.openGitDiffEntry()
+	if len(m.tabs) != 1 {
+		t.Fatalf("expected 1 tab, got %d", len(m.tabs))
+	}
+
+	gs.viewed = map[string]bool{"a.go": true}
+
+	// Navigate next unviewed from diff view (current file a.go).
+	m.navigateUnviewed(1)
+	if gs.cursor != 1 {
+		t.Errorf("expected cursor=1, got %d", gs.cursor)
+	}
+	if len(m.tabs) != 2 {
+		t.Fatalf("expected 2 tabs, got %d", len(m.tabs))
+	}
+}
+
+func TestViewedPersistsAcrossReload(t *testing.T) {
+	m := newTestModel(t)
+	m.activePanel = panelGitDiff
+
+	entries := fillPathFields([]changedFileEntry{
+		{name: "a.go", status: git.StatusModified, category: categoryUnstaged},
+		{name: "b.go", status: git.StatusAdded, category: categoryUnstaged},
+	})
+
+	m.Update(gitChangedFilesMsg{mode: gitModeWorking, entries: entries})
+	gs := m.gitState()
+	gs.toggleViewed("a.go")
+
+	if !gs.viewed["a.go"] {
+		t.Fatal("expected a.go viewed before reload")
+	}
+
+	// Simulate reload with new entries.
+	entries2 := fillPathFields([]changedFileEntry{
+		{name: "a.go", status: git.StatusModified, category: categoryUnstaged},
+		{name: "c.go", status: git.StatusAdded, category: categoryUnstaged},
+	})
+	m.Update(gitChangedFilesMsg{mode: gitModeWorking, entries: entries2})
+
+	gs = m.gitState()
+	if !gs.viewed["a.go"] {
+		t.Error("expected a.go viewed to persist after reload")
 	}
 }
 

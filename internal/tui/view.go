@@ -452,7 +452,17 @@ func (m *Model) renderFooter() string {
 func (m *Model) renderLeftPane(width, height int) []string {
 	var header string
 	if m.activePanel == panelGitDiff {
-		label := m.activePanel.label() + " \u276e" + m.gitDiffMode.label(m.gitDefaultBranch) + "\u276f"
+		gs := m.gitState()
+		v, total := gs.viewedCountTotal()
+		modeLabel := m.gitDiffMode.label(m.gitDefaultBranch)
+		var label string
+		if total > 0 {
+			label = fmt.Sprintf("%s \u276e%s\u276f %d/%d",
+				m.activePanel.label(), modeLabel, v, total)
+		} else {
+			label = fmt.Sprintf("%s \u276e%s\u276f",
+				m.activePanel.label(), modeLabel)
+		}
 		header = renderPanelHeader(label, width, m.theme)
 	} else {
 		header = renderPanelHeader(m.activePanel.label(), width, m.theme)

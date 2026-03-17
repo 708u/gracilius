@@ -843,6 +843,19 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.gPending = true
 	case key.Matches(msg, m.keys.OpenFile):
 		return m, m.openFile.open(m.rootDir, m.excludeFunc)
+	case key.Matches(msg, m.keys.ToggleViewed):
+		if m.focusPane == paneTree && m.activePanel == panelGitDiff {
+			gs := m.gitState()
+			if gs.cursor >= 0 && gs.cursor < len(gs.entries) {
+				gs.toggleViewed(gs.entries[gs.cursor].name)
+				gs.visualRows, gs.entryToVisualIdx =
+					buildGitVisualRows(gs.entries, gs.viewed)
+			}
+		}
+	case key.Matches(msg, m.keys.NextUnviewed):
+		return m.navigateUnviewed(1)
+	case key.Matches(msg, m.keys.PrevUnviewed):
+		return m.navigateUnviewed(-1)
 	case key.Matches(msg, m.keys.Search):
 		if hasTab {
 			m.startSearch()
