@@ -1,15 +1,39 @@
 package render
 
 import (
+	"regexp"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
+	"github.com/muesli/termenv"
 )
 
 // PadRight pads a string with spaces to the given display width.
 func PadRight(s string, width int) string {
 	return lipgloss.NewStyle().Width(width).Render(s)
+}
+
+// sgrResetRe matches all SGR full-reset variants: \033[m, \033[0m, \033[00m, etc.
+var sgrResetRe = regexp.MustCompile("\x1b\\[0*m")
+
+// PadRightWithBg pads s with spaces to width and applies bgSeq as
+// background color across the entire line using raw ANSI sequences.
+//
+// Content may contain internal SGR full-resets (\033[0m, \033[m, etc.)
+// from lipgloss or termenv renders. Each reset is followed by a bgSeq
+// re-application so the background persists across the entire line.
+func PadRightWithBg(s string, width int, bgSeq string) string {
+	visW := ansi.StringWidth(s)
+	pad := ""
+	if visW < width {
+		pad = strings.Repeat(" ", width-visW)
+	}
+	patched := sgrResetRe.ReplaceAllStringFunc(s, func(match string) string {
+		return match + bgSeq
+	})
+	return bgSeq + patched + pad + termenv.CSI + "0m"
 }
 
 // ExpandTabs replaces tabs with 4 spaces.

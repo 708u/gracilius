@@ -383,11 +383,12 @@ func (m *Model) renderGitPanel(width, height int) []string {
 		style := gitStatusStyles[e.status]
 		statusIcon := style.Render(e.status.String())
 		line := "      " + statusIcon + " " + e.baseName
-		displayLine := ansi.Truncate(line, width, "...")
-		displayLine = render.PadRight(displayLine, width)
 
+		var displayLine string
 		if isCursor {
-			displayLine = styleTreeCursor(m.theme).Render(displayLine)
+			displayLine = renderTreeCursor(line, width, m.theme)
+		} else {
+			displayLine = render.PadRight(ansi.Truncate(line, width, "..."), width)
 		}
 
 		lines = append(lines, displayLine)
@@ -400,22 +401,34 @@ func (m *Model) renderGitPanel(width, height int) []string {
 	return lines
 }
 
-// gitCursorUp moves the git cursor up one entry.
+// gitCursorUp moves the git cursor to the previous file in visual order.
 func (m *Model) gitCursorUp() {
 	gs := m.gitState()
-	if gs.cursor <= 0 {
+	curVisual, ok := gs.entryToVisualIdx[gs.cursor]
+	if !ok {
 		return
 	}
-	gs.cursor--
+	for i := curVisual - 1; i >= 0; i-- {
+		if gs.visualRows[i].isFileRow() {
+			gs.cursor = gs.visualRows[i].entryIdx
+			return
+		}
+	}
 }
 
-// gitCursorDown moves the git cursor down one entry.
+// gitCursorDown moves the git cursor to the next file in visual order.
 func (m *Model) gitCursorDown() {
 	gs := m.gitState()
-	if gs.cursor >= len(gs.entries)-1 {
+	curVisual, ok := gs.entryToVisualIdx[gs.cursor]
+	if !ok {
 		return
 	}
-	gs.cursor++
+	for i := curVisual + 1; i < len(gs.visualRows); i++ {
+		if gs.visualRows[i].isFileRow() {
+			gs.cursor = gs.visualRows[i].entryIdx
+			return
+		}
+	}
 }
 
 // gitCursorVisualIdx returns the visual row index for the current gitCursor.

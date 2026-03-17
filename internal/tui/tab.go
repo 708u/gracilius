@@ -71,10 +71,6 @@ type tab struct {
 	diffRowVisualStarts []int // logical row → visual line offset
 	diffCachedCtx       *diffSideCtx
 
-	// gutter highlight cache (invalidated on cursor move)
-	diffGutterCacheKey   diffGutterKey
-	diffGutterCacheLines []string
-
 	// search match cache (per-tab)
 	searchMatches     []searchMatch
 	diffSearchMatches []diffSearchMatch
@@ -117,6 +113,21 @@ func (t *tab) snapDiffSide() {
 	t.diffSide = diffRowAvailableSide(t.diffViewData.Rows[t.diffCursor], t.diffSide)
 }
 
+// diffNextRow returns the next row index in the given direction (+1/-1)
+// that has content on the current diffSide. Returns -1 if none found.
+func (t *tab) diffNextRow(dir int) int {
+	if t.diffViewData == nil {
+		return -1
+	}
+	rows := t.diffViewData.Rows
+	for i := t.diffCursor + dir; i >= 0 && i < len(rows); i += dir {
+		if diffRowAvailableSide(rows[i], t.diffSide) == t.diffSide {
+			return i
+		}
+	}
+	return -1
+}
+
 // diffRowTextForSide returns the text for the given side of a diff row.
 func diffRowTextForSide(row diff.Row, side diffSide) string {
 	if side == diffSideOld {
@@ -131,12 +142,21 @@ func diffRowTextForSide(row diff.Row, side diffSide) string {
 	return row.OldText
 }
 
-// diffGutterKey is the cache key for gutter highlight results.
-// When selStart == selEnd the cursor is on a single row (no selection).
-type diffGutterKey struct {
-	selStart int
-	selEnd   int
-	side     diffSide
+// findNearestRowForSide searches both directions from current for the nearest
+// row with content on the given side. Returns -1 if none found.
+// Ties prefer upward (the row before a change block is more natural context).
+func findNearestRowForSide(rows []diff.Row, current int, side diffSide) int {
+	for d := 1; d < len(rows); d++ {
+		up := current - d
+		if up >= 0 && diffRowAvailableSide(rows[up], side) == side {
+			return up
+		}
+		down := current + d
+		if down < len(rows) && diffRowAvailableSide(rows[down], side) == side {
+			return down
+		}
+	}
+	return -1
 }
 
 // diffState holds accept/reject callbacks for a diff review tab.
@@ -401,7 +421,6 @@ func (t *tab) renderDiffContent(theme render.Theme, width int) []int {
 	t.vp.SetContentLines(result.lines)
 	t.diffCacheWidth = width
 	t.diffCacheTheme = theme.Name
-	t.diffGutterCacheLines = nil
 	return result.hunkVisualOffs
 }
 

@@ -67,8 +67,9 @@ var (
 			BorderStyle(separatorBorder)
 )
 
-func styleTreeCursor(theme render.Theme) lipgloss.Style {
-	return lipgloss.NewStyle().Background(lipgloss.Color(theme.ListSelectionBg))
+func renderTreeCursor(line string, width int, theme render.Theme) string {
+	truncated := ansi.Truncate(line, width, "...")
+	return render.PadRightWithBg(truncated, width, theme.ListSelectionBgSeq())
 }
 
 // newView returns a tea.View with the base terminal settings.
@@ -500,16 +501,16 @@ func (m *Model) renderTree(width, height int) []string {
 		icon := iconFor(m.iconMode, entry)
 
 		line := indent + arrow + icon.prefix() + entry.name
-		displayLine := ansi.Truncate(line, width, "...")
-		displayLine = render.PadRight(displayLine, width)
 
+		var displayLine string
 		switch {
 		case isCursor:
-			displayLine = styleTreeCursor(m.theme).Render(displayLine)
+			displayLine = renderTreeCursor(line, width, m.theme)
 		case isActiveFile:
-			displayLine = lipgloss.NewStyle().
-				Background(lipgloss.Color(m.theme.ActiveFileBg)).
-				Render(displayLine)
+			truncated := ansi.Truncate(line, width, "...")
+			displayLine = render.PadRightWithBg(truncated, width, m.theme.ActiveFileBgSeq())
+		default:
+			displayLine = render.PadRight(ansi.Truncate(line, width, "..."), width)
 		}
 
 		displayLine = icon.colorize(displayLine)
@@ -615,11 +616,10 @@ func (m *Model) overlayDiffTextarea(t *tab, diffLines []string, viewOff, width, 
 	m.lastMapping = mapping
 }
 
-// applyDiffGutterHighlights re-renders diff rows that need cursor or selection
-// gutter highlighting within the visible window.
-// Results are cached so that redundant View() cycles (e.g. stale debounce
-// tick messages) skip the expensive renderSingleDiffRow calls.
-func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, width int) {
+// applyDiffGutterHighlights applies cursor/selection gutter highlights to
+// visible diff rows by splicing the gutter portion of pre-rendered cached
+// lines. This avoids the expensive renderSingleDiffRow call entirely.
+func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, _ int) {
 	if t.diffViewData == nil || len(t.diffRowVisualStarts) == 0 || t.diffCachedCtx == nil {
 		return
 	}
@@ -629,55 +629,35 @@ func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, w
 		startRow, endRow = t.diffNormalizedSelection()
 	}
 
-	// Check gutter highlight cache.
-	wantKey := diffGutterKey{selStart: startRow, selEnd: endRow, side: t.diffSide}
-	if t.diffGutterCacheLines == nil || t.diffGutterCacheKey != wantKey {
-		// Re-render and update cache.
-		ctx := *t.diffCachedCtx
-		highlightBg := m.theme.SelectionBgSeq()
-
-		var cached []string
-		for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.Rows); rowIdx++ {
-			row := t.diffViewData.Rows[rowIdx]
-			activeSide := diffRowAvailableSide(row, t.diffSide)
-			oldCtx, newCtx := ctx, ctx
-			if activeSide == diffSideOld {
-				oldCtx.gutterHighlight = highlightBg
-			} else {
-				newCtx.gutterHighlight = highlightBg
-			}
-			reRendered := renderSingleDiffRow(row, t.diffOldHighlights, t.diffNewHighlights, oldCtx, newCtx, width, nil, nil)
-			cached = append(cached, reRendered...)
-		}
-
-		t.diffGutterCacheLines = cached
-		t.diffGutterCacheKey = wantKey
-	}
-
-	// Apply cached lines to the visible window.
+	ctx := *t.diffCachedCtx
+	highlightBg := m.theme.SelectionBgSeq()
 	viewEnd := viewOff + len(diffLines)
-	cachedIdx := 0
+
 	for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.Rows); rowIdx++ {
 		rowVisStart := t.diffRowVisualStarts[rowIdx]
+		if rowVisStart >= viewEnd {
+			break
+		}
 		rowVisEnd := len(t.diffCachedLines)
 		if rowIdx+1 < len(t.diffRowVisualStarts) {
 			rowVisEnd = t.diffRowVisualStarts[rowIdx+1]
 		}
-		rowLineCount := rowVisEnd - rowVisStart
+		if rowVisEnd <= viewOff {
+			continue
+		}
 
-		// diffRowVisualStarts is monotonically increasing; once past viewport, stop.
-		if rowVisStart >= viewEnd {
-			break
-		}
-		if rowVisEnd > viewOff {
-			for j := 0; j < rowLineCount && cachedIdx+j < len(t.diffGutterCacheLines); j++ {
-				visIdx := rowVisStart + j - viewOff
-				if visIdx >= 0 && visIdx < len(diffLines) {
-					diffLines[visIdx] = t.diffGutterCacheLines[cachedIdx+j]
-				}
+		row := t.diffViewData.Rows[rowIdx]
+		activeSide := diffRowAvailableSide(row, t.diffSide)
+
+		for j := 0; j < rowVisEnd-rowVisStart; j++ {
+			visIdx := rowVisStart + j - viewOff
+			if visIdx < 0 || visIdx >= len(diffLines) {
+				continue
 			}
+			diffLines[visIdx] = spliceGutter(
+				diffLines[visIdx], activeSide, row, j, ctx, highlightBg,
+			)
 		}
-		cachedIdx += rowLineCount
 	}
 }
 

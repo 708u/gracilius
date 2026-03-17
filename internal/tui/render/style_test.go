@@ -5,146 +5,217 @@ import (
 	"testing"
 )
 
-func TestWriteStyledText_WithANSI(t *testing.T) {
-	var sb strings.Builder
-	ansi := "\033[38;5;148m"
-	WriteStyledText(&sb, ansi, "hello")
-	got := sb.String()
+func TestWriteStyledText(t *testing.T) {
+	t.Parallel()
 
-	if !strings.HasPrefix(got, ansi) {
-		t.Errorf("expected prefix %q, got %q", ansi, got)
-	}
-	if !strings.Contains(got, "hello") {
-		t.Error("expected 'hello' in output")
-	}
-	if !strings.HasSuffix(got, AnsiReset) {
-		t.Errorf("expected suffix %q, got %q", AnsiReset, got)
+	tests := []struct {
+		name     string
+		ansiCode string
+		text     string
+		verify   func(t *testing.T, got string)
+	}{
+		{
+			name:     "WithANSI",
+			ansiCode: "\033[38;5;148m",
+			text:     "hello",
+			verify: func(t *testing.T, got string) {
+				t.Helper()
+				ansi := "\033[38;5;148m"
+				if !strings.HasPrefix(got, ansi) {
+					t.Errorf("expected prefix %q, got %q", ansi, got)
+				}
+				if !strings.Contains(got, "hello") {
+					t.Error("expected 'hello' in output")
+				}
+				if !strings.HasSuffix(got, AnsiReset) {
+					t.Errorf("expected suffix %q, got %q", AnsiReset, got)
+				}
+				want := ansi + "hello" + AnsiReset
+				if got != want {
+					t.Errorf("got %q, want %q", got, want)
+				}
+			},
+		},
+		{
+			name:     "NoANSI",
+			ansiCode: "",
+			text:     "plain",
+			verify: func(t *testing.T, got string) {
+				t.Helper()
+				if got != "plain" {
+					t.Errorf("expected 'plain', got %q", got)
+				}
+				if strings.Contains(got, "\033[") {
+					t.Error("expected no ANSI codes for empty ansiCode")
+				}
+			},
+		},
 	}
 
-	want := ansi + "hello" + AnsiReset
-	if got != want {
-		t.Errorf("got %q, want %q", got, want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var sb strings.Builder
+			WriteStyledText(&sb, tt.ansiCode, tt.text)
+			tt.verify(t, sb.String())
+		})
 	}
 }
 
-func TestWriteStyledText_NoANSI(t *testing.T) {
-	var sb strings.Builder
-	WriteStyledText(&sb, "", "plain")
-	got := sb.String()
+func TestWriteColoredChunk(t *testing.T) {
+	t.Parallel()
 
-	if got != "plain" {
-		t.Errorf("expected 'plain', got %q", got)
+	tests := []struct {
+		name   string
+		fg     string
+		bg     string
+		text   string
+		verify func(t *testing.T, got string)
+	}{
+		{
+			name: "WithFgAndBg",
+			fg:   "\033[31m",
+			bg:   "\033[44m",
+			text: "text",
+			verify: func(t *testing.T, got string) {
+				t.Helper()
+				if !strings.HasPrefix(got, "\033[31m") {
+					t.Errorf("expected fg prefix, got %q", got)
+				}
+				if !strings.Contains(got, "\033[44m") {
+					t.Errorf("expected bg in output")
+				}
+				if !strings.Contains(got, "text") {
+					t.Error("expected 'text' in output")
+				}
+				if !strings.HasSuffix(got, AnsiReset) {
+					t.Error("expected reset suffix")
+				}
+			},
+		},
+		{
+			name: "FgOnly",
+			fg:   "\033[31m",
+			bg:   "",
+			text: "text",
+			verify: func(t *testing.T, got string) {
+				t.Helper()
+				if !strings.HasPrefix(got, "\033[31m") {
+					t.Errorf("expected fg prefix, got %q", got)
+				}
+				if !strings.HasSuffix(got, AnsiReset) {
+					t.Error("expected reset suffix")
+				}
+			},
+		},
+		{
+			name: "NoStyle",
+			fg:   "",
+			bg:   "",
+			text: "text",
+			verify: func(t *testing.T, got string) {
+				t.Helper()
+				if got != "text" {
+					t.Errorf("expected 'text', got %q", got)
+				}
+				if strings.Contains(got, "\033[") {
+					t.Error("expected no ANSI codes")
+				}
+			},
+		},
 	}
-	if strings.Contains(got, "\033[") {
-		t.Error("expected no ANSI codes for empty ansiCode")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var sb strings.Builder
+			WriteColoredChunk(&sb, tt.fg, tt.bg, tt.text)
+			tt.verify(t, sb.String())
+		})
 	}
 }
 
-func TestWriteColoredChunk_WithFgAndBg(t *testing.T) {
-	var sb strings.Builder
-	fg := "\033[31m"
-	bg := "\033[44m"
-	WriteColoredChunk(&sb, fg, bg, "text")
-	got := sb.String()
+func TestWritePaddedText(t *testing.T) {
+	t.Parallel()
 
-	if !strings.HasPrefix(got, fg) {
-		t.Errorf("expected fg prefix %q, got %q", fg, got)
+	tests := []struct {
+		name   string
+		text   string
+		width  int
+		bg     string
+		verify func(t *testing.T, got string)
+	}{
+		{
+			name:  "WithBg",
+			text:  "hi",
+			width: 10,
+			bg:    "\033[44m",
+			verify: func(t *testing.T, got string) {
+				t.Helper()
+				if !strings.HasPrefix(got, "\033[44m") {
+					t.Errorf("expected bg prefix, got %q", got)
+				}
+				if !strings.Contains(got, "hi") {
+					t.Error("expected 'hi' in output")
+				}
+				if !strings.HasSuffix(got, AnsiReset) {
+					t.Error("expected reset suffix")
+				}
+				if !strings.Contains(got, "        ") {
+					t.Error("expected 8 spaces padding")
+				}
+			},
+		},
+		{
+			name:  "NoBg",
+			text:  "hi",
+			width: 10,
+			bg:    "",
+			verify: func(t *testing.T, got string) {
+				t.Helper()
+				if !strings.Contains(got, "hi") {
+					t.Error("expected 'hi' in output")
+				}
+				if strings.Contains(got, AnsiReset) {
+					t.Error("expected no reset without bg")
+				}
+				if !strings.Contains(got, "        ") {
+					t.Error("expected 8 spaces padding")
+				}
+			},
+		},
+		{
+			name:  "ExactWidth",
+			text:  "abcde",
+			width: 5,
+			bg:    "",
+			verify: func(t *testing.T, got string) {
+				t.Helper()
+				if got != "abcde" {
+					t.Errorf("expected 'abcde' with no padding, got %q", got)
+				}
+			},
+		},
+		{
+			name:  "OverWidth",
+			text:  "abcdefgh",
+			width: 5,
+			bg:    "",
+			verify: func(t *testing.T, got string) {
+				t.Helper()
+				if got != "abcdefgh" {
+					t.Errorf("expected 'abcdefgh' unchanged, got %q", got)
+				}
+			},
+		},
 	}
-	if !strings.Contains(got, bg) {
-		t.Errorf("expected bg %q in output", bg)
-	}
-	if !strings.Contains(got, "text") {
-		t.Error("expected 'text' in output")
-	}
-	if !strings.HasSuffix(got, AnsiReset) {
-		t.Error("expected reset suffix")
-	}
-}
 
-func TestWriteColoredChunk_FgOnly(t *testing.T) {
-	var sb strings.Builder
-	fg := "\033[31m"
-	WriteColoredChunk(&sb, fg, "", "text")
-	got := sb.String()
-
-	if !strings.HasPrefix(got, fg) {
-		t.Errorf("expected fg prefix, got %q", got)
-	}
-	if !strings.HasSuffix(got, AnsiReset) {
-		t.Error("expected reset suffix")
-	}
-}
-
-func TestWriteColoredChunk_NoStyle(t *testing.T) {
-	var sb strings.Builder
-	WriteColoredChunk(&sb, "", "", "text")
-	got := sb.String()
-
-	if got != "text" {
-		t.Errorf("expected 'text', got %q", got)
-	}
-	if strings.Contains(got, "\033[") {
-		t.Error("expected no ANSI codes")
-	}
-}
-
-func TestWritePaddedText_WithBg(t *testing.T) {
-	var sb strings.Builder
-	bg := "\033[44m"
-	WritePaddedText(&sb, "hi", 10, bg)
-	got := sb.String()
-
-	if !strings.HasPrefix(got, bg) {
-		t.Errorf("expected bg prefix %q, got %q", bg, got)
-	}
-	if !strings.Contains(got, "hi") {
-		t.Error("expected 'hi' in output")
-	}
-	if !strings.HasSuffix(got, AnsiReset) {
-		t.Error("expected reset suffix")
-	}
-	// "hi" is 2 columns, so 8 spaces of padding
-	if !strings.Contains(got, "        ") {
-		t.Error("expected 8 spaces padding")
-	}
-}
-
-func TestWritePaddedText_NoBg(t *testing.T) {
-	var sb strings.Builder
-	WritePaddedText(&sb, "hi", 10, "")
-	got := sb.String()
-
-	if !strings.Contains(got, "hi") {
-		t.Error("expected 'hi' in output")
-	}
-	// No reset when no bg
-	if strings.Contains(got, AnsiReset) {
-		t.Error("expected no reset without bg")
-	}
-	// Still should be padded to width 10
-	if !strings.Contains(got, "        ") {
-		t.Error("expected 8 spaces padding")
-	}
-}
-
-func TestWritePaddedText_ExactWidth(t *testing.T) {
-	var sb strings.Builder
-	WritePaddedText(&sb, "abcde", 5, "")
-	got := sb.String()
-
-	// No padding needed, text is exactly the target width
-	if got != "abcde" {
-		t.Errorf("expected 'abcde' with no padding, got %q", got)
-	}
-}
-
-func TestWritePaddedText_OverWidth(t *testing.T) {
-	var sb strings.Builder
-	WritePaddedText(&sb, "abcdefgh", 5, "")
-	got := sb.String()
-
-	// Text wider than target: no padding added
-	if got != "abcdefgh" {
-		t.Errorf("expected 'abcdefgh' unchanged, got %q", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var sb strings.Builder
+			WritePaddedText(&sb, tt.text, tt.width, tt.bg)
+			tt.verify(t, sb.String())
+		})
 	}
 }
