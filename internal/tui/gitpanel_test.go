@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/diff"
 	"github.com/708u/gracilius/internal/git"
+	"github.com/708u/gracilius/internal/tui/render"
 )
 
 // fillPathFields populates baseName/dirName for test entries.
@@ -588,7 +590,7 @@ func TestBuildGitVisualRows_DirGrouping(t *testing.T) {
 	if !rows[0].isHeader {
 		t.Error("row 0: expected category header")
 	}
-	if !rows[1].isDirHeader || rows[1].label != "    internal/git/" {
+	if !rows[1].isDirHeader || rows[1].label != "  internal/git/" {
 		t.Errorf("row 1: expected dir header 'internal/git/', got %q (isDirHeader=%v)",
 			rows[1].label, rows[1].isDirHeader)
 	}
@@ -598,7 +600,7 @@ func TestBuildGitVisualRows_DirGrouping(t *testing.T) {
 	if !rows[3].isFileRow() || rows[3].entryIdx != 1 {
 		t.Errorf("row 3: expected file entry 1, got entryIdx=%d", rows[3].entryIdx)
 	}
-	if !rows[4].isDirHeader || rows[4].label != "    internal/tui/" {
+	if !rows[4].isDirHeader || rows[4].label != "  internal/tui/" {
 		t.Errorf("row 4: expected dir header 'internal/tui/', got %q", rows[4].label)
 	}
 	if !rows[5].isFileRow() || rows[5].entryIdx != 2 {
@@ -634,7 +636,7 @@ func TestBuildGitVisualRows_MixedRootAndDir(t *testing.T) {
 		t.Error("row 0: expected category header")
 	}
 	// Row 1: root dir header
-	if !rows[1].isDirHeader || rows[1].label != "    ./" {
+	if !rows[1].isDirHeader || rows[1].label != "  ./" {
 		t.Errorf("row 1: expected dir header './', got %q", rows[1].label)
 	}
 	// Row 2: root file
@@ -667,10 +669,10 @@ func TestBuildGitVisualRows_DirGroupingMultiCategory(t *testing.T) {
 		t.Fatalf("expected 6 rows, got %d", len(rows))
 	}
 	// Same directory appears in both categories
-	if !rows[1].isDirHeader || rows[1].label != "    internal/git/" {
+	if !rows[1].isDirHeader || rows[1].label != "  internal/git/" {
 		t.Errorf("row 1: expected staged dir header, got %q", rows[1].label)
 	}
-	if !rows[4].isDirHeader || rows[4].label != "    internal/git/" {
+	if !rows[4].isDirHeader || rows[4].label != "  internal/git/" {
 		t.Errorf("row 4: expected unstaged dir header, got %q", rows[4].label)
 	}
 }
@@ -856,5 +858,37 @@ func TestGitDiffModeTabPrefix(t *testing.T) {
 		if got := tt.mode.tabPrefix(tt.defaultBranch); got != tt.want {
 			t.Errorf("gitDiffMode(%d).tabPrefix(%q) = %q, want %q", tt.mode, tt.defaultBranch, got, tt.want)
 		}
+	}
+}
+
+func TestCategoryStats(t *testing.T) {
+	t.Parallel()
+	entries := []changedFileEntry{
+		{category: categoryStaged, stats: diff.Stats{Additions: 5, Deletions: 2, Modified: 1}},
+		{category: categoryStaged, stats: diff.Stats{Additions: 3}},
+		{category: categoryUnstaged, stats: diff.Stats{Additions: 10, Deletions: 1, Modified: 2}},
+	}
+
+	s := categoryStats(entries, categoryStaged)
+	if s.Additions != 8 || s.Deletions != 2 || s.Modified != 1 {
+		t.Errorf("staged: got +%d -%d ~%d, want +8 -2 ~1", s.Additions, s.Deletions, s.Modified)
+	}
+
+	s = categoryStats(entries, categoryUnstaged)
+	if s.Additions != 10 || s.Deletions != 1 || s.Modified != 2 {
+		t.Errorf("unstaged: got +%d -%d ~%d, want +10 -1 ~2", s.Additions, s.Deletions, s.Modified)
+	}
+
+	s = categoryStats(entries, categoryUntracked)
+	if s.Additions != 0 || s.Deletions != 0 || s.Modified != 0 {
+		t.Errorf("untracked: got +%d -%d ~%d, want all zero", s.Additions, s.Deletions, s.Modified)
+	}
+}
+
+func TestRenderModeSelector(t *testing.T) {
+	t.Parallel()
+	result := renderModeSelector(gitModeWorking, "main", render.Dark)
+	if result == "" {
+		t.Fatal("expected non-empty mode selector")
 	}
 }

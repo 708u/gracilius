@@ -19,6 +19,9 @@ type Theme struct {
 	LogoTrunk           string // Welcome logo bottom color (brown/trunk)
 	SearchMatchBg       string // Search match background hex color
 	SearchCurrentBg     string // Current search match background hex color
+	DiffAddFg           string // Diff additions foreground hex color
+	DiffDelFg           string // Diff deletions foreground hex color
+	DiffModFg           string // Diff modifications foreground hex color
 }
 
 // SelectionBgSeq returns the ANSI SGR sequence for editor selection background.
@@ -61,6 +64,9 @@ var Dark = Theme{
 	LogoTrunk:           "#CE9178",
 	SearchMatchBg:       "#613214",
 	SearchCurrentBg:     "#9E6A03",
+	DiffAddFg:           "#3fb950",
+	DiffDelFg:           "#f85149",
+	DiffModFg:           "#d29922",
 }
 
 // Light is the light theme configuration.
@@ -78,4 +84,7 @@ var Light = Theme{
 	LogoTrunk:           "#795E26",
 	SearchMatchBg:       "#FFF2CC",
 	SearchCurrentBg:     "#FFD700",
+	DiffAddFg:           "#1a7f37",
+	DiffDelFg:           "#cf222e",
+	DiffModFg:           "#9a6700",
 }

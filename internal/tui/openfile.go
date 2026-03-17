@@ -271,7 +271,7 @@ func (s *openFileOverlay) computeLayout(width, height int) openFileLayout {
 	overlayW := min(width*overlayWidthRatio/4, overlayMaxW)
 	innerW := overlayW - overlayBorderW - overlayPaddingW
 
-	startY := contentStartY
+	startY := paneHeaderRows
 	available := height - startY - footerHeight - overlayBorderH
 	maxInnerH := max(available, overlayMinInnerH)
 	itemCount := len(s.list.Items())
@@ -409,7 +409,7 @@ func placeOverlay(width, height int, fg, bg string) string {
 	}
 
 	maxBottom := height - footerHeight
-	startY := headerHeight + tabBarHeight
+	startY := paneHeaderRows
 	if startY+fgH > maxBottom {
 		startY = max(maxBottom-fgH, 0)
 	}
