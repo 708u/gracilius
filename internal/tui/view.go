@@ -413,12 +413,9 @@ func (m *Model) renderLeftPane(width, height int) []string {
 	case panelGitDiff:
 		line0 = renderPanelHeader(m.activePanel.label(), width, m.theme)
 
-		// Mode row: segmented control + total stats.
-		gs := m.gitState()
+		// Mode row: segmented control only.
 		modeStr := renderModeSelector(m.gitDiffMode, m.gitDefaultBranch, m.theme)
-		add, del, mod := totalStats(gs.entries)
-		statsStr := formatDiffStats(add, del, mod, m.theme)
-		line1 = render.PadBetween(modeStr, statsStr, width)
+		line1 = render.PadRight(modeStr, width)
 	default:
 		line0 = renderPanelHeader(m.activePanel.label(), width, m.theme)
 		line1 = render.PadRight("", width)
