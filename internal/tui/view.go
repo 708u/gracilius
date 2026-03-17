@@ -411,8 +411,7 @@ func (m *Model) renderLeftPane(width, height int) []string {
 
 	switch m.activePanel {
 	case panelGitDiff:
-		label := m.activePanel.label() + " \u276e" + m.gitDiffMode.label(m.gitDefaultBranch) + "\u276f"
-		line0 = renderPanelHeader(label, width, m.theme)
+		line0 = renderPanelHeader(m.activePanel.label(), width, m.theme)
 
 		// Mode row: segmented control + total stats.
 		gs := m.gitState()
