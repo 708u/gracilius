@@ -401,22 +401,34 @@ func (m *Model) renderGitPanel(width, height int) []string {
 	return lines
 }
 
-// gitCursorUp moves the git cursor up one entry.
+// gitCursorUp moves the git cursor to the previous file in visual order.
 func (m *Model) gitCursorUp() {
 	gs := m.gitState()
-	if gs.cursor <= 0 {
+	curVisual, ok := gs.entryToVisualIdx[gs.cursor]
+	if !ok {
 		return
 	}
-	gs.cursor--
+	for i := curVisual - 1; i >= 0; i-- {
+		if gs.visualRows[i].isFileRow() {
+			gs.cursor = gs.visualRows[i].entryIdx
+			return
+		}
+	}
 }
 
-// gitCursorDown moves the git cursor down one entry.
+// gitCursorDown moves the git cursor to the next file in visual order.
 func (m *Model) gitCursorDown() {
 	gs := m.gitState()
-	if gs.cursor >= len(gs.entries)-1 {
+	curVisual, ok := gs.entryToVisualIdx[gs.cursor]
+	if !ok {
 		return
 	}
-	gs.cursor++
+	for i := curVisual + 1; i < len(gs.visualRows); i++ {
+		if gs.visualRows[i].isFileRow() {
+			gs.cursor = gs.visualRows[i].entryIdx
+			return
+		}
+	}
 }
 
 // gitCursorVisualIdx returns the visual row index for the current gitCursor.
