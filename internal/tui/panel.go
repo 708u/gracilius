@@ -2,6 +2,7 @@ package tui
 
 import (
 	"charm.land/lipgloss/v2"
+	"github.com/708u/gracilius/internal/diff"
 	"github.com/708u/gracilius/internal/git"
 	"github.com/708u/gracilius/internal/tui/render"
 )
@@ -26,6 +27,10 @@ type changedFileEntry struct {
 	newContent []string
 	binary     bool
 	category   fileCategory
+	additions  int
+	deletions  int
+	modified   int
+	diffData   *diff.Data // cached diff result (nil if not computed)
 }
 
 // gitVisualRow represents a visual row in the git panel.
@@ -34,6 +39,10 @@ type gitVisualRow struct {
 	isDirHeader bool   // directory header (e.g., "internal/tui/")
 	label       string // header text (header/dir header rows only)
 	entryIdx    int    // index into gitChangedFiles (file rows only)
+	// Category stats (header rows only).
+	catAdd int
+	catDel int
+	catMod int
 }
 
 // isFileRow returns true if this row represents an actual file entry.

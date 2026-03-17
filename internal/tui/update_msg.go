@@ -158,8 +158,8 @@ func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 	dt.diffViewData = diff.Build(oldLines, newLines)
 	lo := m.computeLayout()
 	dt.vp.SetWidth(lo.editorWidth)
-	dt.vp.SetHeight(lo.contentHeight)
-	dt.initDiffContent(m.theme, lo.editorWidth, lo.contentHeight)
+	dt.vp.SetHeight(lo.paneBodyHeight)
+	dt.initDiffContent(m.theme, lo.editorWidth, lo.paneBodyHeight)
 
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1
@@ -211,7 +211,7 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	lo := m.computeLayout()
 	for _, tab := range m.tabs {
 		tab.vp.SetWidth(lo.editorWidth)
-		tab.vp.SetHeight(lo.contentHeight)
+		tab.vp.SetHeight(lo.paneBodyHeight)
 	}
 	if t, ok := m.activeTabState(); ok && t.filePath != "" && len(t.lines) > 0 && m.focusPane == paneEditor {
 		m.notifySelectionChanged()
@@ -224,7 +224,7 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 func (m *Model) adjustScroll() {
 	lo := m.computeLayout()
 	if m.focusPane == paneTree {
-		h := lo.contentHeight - 1 // -1 for panel header
+		h := lo.paneBodyHeight
 		switch m.activePanel {
 		case panelGitDiff:
 			gs := m.gitState()
@@ -235,11 +235,11 @@ func (m *Model) adjustScroll() {
 		}
 	} else if t, ok := m.activeTabState(); ok {
 		if t.diffViewData != nil {
-			t.adjustDiffScrollForCursor(lo.contentHeight)
+			t.adjustDiffScrollForCursor(lo.paneBodyHeight)
 			return
 		}
 		if len(t.lines) > 0 {
-			t.adjustScrollForCursor(lo.contentHeight, lo.textWidth)
+			t.adjustScrollForCursor(lo.paneBodyHeight, lo.textWidth)
 		}
 	}
 }

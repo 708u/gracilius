@@ -417,7 +417,7 @@ func (m *Model) searchCursorScreenPos(lo layout, boxW int) cursorPosition {
 	// Overlay is right-aligned within the editor area.
 	startX := lo.editorStartX + lo.editorWidth - boxW
 	// Content is on the second line (after top border).
-	y := contentStartY + 1
+	y := paneHeaderRows + 1
 	// Compute display width instead of using Cursor().X, which returns
 	// a rune index and is incorrect for wide characters (CJK).
 	// See: https://github.com/charmbracelet/bubbles/issues/906

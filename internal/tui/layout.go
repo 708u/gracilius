@@ -2,8 +2,7 @@ package tui
 
 // Screen geometry constants.
 const (
-	headerHeight        = 1
-	tabBarHeight        = 2 // labels + underline
+	paneHeaderRows      = 2 // panel header + mode/tab underline rows
 	footerHeight        = 4 // border-top + help + status
 	separatorWidth      = 3
 	minLineNumberWidth  = 4
@@ -11,7 +10,6 @@ const (
 	minTreeWidth        = 15
 	defaultTreePercent  = 30
 	maxTreeWidthPercent = 70
-	contentStartY       = headerHeight + tabBarHeight
 	minContentHeight    = 5
 )
 
@@ -29,11 +27,10 @@ const (
 // Vertical:
 //
 //	+-----------------------+ --
-//	| header                |  1  headerHeight
-//	| tab labels            |  2  tabBarHeight
-//	| tab underline         |
+//	| panel hdr | tab label |  2  paneHeaderRows
+//	| mode/stat | tab uline |
 //	+-----------------------+ --
-//	| tree | sep | editor   |  contentHeight
+//	| tree | sep | editor   |  paneBodyHeight
 //	|      |     |          |
 //	+-----------------------+ --
 //	| footer border         |  4  footerHeight
@@ -48,12 +45,13 @@ const (
 //	              ^             ^
 //	              editorStartX  editorStartX + lineNumberWidth
 type layout struct {
-	contentHeight int // usable rows for tree and editor panes
-	treeWidth     int // file tree pane width
-	editorStartX  int // treeWidth + separatorWidth
-	editorWidth   int // total width - treeWidth - separatorWidth
-	lineNumWidth  int // line number gutter width (digits + 1 space)
-	textWidth     int // editorWidth - lineNumWidth
+	contentHeight  int // total usable rows (paneHeaderRows + paneBodyHeight)
+	paneBodyHeight int // usable rows for tree body and editor content
+	treeWidth      int // file tree pane width
+	editorStartX   int // treeWidth + separatorWidth
+	editorWidth    int // total width - treeWidth - separatorWidth
+	lineNumWidth   int // line number gutter width (digits + 1 space)
+	textWidth      int // editorWidth - lineNumWidth
 }
 
 // getTreeWidth returns the tree pane width.
@@ -69,10 +67,10 @@ func (m *Model) getTreeWidth() int {
 	return m.width * defaultTreePercent / 100
 }
 
-// getContentHeight returns the content area height.
+// getContentHeight returns the total content area height
+// (pane header + body).
 func (m *Model) getContentHeight() int {
-	chrome := headerHeight + tabBarHeight + footerHeight
-	return max(m.height-chrome, minContentHeight)
+	return max(m.height-footerHeight, minContentHeight)
 }
 
 // lineNumWidthFor returns the gutter width needed for n lines.
@@ -102,12 +100,15 @@ func (m *Model) computeLayout() layout {
 		ew = m.width - tw - separatorWidth
 	}
 
+	ch := m.getContentHeight()
+
 	return layout{
-		contentHeight: m.getContentHeight(),
-		treeWidth:     tw,
-		editorStartX:  sx,
-		editorWidth:   ew,
-		lineNumWidth:  lnw,
-		textWidth:     ew - lnw,
+		contentHeight:  ch,
+		paneBodyHeight: ch - paneHeaderRows,
+		treeWidth:      tw,
+		editorStartX:   sx,
+		editorWidth:    ew,
+		lineNumWidth:   lnw,
+		textWidth:      ew - lnw,
 	}
 }

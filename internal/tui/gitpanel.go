@@ -29,6 +29,13 @@ func toEntries(dir string, files []git.ChangedFile, cat fileCategory) []changedF
 			binary:     f.Binary,
 			category:   cat,
 		}
+		if !f.Binary && (len(f.OldContent) > 0 || len(f.NewContent) > 0) {
+			d := diff.Build(f.OldContent, f.NewContent)
+			entries[i].additions = d.Summary.Additions
+			entries[i].deletions = d.Summary.Deletions
+			entries[i].modified = d.Summary.Modified
+			entries[i].diffData = d
+		}
 	}
 	return entries
 }
@@ -209,9 +216,14 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 		}
 
 		// Category header.
+		add, del, mod := categoryStats(entries, sec.cat)
+		headerLabel := fmt.Sprintf("%s (%d)", sec.label, len(sec.indices))
 		rows = append(rows, gitVisualRow{
 			isHeader: true,
-			label:    fmt.Sprintf("  %s (%d)", sec.label, len(sec.indices)),
+			label:    headerLabel,
+			catAdd:   add,
+			catDel:   del,
+			catMod:   mod,
 		})
 
 		// Group entries by directory, preserving order of first appearance.
@@ -230,7 +242,7 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 		for _, dg := range dirs {
 			rows = append(rows, gitVisualRow{
 				isDirHeader: true,
-				label:       "    " + dg.dir + "/",
+				label:       "  " + dg.dir + "/",
 			})
 			for _, idx := range dg.indices {
 				reverseMap[idx] = len(rows)
@@ -306,7 +318,7 @@ func (m *Model) openGitDiffEntry() {
 		gitDiffLabel:      m.gitDiffMode.tabPrefix(m.gitDefaultBranch),
 	}
 	dt.vp.SetWidth(lo.editorWidth)
-	dt.vp.SetHeight(lo.contentHeight)
+	dt.vp.SetHeight(lo.paneBodyHeight)
 
 	if len(oldContent) > 0 {
 		oldSource := strings.Join(oldContent, "\n")
@@ -317,8 +329,13 @@ func (m *Model) openGitDiffEntry() {
 		dt.diffNewHighlights = render.HighlightFile(entry.absPath, strings.Join(newContent, "\n"), m.theme)
 	}
 
-	dt.diffViewData = diff.Build(oldContent, newContent)
-	dt.initDiffContent(m.theme, lo.editorWidth, lo.contentHeight)
+	if entry.diffData != nil {
+		dt.diffViewData = entry.diffData
+		entry.diffData = nil // release reference after handoff
+	} else {
+		dt.diffViewData = diff.Build(oldContent, newContent)
+	}
+	dt.initDiffContent(m.theme, lo.editorWidth, lo.paneBodyHeight)
 
 	m.tabs = append(m.tabs, dt)
 	m.activeTab = len(m.tabs) - 1
@@ -338,6 +355,53 @@ var styleCategoryHeader = lipgloss.NewStyle().Bold(true)
 
 // styleDirHeader is the style for directory header lines.
 var styleDirHeader = lipgloss.NewStyle().Faint(true)
+
+// formatDiffStats returns a colored "+N -N ~N" string.
+// Parts with zero count are omitted. Returns "" if all zero.
+func formatDiffStats(add, del, mod int, theme render.Theme) string {
+	coloredStat := func(hex, prefix string, count int) string {
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(hex)).
+			Render(fmt.Sprintf("%s%d", prefix, count))
+	}
+
+	var parts []string
+	if add > 0 {
+		parts = append(parts, coloredStat(theme.DiffAddFg, "+", add))
+	}
+	if del > 0 {
+		parts = append(parts, coloredStat(theme.DiffDelFg, "-", del))
+	}
+	if mod > 0 {
+		parts = append(parts, coloredStat(theme.DiffModFg, "~", mod))
+	}
+	return strings.Join(parts, " ")
+}
+
+// categoryStats returns the sum of additions, deletions, and modified
+// counts for entries matching the given category.
+func categoryStats(entries []changedFileEntry, cat fileCategory) (int, int, int) {
+	var add, del, mod int
+	for i := range entries {
+		if entries[i].category == cat {
+			add += entries[i].additions
+			del += entries[i].deletions
+			mod += entries[i].modified
+		}
+	}
+	return add, del, mod
+}
+
+// totalStats returns the sum of additions, deletions, and modified
+// counts across all entries.
+func totalStats(entries []changedFileEntry) (int, int, int) {
+	var add, del, mod int
+	for i := range entries {
+		add += entries[i].additions
+		del += entries[i].deletions
+		mod += entries[i].modified
+	}
+	return add, del, mod
+}
 
 // renderGitPanel renders the git changed files list.
 func (m *Model) renderGitPanel(width, height int) []string {
@@ -364,8 +428,9 @@ func (m *Model) renderGitPanel(width, height int) []string {
 		row := gs.visualRows[i]
 
 		if row.isHeader {
-			headerLine := styleCategoryHeader.Render(row.label)
-			headerLine = render.PadRight(headerLine, width)
+			headerLabel := styleCategoryHeader.Render(row.label)
+			statsStr := formatDiffStats(row.catAdd, row.catDel, row.catMod, m.theme)
+			headerLine := render.PadBetween(headerLabel, statsStr, width)
 			lines = append(lines, headerLine)
 			continue
 		}
@@ -382,7 +447,7 @@ func (m *Model) renderGitPanel(width, height int) []string {
 
 		style := gitStatusStyles[e.status]
 		statusIcon := style.Render(e.status.String())
-		line := "      " + statusIcon + " " + e.baseName
+		line := "    " + statusIcon + " " + e.baseName
 
 		var displayLine string
 		if isCursor {
