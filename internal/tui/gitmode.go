@@ -1,6 +1,12 @@
 package tui
 
-import tea "charm.land/bubbletea/v2"
+import (
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/708u/gracilius/internal/tui/render"
+)
 
 // gitDiffMode identifies which diff comparison is active.
 type gitDiffMode int
@@ -35,6 +41,41 @@ func (m gitDiffMode) label(defaultBranch string) string {
 // tabPrefix returns the bracketed prefix for diff tab labels.
 func (m gitDiffMode) tabPrefix(defaultBranch string) string {
 	return "[" + m.label(defaultBranch) + "]"
+}
+
+// renderModeSelector renders the segmented mode control for the git panel.
+// Active mode is bold, inactive modes are faint.
+func renderModeSelector(
+	active gitDiffMode,
+	defaultBranch string,
+	theme render.Theme,
+) string {
+	styleActive := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color(theme.TabActiveFg))
+	styleFaint := lipgloss.NewStyle().Faint(true)
+
+	var parts []string
+	activeIdx := 0
+	for i, mode := range gitDiffModes {
+		label := mode.label(defaultBranch)
+		if mode == active {
+			activeIdx = i
+			parts = append(parts, styleActive.Render(label))
+		} else {
+			parts = append(parts, styleFaint.Render(label))
+		}
+	}
+
+	leftArrow := "\u25c2"
+	rightArrow := "\u25b8"
+	if activeIdx == 0 {
+		leftArrow = styleFaint.Render(leftArrow)
+	}
+	if activeIdx == len(gitDiffModes)-1 {
+		rightArrow = styleFaint.Render(rightArrow)
+	}
+	return "  " + leftArrow + " " + strings.Join(parts, "  ") + " " + rightArrow
 }
 
 // gitPanelState holds per-mode state for the git changes panel.

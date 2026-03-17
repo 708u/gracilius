@@ -8,8 +8,7 @@ import (
 )
 
 // tabIndexAtX returns the tab index at screen X coordinate, or -1 if none.
-func (m *Model) tabIndexAtX(x int) int {
-	lo := m.computeLayout()
+func (m *Model) tabIndexAtX(lo layout, x int) int {
 	pos := lo.editorStartX
 	for i, t := range m.tabs {
 		if i > 0 {
@@ -29,6 +28,8 @@ func (m *Model) tabIndexAtX(x int) int {
 func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	t, hasTab := m.activeTabState()
 
+	lo := m.computeLayout()
+
 	if m.openFile.active {
 		if msg.Button == tea.MouseLeft {
 			path, closeOverlay := m.openFile.handleClick(msg.X, msg.Y, m.width, m.height)
@@ -43,24 +44,23 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Tab bar click: Y < paneHeaderRows and X in right pane area.
 	if msg.Button == tea.MouseLeft &&
-		msg.Y >= headerHeight && msg.Y < headerHeight+tabBarHeight {
-		if idx := m.tabIndexAtX(msg.X); idx >= 0 {
+		msg.Y < paneHeaderRows && (!m.sidebarVisible || msg.X >= lo.editorStartX) {
+		if idx := m.tabIndexAtX(lo, msg.X); idx >= 0 {
 			m.activeTab = idx
 		}
 		return m, nil
 	}
 
-	lo := m.computeLayout()
-
 	borderX := lo.treeWidth
-	isBorderArea := m.sidebarVisible && msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= contentStartY
+	isBorderArea := m.sidebarVisible && msg.X >= borderX && msg.X <= borderX+2 && msg.Y >= paneHeaderRows
 	if isBorderArea && msg.Button == tea.MouseLeft {
 		m.resizingPane = true
 		return m, nil
 	}
 
-	panelBodyY := contentStartY + 1 // +1 for panel header line
+	panelBodyY := m.leftPaneHeaderRows()
 	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= panelBodyY && msg.Button == tea.MouseLeft {
 		switch m.activePanel {
 		case panelGitDiff:
@@ -88,8 +88,8 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Diff tab click: set diff cursor by visual line → row mapping.
-	if t.diffViewData != nil && msg.Button == tea.MouseLeft && msg.X >= lo.editorStartX && msg.Y >= contentStartY {
-		visualLine := msg.Y - contentStartY + t.vp.YOffset()
+	if t.diffViewData != nil && msg.Button == tea.MouseLeft && msg.X >= lo.editorStartX && msg.Y >= paneHeaderRows {
+		visualLine := msg.Y - paneHeaderRows + t.vp.YOffset()
 		row := t.diffVisualLineToRow(visualLine)
 		m.focusPane = paneEditor
 		t.diffCursor = row
@@ -107,7 +107,7 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if msg.Button == tea.MouseLeft && msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+	if msg.Button == tea.MouseLeft && msg.X >= lo.editorStartX && msg.Y >= paneHeaderRows {
 		targetLine, targetChar := m.editorTarget(t, lo, msg.X, msg.Y)
 		m.focusPane = paneEditor
 		t.cursorLine = targetLine
@@ -137,8 +137,8 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
 	lo := m.computeLayout()
 
 	// Diff tab drag: select rows.
-	if t.diffViewData != nil && msg.X >= lo.editorStartX && msg.Y >= contentStartY {
-		visualLine := msg.Y - contentStartY + t.vp.YOffset()
+	if t.diffViewData != nil && msg.X >= lo.editorStartX && msg.Y >= paneHeaderRows {
+		visualLine := msg.Y - paneHeaderRows + t.vp.YOffset()
 		row := t.diffVisualLineToRow(visualLine)
 		if row != m.lastMouseLine {
 			t.diffSelecting = true
@@ -153,7 +153,7 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+	if msg.X >= lo.editorStartX && msg.Y >= paneHeaderRows {
 		targetLine, targetChar := m.editorTarget(t, lo, msg.X, msg.Y)
 		if targetLine != m.lastMouseLine || targetChar != m.lastMouseChar {
 			t.selecting = true
@@ -187,8 +187,8 @@ func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) (tea.Model, tea.Cmd)
 	// Diff tab release: finalize selection and notify.
 	if wasDown && t.diffViewData != nil && t.diffSelecting {
 		lo := m.computeLayout()
-		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
-			visualLine := msg.Y - contentStartY + t.vp.YOffset()
+		if msg.X >= lo.editorStartX && msg.Y >= paneHeaderRows {
+			visualLine := msg.Y - paneHeaderRows + t.vp.YOffset()
 			row := t.diffVisualLineToRow(visualLine)
 			t.diffCursor = row
 			t.snapDiffSide()
@@ -203,7 +203,7 @@ func (m *Model) handleMouseRelease(msg tea.MouseReleaseMsg) (tea.Model, tea.Cmd)
 
 	if wasDown && t.selecting {
 		lo := m.computeLayout()
-		if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+		if msg.X >= lo.editorStartX && msg.Y >= paneHeaderRows {
 			targetLine, targetChar := m.editorTarget(t, lo, msg.X, msg.Y)
 			t.cursorLine = targetLine
 			t.cursorChar = targetChar
@@ -230,12 +230,12 @@ func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	lo := m.computeLayout()
 
 	// Left pane scrolling.
-	if m.sidebarVisible && msg.X < lo.treeWidth && msg.Y >= contentStartY {
+	if m.sidebarVisible && msg.X < lo.treeWidth {
 		delta := 3
 		if msg.Button == tea.MouseWheelUp {
 			delta = -3
 		}
-		bodyHeight := lo.contentHeight - 1 // -1 for panel header
+		bodyHeight := m.leftPaneBodyHeight(lo)
 		switch m.activePanel {
 		case panelGitDiff:
 			gs := m.gitState()
@@ -254,12 +254,12 @@ func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	if !hasTab {
 		return m, nil
 	}
-	if msg.X >= lo.editorStartX && msg.Y >= contentStartY {
+	if msg.X >= lo.editorStartX && msg.Y >= paneHeaderRows {
 		if t.diffViewData != nil {
 			t.vp, _ = t.vp.Update(msg)
 		} else if len(t.lines) > 0 {
 			t.vp, _ = t.vp.Update(msg)
-			maxOff := t.maxScrollOffset(lo.contentHeight, lo.textWidth)
+			maxOff := t.maxScrollOffset(lo.paneBodyHeight, lo.textWidth)
 			if t.vp.YOffset() > maxOff {
 				t.vp.SetYOffset(maxOff)
 			}

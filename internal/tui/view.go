@@ -94,21 +94,18 @@ func (m *Model) View() tea.View {
 
 	t, hasTab := m.activeTabState()
 
-	// header
-	header := m.renderHeader(t)
-	// content
 	lo := m.computeLayout()
 
 	var editorLines []string
 	switch {
 	case !hasTab && !m.initialDiffAutoOpened:
 		// Auto-open pending: show blank pane to avoid welcome flicker.
-		editorLines = make([]string, lo.contentHeight)
+		editorLines = make([]string, lo.paneBodyHeight)
 		for i := range editorLines {
 			editorLines[i] = render.PadRight("", lo.editorWidth)
 		}
 	case !hasTab:
-		editorLines = renderWelcome(lo.editorWidth, lo.contentHeight, m.theme)
+		editorLines = renderWelcome(lo.editorWidth, lo.paneBodyHeight, m.theme)
 	default:
 		editorLines = m.renderEditor(lo)
 	}
@@ -130,6 +127,10 @@ func (m *Model) View() tea.View {
 		}
 	}
 
+	// Build right pane: tab bar (2 lines) + editor.
+	rightLines := m.renderTabBarLines(lo.editorWidth)
+	rightLines = append(rightLines, editorLines...)
+
 	var content string
 	if m.sidebarVisible {
 		panelLines := m.renderLeftPane(lo.treeWidth, lo.contentHeight)
@@ -143,10 +144,10 @@ func (m *Model) View() tea.View {
 			lipgloss.Top,
 			strings.Join(panelLines, "\n"),
 			strings.Join(sepLines, "\n"),
-			strings.Join(editorLines, "\n"),
+			strings.Join(rightLines, "\n"),
 		)
 	} else {
-		content = strings.Join(editorLines, "\n")
+		content = strings.Join(rightLines, "\n")
 	}
 
 	// footer
@@ -156,12 +157,8 @@ func (m *Model) View() tea.View {
 		Width(m.width).
 		Render(footer)
 
-	tabBar := m.renderTabBar(lo.editorStartX)
-
 	base := lipgloss.JoinVertical(
 		lipgloss.Left,
-		header,
-		tabBar,
 		content,
 		footerRendered,
 	)
@@ -244,7 +241,7 @@ func (m *Model) cursorScreenPos(lo layout) cursorPosition {
 				m.lastMapping[visualRow].wrapOffset,
 				t.cursorChar,
 			),
-		y: contentStartY + visualRow,
+		y: paneHeaderRows + visualRow,
 	}
 }
 
@@ -285,54 +282,14 @@ func (m *Model) commentCursorScreenPos(lo layout) cursorPosition {
 
 	return cursorPosition{
 		x: lo.editorStartX + xOffset + c.X,
-		y: contentStartY + blockStart + blockBorderTop + c.Y,
+		y: paneHeaderRows + blockStart + blockBorderTop + c.Y,
 	}
 }
 
-// renderHeader generates the header line.
-// For diff tabs it shows diff stats (+N -N ~N); otherwise an empty line.
-func (m *Model) renderHeader(t *tab) string {
-	if t == nil || t.diffViewData == nil {
-		return ""
-	}
-
-	s := t.diffViewData.Summary
-	if s.Additions == 0 && s.Deletions == 0 && s.Modified == 0 {
-		return ""
-	}
-
-	isDark := m.theme.Name == "github-dark"
-	var addHex, delHex, modHex string
-	if isDark {
-		addHex, delHex, modHex = "#3fb950", "#f85149", "#d29922"
-	} else {
-		addHex, delHex, modHex = "#1a7f37", "#cf222e", "#9a6700"
-	}
-
-	coloredStat := func(hex, prefix string, count int) string {
-		return lipgloss.NewStyle().Foreground(lipgloss.Color(hex)).
-			Render(fmt.Sprintf("%s%d", prefix, count))
-	}
-
-	parts := make([]string, 0, 3)
-	if s.Additions > 0 {
-		parts = append(parts, coloredStat(addHex, "+", s.Additions))
-	}
-	if s.Deletions > 0 {
-		parts = append(parts, coloredStat(delHex, "-", s.Deletions))
-	}
-	if s.Modified > 0 {
-		parts = append(parts, coloredStat(modHex, "~", s.Modified))
-	}
-
-	return strings.Join(parts, " ")
-}
-
-// renderTabBar generates the tab bar (2 lines: labels + underline).
-// offset is the left padding to align with the editor pane.
-func (m *Model) renderTabBar(offset int) string {
+// renderTabBarLines generates the tab bar as 2 lines (labels + underline).
+func (m *Model) renderTabBarLines(width int) []string {
 	if len(m.tabs) == 0 {
-		return "\n"
+		return []string{"", ""}
 	}
 
 	styleActive := lipgloss.NewStyle().
@@ -341,8 +298,6 @@ func (m *Model) renderTabBar(offset int) string {
 		Foreground(lipgloss.Color(m.theme.TabInactiveFg))
 	styleBorder := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(m.theme.TabActiveBorder))
-
-	padding := strings.Repeat(" ", offset)
 
 	var labels []string
 	var borders []string
@@ -365,9 +320,10 @@ func (m *Model) renderTabBar(offset int) string {
 	labelLine := strings.Join(labels, sep)
 	borderLine := strings.Join(borders, borderSep)
 
-	return ansi.Truncate(padding+labelLine, m.width, "...") +
-		"\n" +
-		ansi.Truncate(padding+borderLine, m.width, "")
+	return []string{
+		ansi.Truncate(labelLine, width, "..."),
+		ansi.Truncate(borderLine, width, ""),
+	}
 }
 
 // renderFooter generates the footer area (help hints + status).
@@ -451,25 +407,22 @@ func (m *Model) renderFooter() string {
 
 // renderLeftPane generates the left pane lines with a header and panel body.
 func (m *Model) renderLeftPane(width, height int) []string {
-	var header string
+	panelLabel := m.activePanel.label()
 	if m.activePanel == panelGitDiff {
 		gs := m.gitState()
 		v, total := gs.viewedCountTotal()
-		modeLabel := m.gitDiffMode.label(m.gitDefaultBranch)
-		var label string
 		if total > 0 {
-			label = fmt.Sprintf("%s \u276e%s\u276f %d/%d",
-				m.activePanel.label(), modeLabel, v, total)
-		} else {
-			label = fmt.Sprintf("%s \u276e%s\u276f",
-				m.activePanel.label(), modeLabel)
+			panelLabel = fmt.Sprintf("%s %d/%d", panelLabel, v, total)
 		}
-		header = renderPanelHeader(label, width, m.theme)
-	} else {
-		header = renderPanelHeader(m.activePanel.label(), width, m.theme)
 	}
-	bodyHeight := height - 1
+	header := []string{renderPanelHeader(panelLabel, width, m.theme)}
 
+	if m.activePanel == panelGitDiff {
+		modeStr := renderModeSelector(m.gitDiffMode, m.gitDefaultBranch, m.theme)
+		header = append(header, render.PadRight(modeStr, width))
+	}
+
+	bodyHeight := height - m.leftPaneHeaderRows()
 	var body []string
 	switch m.activePanel {
 	case panelGitDiff:
@@ -478,7 +431,7 @@ func (m *Model) renderLeftPane(width, height int) []string {
 		body = m.renderTree(width, bodyHeight)
 	}
 
-	return append([]string{header}, body...)
+	return append(header, body...)
 }
 
 // renderTree generates the tree pane lines.
@@ -541,7 +494,7 @@ func (m *Model) renderTree(width, height int) []string {
 // Active textarea (inputMode) is overlaid after viewport slicing.
 func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 	width := lo.editorWidth
-	height := lo.contentHeight
+	height := lo.paneBodyHeight
 
 	t.ensureDiffContent(m.theme, width, m.search.gen)
 	m.lastMapping = nil
@@ -685,7 +638,7 @@ func (m *Model) renderEditor(lo layout) []string {
 	}
 
 	width := lo.editorWidth
-	height := lo.contentHeight
+	height := lo.paneBodyHeight
 	lnw := lo.lineNumWidth
 	textWidth := lo.textWidth
 

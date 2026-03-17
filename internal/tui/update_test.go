@@ -184,8 +184,8 @@ func TestMouseClick_TreeEntry(t *testing.T) {
 	}
 
 	// Click on second tree entry: panelBodyY + 1
-	// panelBodyY = contentStartY + 1 (panel header takes 1 row)
-	panelBodyY := contentStartY + 1
+	// Files panel has 1-line header, so body starts at Y=1.
+	panelBodyY := 1
 	m.Update(tea.MouseClickMsg{
 		X:      5,
 		Y:      panelBodyY + 1,
@@ -511,8 +511,10 @@ func TestTabIndexAtX(t *testing.T) {
 	t.Parallel()
 	m := newTestModel(t)
 
+	lo := m.computeLayout()
+
 	// No tabs: always -1.
-	if got := m.tabIndexAtX(40); got != -1 {
+	if got := m.tabIndexAtX(lo, 40); got != -1 {
 		t.Errorf("no tabs: expected -1, got %d", got)
 	}
 
@@ -523,28 +525,28 @@ func TestTabIndexAtX(t *testing.T) {
 	t2.filePath = "/workspace/util.go"
 	m.tabs = []*tab{t1, t2}
 
-	lo := m.computeLayout()
+	lo = m.computeLayout()
 	// Tab 0 label: " main.go " (9 runes), starts at editorStartX.
 	label0 := tabLabel(t1)
 	w0 := ansi.StringWidth(label0)
 
 	// Click on first tab start.
-	if got := m.tabIndexAtX(lo.editorStartX); got != 0 {
+	if got := m.tabIndexAtX(lo, lo.editorStartX); got != 0 {
 		t.Errorf("first tab start: expected 0, got %d", got)
 	}
 	// Click on first tab end - 1.
-	if got := m.tabIndexAtX(lo.editorStartX + w0 - 1); got != 0 {
+	if got := m.tabIndexAtX(lo, lo.editorStartX+w0-1); got != 0 {
 		t.Errorf("first tab end-1: expected 0, got %d", got)
 	}
 
 	// Second tab starts at editorStartX + w0 + 1 (separator).
 	secondStart := lo.editorStartX + w0 + 1
-	if got := m.tabIndexAtX(secondStart); got != 1 {
+	if got := m.tabIndexAtX(lo, secondStart); got != 1 {
 		t.Errorf("second tab start: expected 1, got %d", got)
 	}
 
 	// Click before tabs.
-	if got := m.tabIndexAtX(0); got != -1 {
+	if got := m.tabIndexAtX(lo, 0); got != -1 {
 		t.Errorf("before tabs: expected -1, got %d", got)
 	}
 
@@ -552,7 +554,7 @@ func TestTabIndexAtX(t *testing.T) {
 	label1 := tabLabel(t2)
 	w1 := ansi.StringWidth(label1)
 	afterAll := secondStart + w1
-	if got := m.tabIndexAtX(afterAll); got != -1 {
+	if got := m.tabIndexAtX(lo, afterAll); got != -1 {
 		t.Errorf("after all tabs: expected -1, got %d", got)
 	}
 }
@@ -575,10 +577,10 @@ func TestMouseClick_TabBar(t *testing.T) {
 	w0 := ansi.StringWidth(label0)
 	secondTabX := lo.editorStartX + w0 + 1
 
-	// Click on second tab (Y = headerHeight, the label row).
+	// Click on second tab (Y = 0, the label row).
 	m.Update(tea.MouseClickMsg{
 		X:      secondTabX,
-		Y:      headerHeight,
+		Y:      0,
 		Button: tea.MouseLeft,
 	})
 
@@ -586,10 +588,10 @@ func TestMouseClick_TabBar(t *testing.T) {
 		t.Errorf("expected activeTab=1 after click, got %d", m.activeTab)
 	}
 
-	// Click on first tab (Y = headerHeight+1, the underline row).
+	// Click on first tab (Y = 1, the underline row).
 	m.Update(tea.MouseClickMsg{
 		X:      lo.editorStartX,
-		Y:      headerHeight + 1,
+		Y:      1,
 		Button: tea.MouseLeft,
 	})
 
@@ -764,7 +766,7 @@ func TestDiffSide_MouseClick_OldSide(t *testing.T) {
 	// Click on left half of editor (old side).
 	m.Update(tea.MouseClickMsg{
 		X:      lo.editorStartX + 1,
-		Y:      contentStartY,
+		Y:      paneHeaderRows,
 		Button: tea.MouseLeft,
 	})
 
@@ -788,7 +790,7 @@ func TestDiffSide_MouseClick_NewSide(t *testing.T) {
 	sideWidth := (lo.editorWidth - diffSeparatorWidth) / 2
 	m.Update(tea.MouseClickMsg{
 		X:      lo.editorStartX + sideWidth + diffSeparatorWidth + 1,
-		Y:      contentStartY,
+		Y:      paneHeaderRows,
 		Button: tea.MouseLeft,
 	})
 

@@ -211,7 +211,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // editorTarget converts mouse coordinates to editor line and character.
 func (m *Model) editorTarget(t *tab, lo layout, mouseX, mouseY int) (int, int) {
 	editorX := mouseX - lo.editorStartX - lo.lineNumWidth
-	editorY := mouseY - contentStartY
+	editorY := mouseY - paneHeaderRows
 
 	targetLine := t.vp.YOffset() + editorY
 	if editorY >= 0 && editorY < len(m.lastMapping) {
