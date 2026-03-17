@@ -475,6 +475,69 @@ func TestSplitRunsAtBreakpoints(t *testing.T) {
 	}
 }
 
+func TestPadBetween(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		left  string
+		right string
+		width int
+		want  string
+	}{
+		{
+			name:  "Normal",
+			left:  "ABC",
+			right: "XY",
+			width: 10,
+			want:  "ABC     XY",
+		},
+		{
+			name:  "ExactFit",
+			left:  "ABC",
+			right: "XY",
+			width: 6,
+			want:  "ABC XY",
+		},
+		{
+			name:  "EmptyRight",
+			left:  "hello",
+			right: "",
+			width: 10,
+			want:  "hello     ",
+		},
+		{
+			name:  "EmptyLeft",
+			left:  "",
+			right: "end",
+			width: 10,
+			want:  "       end",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := PadBetween(tt.left, tt.right, tt.width)
+			if got != tt.want {
+				t.Errorf("PadBetween(%q, %q, %d) = %q, want %q",
+					tt.left, tt.right, tt.width, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPadBetween_Overflow(t *testing.T) {
+	t.Parallel()
+	// Left is too long: should be truncated to make room for right.
+	got := PadBetween("very long left text", "R", 10)
+	if !strings.Contains(got, "R") {
+		t.Errorf("expected right part 'R' preserved, got %q", got)
+	}
+	if len(got) < 10 {
+		t.Errorf("expected at least width 10, got %d: %q", len(got), got)
+	}
+}
+
 func TestClampHighlightsToSegment(t *testing.T) {
 	t.Parallel()
 
