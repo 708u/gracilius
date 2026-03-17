@@ -6,6 +6,8 @@ import (
 )
 
 func TestIsBinary(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		data []byte
@@ -52,6 +54,7 @@ func TestIsBinary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := IsBinary(tt.data)
 			if got != tt.want {
 				t.Fatalf("IsBinary() = %v, want %v", got, tt.want)
@@ -61,6 +64,8 @@ func TestIsBinary(t *testing.T) {
 }
 
 func TestSplitLines(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		data []byte
@@ -110,6 +115,7 @@ func TestSplitLines(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := SplitLines(tt.data)
 			if len(got) != len(tt.want) {
 				t.Fatalf("SplitLines() returned %d lines, want %d\ngot:  %q\nwant: %q",
@@ -126,6 +132,8 @@ func TestSplitLines(t *testing.T) {
 }
 
 func TestSplitLines_LargeInput(t *testing.T) {
+	t.Parallel()
+
 	// Ensure it works with content exceeding default scanner buffer.
 	line := strings.Repeat("x", 100)
 	var buf []byte

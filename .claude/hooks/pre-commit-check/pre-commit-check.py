@@ -21,6 +21,19 @@ CHECKS = {
             "make build",
         ],
     },
+    "test_quality": {
+        "when": "When new code or logic changes are added",
+        "checks": [
+            "Tests exist for all new/changed exported functions",
+            "Happy path: representative success case is covered",
+            "Edge cases: unusual but valid inputs are considered",
+            "Boundary values: range limits are considered",
+            "Error paths: failures callers would reasonably "
+            "hit are tested",
+            "Irregular use: misuse or unexpected caller "
+            "behavior is considered",
+        ],
+    },
 }
 
 STATE_DIR = os.path.join(
@@ -119,8 +132,9 @@ def main():
             f"  [{category}] {info['when']}",
             file=sys.stderr,
         )
-        for cmd in info["commands"]:
-            print(f"    - {cmd}", file=sys.stderr)
+        items = info.get("commands", []) + info.get("checks", [])
+        for item in items:
+            print(f"    - {item}", file=sys.stderr)
     print("", file=sys.stderr)
     print(
         "After committing and pushing, review the entire PR "

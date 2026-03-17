@@ -31,6 +31,7 @@ func renderDiffHL(data *diff.Data, theme render.Theme, width, height, offset int
 }
 
 func TestRenderSideBySide_LineCount(t *testing.T) {
+	t.Parallel()
 	old := []string{"aaa", "bbb", "ccc"}
 	new := []string{"aaa", "BBB", "ccc"}
 	data := diff.Build(old, new)
@@ -45,6 +46,7 @@ func TestRenderSideBySide_LineCount(t *testing.T) {
 }
 
 func TestRenderSideBySide_EmptyDiff(t *testing.T) {
+	t.Parallel()
 	data := diff.Build(nil, nil)
 
 	lines := renderDiff(data, render.Dark, 80, 10, 0)
@@ -54,6 +56,7 @@ func TestRenderSideBySide_EmptyDiff(t *testing.T) {
 }
 
 func TestRenderSideBySide_ColumnWidths(t *testing.T) {
+	t.Parallel()
 	old := []string{"aaa", "bbb"}
 	new := []string{"aaa", "BBB"}
 	data := diff.Build(old, new)
@@ -69,6 +72,7 @@ func TestRenderSideBySide_ColumnWidths(t *testing.T) {
 }
 
 func TestRenderSideBySide_Separator(t *testing.T) {
+	t.Parallel()
 	old := []string{"aaa", "bbb"}
 	new := []string{"aaa", "BBB"}
 	data := diff.Build(old, new)
@@ -83,6 +87,7 @@ func TestRenderSideBySide_Separator(t *testing.T) {
 }
 
 func TestRenderSideBySide_ScrollOffset(t *testing.T) {
+	t.Parallel()
 	old := []string{"aaa", "bbb", "ccc", "ddd", "eee"}
 	new := []string{"aaa", "bbb", "ccc", "ddd", "eee"}
 	data := diff.Build(old, new)
@@ -95,6 +100,7 @@ func TestRenderSideBySide_ScrollOffset(t *testing.T) {
 }
 
 func TestRenderSideBySide_LineNumbers(t *testing.T) {
+	t.Parallel()
 	old := []string{"aaa", "bbb", "ccc"}
 	new := []string{"aaa", "BBB", "ccc"}
 	data := diff.Build(old, new)
@@ -113,6 +119,7 @@ func TestRenderSideBySide_LineNumbers(t *testing.T) {
 }
 
 func TestRenderSideBySide_FillerLine(t *testing.T) {
+	t.Parallel()
 	data := diff.Build(nil, []string{"aaa", "bbb"})
 
 	lines := renderDiff(data, render.Dark, 80, 5, 0)
@@ -130,6 +137,7 @@ func TestRenderSideBySide_FillerLine(t *testing.T) {
 }
 
 func TestDiffGutterWidth(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		maxLine int
 		want    int
@@ -151,6 +159,7 @@ func TestDiffGutterWidth(t *testing.T) {
 }
 
 func TestDiffColorsFor(t *testing.T) {
+	t.Parallel()
 	dark := diffColorsFor(render.Dark)
 	light := diffColorsFor(render.Light)
 
@@ -175,6 +184,7 @@ func TestDiffColorsFor(t *testing.T) {
 }
 
 func TestRenderSideBySide_WithSyntaxHighlight(t *testing.T) {
+	t.Parallel()
 	old := []string{"func foo() {", "  return 1", "}"}
 	new := []string{"func foo() {", "  return 2", "}"}
 	data := diff.Build(old, new)
@@ -203,6 +213,7 @@ func TestRenderSideBySide_WithSyntaxHighlight(t *testing.T) {
 }
 
 func TestRenderSideBySide_WordDiffWithSyntax(t *testing.T) {
+	t.Parallel()
 	old := []string{"x := 10"}
 	new := []string{"x := 20"}
 	data := diff.Build(old, new)
@@ -229,6 +240,7 @@ func TestRenderSideBySide_WordDiffWithSyntax(t *testing.T) {
 }
 
 func TestRenderSideBySide_SoftWrapWithSyntax(t *testing.T) {
+	t.Parallel()
 	longLine := "func veryLongFunctionName(parameterOne int, parameterTwo string, parameterThree bool) error {"
 	old := []string{longLine}
 	new := []string{longLine}
@@ -257,6 +269,7 @@ func TestRenderSideBySide_SoftWrapWithSyntax(t *testing.T) {
 }
 
 func TestRenderAllDiffLines_RowVisualStarts(t *testing.T) {
+	t.Parallel()
 	old := []string{"aaa", "bbb", "ccc"}
 	new := []string{"aaa", "BBB", "ccc"}
 	data := diff.Build(old, new)
@@ -277,6 +290,7 @@ func TestRenderAllDiffLines_RowVisualStarts(t *testing.T) {
 }
 
 func TestRenderAllDiffLines_RowVisualStarts_SoftWrap(t *testing.T) {
+	t.Parallel()
 	longLine := strings.Repeat("x", 100)
 	old := []string{"short", longLine}
 	new := []string{"short", longLine}
@@ -310,6 +324,7 @@ func TestRenderAllDiffLines_RowVisualStarts_SoftWrap(t *testing.T) {
 }
 
 func TestDiffVisualToLogical(t *testing.T) {
+	t.Parallel()
 	tb := &tab{
 		diffRowVisualStarts: []int{0, 1, 4, 7},
 	}
@@ -338,6 +353,7 @@ func TestDiffVisualToLogical(t *testing.T) {
 }
 
 func TestDiffVisualToLogical_Empty(t *testing.T) {
+	t.Parallel()
 	tb := &tab{}
 	row, sub := tb.diffVisualToLogical(5)
 	if row != 0 || sub != 0 {
@@ -346,6 +362,7 @@ func TestDiffVisualToLogical_Empty(t *testing.T) {
 }
 
 func TestEnsureDiffContent_PreservesLogicalPosition(t *testing.T) {
+	t.Parallel()
 	longLine := strings.Repeat("x", 100)
 	old := []string{"short", longLine, "end"}
 	new := []string{"short", longLine, "end"}
@@ -378,6 +395,7 @@ func TestEnsureDiffContent_PreservesLogicalPosition(t *testing.T) {
 }
 
 func TestRenderSideBySide_SoftWrapWithWordDiff(t *testing.T) {
+	t.Parallel()
 	// Use a long modified line that forces soft-wrapping at narrow width.
 	old := []string{"func processData(inputValue int, extraParam string) error {"}
 	new := []string{"func processData(inputValue int, changedParam string) error {"}
@@ -420,6 +438,7 @@ func TestRenderSideBySide_SoftWrapWithWordDiff(t *testing.T) {
 }
 
 func TestRenderSideBySide_SoftWrapWordDiffNoSyntax(t *testing.T) {
+	t.Parallel()
 	// Word-diff with wrapping but without syntax highlighting.
 	old := []string{"this is a long line with some original words that will be wrapped"}
 	new := []string{"this is a long line with some modified words that will be wrapped"}
@@ -454,6 +473,7 @@ func TestRenderSideBySide_SoftWrapWordDiffNoSyntax(t *testing.T) {
 }
 
 func TestRenderSideBySide_NilSyntaxFallback(t *testing.T) {
+	t.Parallel()
 	old := []string{"aaa", "bbb"}
 	new := []string{"aaa", "BBB"}
 	data := diff.Build(old, new)

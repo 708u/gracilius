@@ -5,45 +5,72 @@ import (
 	"testing"
 )
 
-func TestPadRight_ASCII(t *testing.T) {
-	result := PadRight("abc", 10)
-	// lipgloss pads to display width 10 using spaces
-	if len(result) < 10 {
-		t.Errorf("expected padded string length >= 10, got %d: %q", len(result), result)
-	}
-	if !strings.HasPrefix(result, "abc") {
-		t.Errorf("expected prefix 'abc', got %q", result)
-	}
-}
+func TestPadRight(t *testing.T) {
+	t.Parallel()
 
-func TestPadRight_CJK(t *testing.T) {
-	// Each CJK char is 2 columns wide; 3 chars = 6 columns
-	result := PadRight("\u4e16\u754c\u4eba", 10)
-	if !strings.Contains(result, "\u4e16\u754c\u4eba") {
-		t.Errorf("expected CJK text preserved, got %q", result)
+	tests := []struct {
+		name   string
+		input  string
+		width  int
+		verify func(t *testing.T, result string)
+	}{
+		{
+			name:  "ASCII",
+			input: "abc",
+			width: 10,
+			verify: func(t *testing.T, result string) {
+				t.Helper()
+				if len(result) < 10 {
+					t.Errorf("expected padded string length >= 10, got %d: %q", len(result), result)
+				}
+				if !strings.HasPrefix(result, "abc") {
+					t.Errorf("expected prefix 'abc', got %q", result)
+				}
+			},
+		},
+		{
+			name:  "CJK",
+			input: "\u4e16\u754c\u4eba",
+			width: 10,
+			verify: func(t *testing.T, result string) {
+				t.Helper()
+				if !strings.Contains(result, "\u4e16\u754c\u4eba") {
+					t.Errorf("expected CJK text preserved, got %q", result)
+				}
+				if !strings.Contains(result, "    ") {
+					t.Errorf("expected 4 spaces padding for CJK at width 10, got %q", result)
+				}
+			},
+		},
+		{
+			name:  "AlreadyWide",
+			input: "abcdefghij",
+			width: 10,
+			verify: func(t *testing.T, result string) {
+				t.Helper()
+				if !strings.Contains(result, "abcdefghij") {
+					t.Errorf("expected original text preserved, got %q", result)
+				}
+				result2 := PadRight("abcdefghijkl", 10)
+				if result2 == "" {
+					t.Error("expected non-empty result for over-width string")
+				}
+			},
+		},
 	}
-	// Should have 4 padding spaces (10 - 6 = 4)
-	if !strings.Contains(result, "    ") {
-		t.Errorf("expected 4 spaces padding for CJK at width 10, got %q", result)
-	}
-}
 
-func TestPadRight_AlreadyWide(t *testing.T) {
-	// Exactly at width: should contain the original text with no extra padding
-	result := PadRight("abcdefghij", 10)
-	if !strings.Contains(result, "abcdefghij") {
-		t.Errorf("expected original text preserved, got %q", result)
-	}
-
-	// Over width: lipgloss wraps to fit, so the text may be reformatted.
-	// Just verify the function does not panic and produces output.
-	result2 := PadRight("abcdefghijkl", 10)
-	if result2 == "" {
-		t.Error("expected non-empty result for over-width string")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := PadRight(tt.input, tt.width)
+			tt.verify(t, result)
+		})
 	}
 }
 
 func TestExpandTabs(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		input string
 		want  string
@@ -55,86 +82,138 @@ func TestExpandTabs(t *testing.T) {
 		{"", ""},
 	}
 	for _, tc := range tests {
-		got := ExpandTabs(tc.input)
-		if got != tc.want {
-			t.Errorf("ExpandTabs(%q) = %q, want %q", tc.input, got, tc.want)
-		}
+		t.Run(tc.input, func(t *testing.T) {
+			t.Parallel()
+			got := ExpandTabs(tc.input)
+			if got != tc.want {
+				t.Errorf("ExpandTabs(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
 	}
 }
 
-func TestRuneWidth_ASCII(t *testing.T) {
-	for _, r := range "abcABC123!@#" {
-		w := RuneWidth(r)
-		if w != 1 {
-			t.Errorf("RuneWidth(%q) = %d, want 1", r, w)
-		}
+func TestRuneWidth(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		runes string
+		want  int
+	}{
+		{
+			name:  "ASCII",
+			runes: "abcABC123!@#",
+			want:  1,
+		},
+		{
+			name:  "CJK",
+			runes: "\u4e16\u754c\u4eba\u3042\uff21",
+			want:  2,
+		},
+		{
+			name:  "Tab",
+			runes: "\t",
+			want:  4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			for _, r := range tt.runes {
+				w := RuneWidth(r)
+				if w != tt.want {
+					t.Errorf("RuneWidth(%q) = %d, want %d", r, w, tt.want)
+				}
+			}
+		})
 	}
 }
 
-func TestRuneWidth_CJK(t *testing.T) {
-	cjk := "\u4e16\u754c\u4eba\u3042\uff21"
-	for _, r := range cjk {
-		w := RuneWidth(r)
-		if w != 2 {
-			t.Errorf("RuneWidth(%q) = %d, want 2", r, w)
-		}
-	}
-}
+func TestWrapBreakpoints(t *testing.T) {
+	t.Parallel()
 
-func TestRuneWidth_Tab(t *testing.T) {
-	w := RuneWidth('\t')
-	if w != 4 {
-		t.Errorf("RuneWidth(tab) = %d, want 4", w)
+	tests := []struct {
+		name   string
+		line   string
+		width  int
+		verify func(t *testing.T, bp []int)
+	}{
+		{
+			name:  "NoWrap",
+			line:  "short",
+			width: 80,
+			verify: func(t *testing.T, bp []int) {
+				t.Helper()
+				if bp != nil {
+					t.Errorf("expected nil breakpoints for short line, got %v", bp)
+				}
+			},
+		},
+		{
+			name:  "BasicWrap",
+			line:  "abcdefghij",
+			width: 5,
+			verify: func(t *testing.T, bp []int) {
+				t.Helper()
+				if len(bp) != 1 {
+					t.Fatalf("expected 1 breakpoint, got %d: %v", len(bp), bp)
+				}
+				if bp[0] != 5 {
+					t.Errorf("expected breakpoint at 5, got %d", bp[0])
+				}
+			},
+		},
+		{
+			name:  "CJK",
+			line:  "\u4e16\u754c\u4eba\u985e\u5b9d",
+			width: 6,
+			verify: func(t *testing.T, bp []int) {
+				t.Helper()
+				if len(bp) < 1 {
+					t.Fatalf("expected at least 1 breakpoint for CJK wrapping, got %v", bp)
+				}
+				if bp[0] != 3 {
+					t.Errorf("expected first breakpoint at 3 (3 CJK chars = 6 cols), got %d", bp[0])
+				}
+			},
+		},
+		{
+			name:  "ZeroWidth",
+			line:  "anything",
+			width: 0,
+			verify: func(t *testing.T, bp []int) {
+				t.Helper()
+				if bp != nil {
+					t.Errorf("expected nil breakpoints for zero width, got %v", bp)
+				}
+			},
+		},
+		{
+			name:  "EmptyLine",
+			line:  "",
+			width: 10,
+			verify: func(t *testing.T, bp []int) {
+				t.Helper()
+				if bp != nil {
+					t.Errorf("expected nil breakpoints for empty line, got %v", bp)
+				}
+			},
+		},
 	}
-}
 
-func TestWrapBreakpoints_NoWrap(t *testing.T) {
-	bp := WrapBreakpoints("short", 80)
-	if bp != nil {
-		t.Errorf("expected nil breakpoints for short line, got %v", bp)
-	}
-}
-
-func TestWrapBreakpoints_BasicWrap(t *testing.T) {
-	// 10 chars, width 5 => break at index 5
-	line := "abcdefghij"
-	bp := WrapBreakpoints(line, 5)
-	if len(bp) != 1 {
-		t.Fatalf("expected 1 breakpoint, got %d: %v", len(bp), bp)
-	}
-	if bp[0] != 5 {
-		t.Errorf("expected breakpoint at 5, got %d", bp[0])
-	}
-}
-
-func TestWrapBreakpoints_CJK(t *testing.T) {
-	// Each CJK char is 2 columns; 5 CJK chars = 10 columns
-	line := "\u4e16\u754c\u4eba\u985e\u5b9d"
-	bp := WrapBreakpoints(line, 6)
-	// Width 6 fits 3 CJK chars (6 cols), break at index 3
-	if len(bp) < 1 {
-		t.Fatalf("expected at least 1 breakpoint for CJK wrapping, got %v", bp)
-	}
-	if bp[0] != 3 {
-		t.Errorf("expected first breakpoint at 3 (3 CJK chars = 6 cols), got %d", bp[0])
-	}
-}
-
-func TestWrapBreakpoints_ZeroWidth(t *testing.T) {
-	bp := WrapBreakpoints("anything", 0)
-	if bp != nil {
-		t.Errorf("expected nil breakpoints for zero width, got %v", bp)
-	}
-}
-
-func TestWrapBreakpoints_EmptyLine(t *testing.T) {
-	bp := WrapBreakpoints("", 10)
-	if bp != nil {
-		t.Errorf("expected nil breakpoints for empty line, got %v", bp)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			bp := WrapBreakpoints(tt.line, tt.width)
+			tt.verify(t, bp)
+		})
 	}
 }
 
 func TestDisplayWidthRange(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		line     string
 		from, to int
@@ -151,122 +230,248 @@ func TestDisplayWidthRange(t *testing.T) {
 		{"abc", 0, 10, 3},         // to beyond length is clamped
 	}
 	for _, tc := range tests {
-		got := DisplayWidthRange(tc.line, tc.from, tc.to)
-		if got != tc.want {
-			t.Errorf("DisplayWidthRange(%q, %d, %d) = %d, want %d",
-				tc.line, tc.from, tc.to, got, tc.want)
-		}
+		t.Run(tc.line, func(t *testing.T) {
+			t.Parallel()
+			got := DisplayWidthRange(tc.line, tc.from, tc.to)
+			if got != tc.want {
+				t.Errorf("DisplayWidthRange(%q, %d, %d) = %d, want %d",
+					tc.line, tc.from, tc.to, got, tc.want)
+			}
+		})
 	}
 }
 
-func TestCountWraps_NoWrap(t *testing.T) {
-	count := CountWraps("short", 80)
-	if count != 1 {
-		t.Errorf("expected 1 for short line, got %d", count)
-	}
-}
+func TestCountWraps(t *testing.T) {
+	t.Parallel()
 
-func TestCountWraps_WithWrap(t *testing.T) {
-	// 10 chars at width 5 => 2 visual rows
-	count := CountWraps("abcdefghij", 5)
-	if count != 2 {
-		t.Errorf("expected 2 for 10-char line at width 5, got %d", count)
+	tests := []struct {
+		name  string
+		line  string
+		width int
+		want  int
+	}{
+		{
+			name:  "NoWrap",
+			line:  "short",
+			width: 80,
+			want:  1,
+		},
+		{
+			name:  "WithWrap_10at5",
+			line:  "abcdefghij",
+			width: 5,
+			want:  2,
+		},
+		{
+			name:  "WithWrap_15at5",
+			line:  "abcdefghijklmno",
+			width: 5,
+			want:  3,
+		},
+		{
+			name:  "ZeroWidth",
+			line:  "anything",
+			width: 0,
+			want:  1,
+		},
+		{
+			name:  "CJK",
+			line:  "\u4e16\u754c\u4eba\u985e\u5b9d",
+			width: 6,
+			want:  2,
+		},
 	}
 
-	// 15 chars at width 5 => 3 visual rows
-	count = CountWraps("abcdefghijklmno", 5)
-	if count != 3 {
-		t.Errorf("expected 3 for 15-char line at width 5, got %d", count)
-	}
-}
-
-func TestCountWraps_ZeroWidth(t *testing.T) {
-	count := CountWraps("anything", 0)
-	if count != 1 {
-		t.Errorf("expected 1 for zero width, got %d", count)
-	}
-}
-
-func TestCountWraps_CJK(t *testing.T) {
-	// 5 CJK chars = 10 columns; width 6 => 2 visual rows
-	count := CountWraps("\u4e16\u754c\u4eba\u985e\u5b9d", 6)
-	if count != 2 {
-		t.Errorf("expected 2 for CJK at width 6, got %d", count)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			count := CountWraps(tt.line, tt.width)
+			if count != tt.want {
+				t.Errorf("CountWraps(%q, %d) = %d, want %d", tt.line, tt.width, count, tt.want)
+			}
+		})
 	}
 }
 
 func TestSplitRunsAtBreakpoints(t *testing.T) {
-	runs := []StyledRun{
-		{Text: "abcdefghij", ANSI: "\033[31m"},
-	}
-	bp := []int{5}
-	segments := SplitRunsAtBreakpoints(runs, bp)
+	t.Parallel()
 
-	if len(segments) != 2 {
-		t.Fatalf("expected 2 segments, got %d", len(segments))
+	tests := []struct {
+		name   string
+		runs   []StyledRun
+		bp     []int
+		verify func(t *testing.T, segments [][]StyledRun)
+	}{
+		{
+			name: "SingleRun",
+			runs: []StyledRun{
+				{Text: "abcdefghij", ANSI: "\033[31m"},
+			},
+			bp: []int{5},
+			verify: func(t *testing.T, segments [][]StyledRun) {
+				t.Helper()
+				if len(segments) != 2 {
+					t.Fatalf("expected 2 segments, got %d", len(segments))
+				}
+				if len(segments[0]) != 1 {
+					t.Fatalf("expected 1 run in segment 0, got %d", len(segments[0]))
+				}
+				if segments[0][0].Text != "abcde" {
+					t.Errorf("segment 0 text = %q, want 'abcde'", segments[0][0].Text)
+				}
+				if segments[0][0].ANSI != "\033[31m" {
+					t.Errorf("segment 0 ANSI = %q, want '\\033[31m'", segments[0][0].ANSI)
+				}
+				if len(segments[1]) != 1 {
+					t.Fatalf("expected 1 run in segment 1, got %d", len(segments[1]))
+				}
+				if segments[1][0].Text != "fghij" {
+					t.Errorf("segment 1 text = %q, want 'fghij'", segments[1][0].Text)
+				}
+			},
+		},
+		{
+			name: "MultipleRuns",
+			runs: []StyledRun{
+				{Text: "abc", ANSI: "\033[31m"},
+				{Text: "defgh", ANSI: "\033[32m"},
+			},
+			bp: []int{5},
+			verify: func(t *testing.T, segments [][]StyledRun) {
+				t.Helper()
+				if len(segments) != 2 {
+					t.Fatalf("expected 2 segments, got %d", len(segments))
+				}
+				seg0Text := ""
+				for _, r := range segments[0] {
+					seg0Text += r.Text
+				}
+				if seg0Text != "abcde" {
+					t.Errorf("segment 0 combined text = %q, want 'abcde'", seg0Text)
+				}
+				seg1Text := ""
+				for _, r := range segments[1] {
+					seg1Text += r.Text
+				}
+				if seg1Text != "fgh" {
+					t.Errorf("segment 1 combined text = %q, want 'fgh'", seg1Text)
+				}
+			},
+		},
+		{
+			name: "NilBreakpoints",
+			runs: []StyledRun{
+				{Text: "hello", ANSI: ""},
+			},
+			bp: nil,
+			verify: func(t *testing.T, segments [][]StyledRun) {
+				t.Helper()
+				if len(segments) != 1 {
+					t.Fatalf("expected 1 segment with nil breakpoints, got %d", len(segments))
+				}
+				if segments[0][0].Text != "hello" {
+					t.Errorf("expected 'hello', got %q", segments[0][0].Text)
+				}
+			},
+		},
 	}
 
-	// First segment: "abcde"
-	if len(segments[0]) != 1 {
-		t.Fatalf("expected 1 run in segment 0, got %d", len(segments[0]))
-	}
-	if segments[0][0].Text != "abcde" {
-		t.Errorf("segment 0 text = %q, want 'abcde'", segments[0][0].Text)
-	}
-	if segments[0][0].ANSI != "\033[31m" {
-		t.Errorf("segment 0 ANSI = %q, want '\\033[31m'", segments[0][0].ANSI)
-	}
-
-	// Second segment: "fghij"
-	if len(segments[1]) != 1 {
-		t.Fatalf("expected 1 run in segment 1, got %d", len(segments[1]))
-	}
-	if segments[1][0].Text != "fghij" {
-		t.Errorf("segment 1 text = %q, want 'fghij'", segments[1][0].Text)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			segments := SplitRunsAtBreakpoints(tt.runs, tt.bp)
+			tt.verify(t, segments)
+		})
 	}
 }
 
-func TestSplitRunsAtBreakpoints_MultipleRuns(t *testing.T) {
-	runs := []StyledRun{
-		{Text: "abc", ANSI: "\033[31m"},
-		{Text: "defgh", ANSI: "\033[32m"},
-	}
-	// Break at position 5, which falls in the second run ("defgh" starts at pos 3)
-	bp := []int{5}
-	segments := SplitRunsAtBreakpoints(runs, bp)
+func TestClampHighlightsToSegment(t *testing.T) {
+	t.Parallel()
 
-	if len(segments) != 2 {
-		t.Fatalf("expected 2 segments, got %d", len(segments))
+	tests := []struct {
+		name       string
+		highlights []HighlightRange
+		wrapOff    int
+		segLen     int
+		wantLen    int
+		wantFirst  *HighlightRange // nil means no results expected
+	}{
+		{
+			name: "fully within segment",
+			highlights: []HighlightRange{
+				{Start: 2, End: 5, BgSeq: "bg1"},
+			},
+			wrapOff:   0,
+			segLen:    10,
+			wantLen:   1,
+			wantFirst: &HighlightRange{Start: 2, End: 5, BgSeq: "bg1"},
+		},
+		{
+			name: "clamp to segment start",
+			highlights: []HighlightRange{
+				{Start: 3, End: 8, BgSeq: "bg1"},
+			},
+			wrapOff:   5,
+			segLen:    10,
+			wantLen:   1,
+			wantFirst: &HighlightRange{Start: 0, End: 3, BgSeq: "bg1"},
+		},
+		{
+			name: "clamp to segment end",
+			highlights: []HighlightRange{
+				{Start: 2, End: 15, BgSeq: "bg1"},
+			},
+			wrapOff:   0,
+			segLen:    10,
+			wantLen:   1,
+			wantFirst: &HighlightRange{Start: 2, End: 10, BgSeq: "bg1"},
+		},
+		{
+			name: "entirely before segment",
+			highlights: []HighlightRange{
+				{Start: 0, End: 3, BgSeq: "bg1"},
+			},
+			wrapOff: 5,
+			segLen:  10,
+			wantLen: 0,
+		},
+		{
+			name: "entirely after segment",
+			highlights: []HighlightRange{
+				{Start: 20, End: 25, BgSeq: "bg1"},
+			},
+			wrapOff: 0,
+			segLen:  10,
+			wantLen: 0,
+		},
+		{
+			name: "multiple highlights",
+			highlights: []HighlightRange{
+				{Start: 5, End: 8, BgSeq: "bg1"},
+				{Start: 12, End: 18, BgSeq: "bg2"},
+			},
+			wrapOff: 10,
+			segLen:  10,
+			wantLen: 1, // only the second overlaps
+		},
 	}
 
-	// First segment should have "abc" + "de"
-	seg0Text := ""
-	for _, r := range segments[0] {
-		seg0Text += r.Text
-	}
-	if seg0Text != "abcde" {
-		t.Errorf("segment 0 combined text = %q, want 'abcde'", seg0Text)
-	}
-
-	// Second segment should have "fgh"
-	seg1Text := ""
-	for _, r := range segments[1] {
-		seg1Text += r.Text
-	}
-	if seg1Text != "fgh" {
-		t.Errorf("segment 1 combined text = %q, want 'fgh'", seg1Text)
-	}
-}
-
-func TestSplitRunsAtBreakpoints_NilBreakpoints(t *testing.T) {
-	runs := []StyledRun{
-		{Text: "hello", ANSI: ""},
-	}
-	segments := SplitRunsAtBreakpoints(runs, nil)
-	if len(segments) != 1 {
-		t.Fatalf("expected 1 segment with nil breakpoints, got %d", len(segments))
-	}
-	if segments[0][0].Text != "hello" {
-		t.Errorf("expected 'hello', got %q", segments[0][0].Text)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			result := ClampHighlightsToSegment(tc.highlights, tc.wrapOff, tc.segLen)
+			if len(result) != tc.wantLen {
+				t.Fatalf("expected %d results, got %d: %+v",
+					tc.wantLen, len(result), result)
+			}
+			if tc.wantFirst != nil && len(result) > 0 {
+				got := result[0]
+				if got.Start != tc.wantFirst.Start ||
+					got.End != tc.wantFirst.End ||
+					got.BgSeq != tc.wantFirst.BgSeq {
+					t.Errorf("first result = %+v, want %+v", got, *tc.wantFirst)
+				}
+			}
+		})
 	}
 }
