@@ -56,16 +56,29 @@ func renderModeSelector(
 	styleInactive := lipgloss.NewStyle().
 		Faint(true)
 
+	styleFaint := lipgloss.NewStyle().Faint(true)
+
 	var parts []string
-	for _, mode := range gitDiffModes {
+	activeIdx := 0
+	for i, mode := range gitDiffModes {
 		label := mode.label(defaultBranch)
 		if mode == active {
+			activeIdx = i
 			parts = append(parts, styleActive.Render(label))
 		} else {
 			parts = append(parts, styleInactive.Render(label))
 		}
 	}
-	return strings.Join(parts, "  ")
+
+	leftArrow := "\u25c2"
+	rightArrow := "\u25b8"
+	if activeIdx == 0 {
+		leftArrow = styleFaint.Render(leftArrow)
+	}
+	if activeIdx == len(gitDiffModes)-1 {
+		rightArrow = styleFaint.Render(rightArrow)
+	}
+	return "  " + leftArrow + " " + strings.Join(parts, "  ") + " " + rightArrow
 }
 
 // gitPanelState holds per-mode state for the git changes panel.
