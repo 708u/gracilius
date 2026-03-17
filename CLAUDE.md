@@ -34,6 +34,18 @@ CLAUDE_CODE_SSE_PORT=18765 claude
 
 ## Test Conventions
 
+### Bug Fix TDD
+
+When fixing a bug, follow the Red-Green workflow:
+
+1. Write a test that reproduces the bug
+2. Run the test and confirm it fails (red)
+3. Apply the minimal fix to make the test pass
+4. Run the test and confirm it passes (green)
+
+Never skip the red step. A test that has never
+failed does not prove it can catch the bug.
+
 ### Table-Driven Tests
 
 Use table-driven tests when inputs and outputs
