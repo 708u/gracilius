@@ -48,6 +48,7 @@ func newReader(t *testing.T, dir string) *StatusReader {
 }
 
 func TestNewStatusReader_NotGitRepo(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	_, err := NewStatusReader(dir)
 	if err == nil {
@@ -56,6 +57,7 @@ func TestNewStatusReader_NotGitRepo(t *testing.T) {
 }
 
 func TestChangedFiles_NoChanges(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", ".")
@@ -71,6 +73,7 @@ func TestChangedFiles_NoChanges(t *testing.T) {
 }
 
 func TestChangedFiles_Modified(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", ".")
@@ -105,6 +108,7 @@ func TestChangedFiles_Modified(t *testing.T) {
 }
 
 func TestChangedFiles_NewFile(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "first.txt", "first\n")
 	run(t, dir, "git", "add", ".")
@@ -125,6 +129,7 @@ func TestChangedFiles_NewFile(t *testing.T) {
 }
 
 func TestChangedFiles_DeletedFile(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", ".")
@@ -156,6 +161,7 @@ func TestChangedFiles_DeletedFile(t *testing.T) {
 }
 
 func TestChangedFiles_BinaryFile(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	// Create a binary file (contains null bytes)
 	writeFile(t, dir, "image.bin", "header\x00data\x00end\n")
@@ -186,6 +192,7 @@ func TestChangedFiles_BinaryFile(t *testing.T) {
 }
 
 func TestChangedFiles_RenamedFile(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "old.txt", "content\n")
 	run(t, dir, "git", "add", ".")
@@ -224,6 +231,7 @@ func TestChangedFiles_RenamedFile(t *testing.T) {
 }
 
 func TestChangedFiles_EmptyRepo(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 
 	files, err := newReader(t, dir).ChangedFiles()
@@ -236,6 +244,7 @@ func TestChangedFiles_EmptyRepo(t *testing.T) {
 }
 
 func TestStagedFiles_NoChanges(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", ".")
@@ -251,6 +260,7 @@ func TestStagedFiles_NoChanges(t *testing.T) {
 }
 
 func TestStagedFiles_StagedModified(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", ".")
@@ -284,6 +294,7 @@ func TestStagedFiles_StagedModified(t *testing.T) {
 }
 
 func TestStagedFiles_StagedNewFile(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "first.txt", "first\n")
 	run(t, dir, "git", "add", ".")
@@ -308,6 +319,7 @@ func TestStagedFiles_StagedNewFile(t *testing.T) {
 }
 
 func TestStagedFiles_StagedDeleted(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", ".")
@@ -332,6 +344,7 @@ func TestStagedFiles_StagedDeleted(t *testing.T) {
 }
 
 func TestStagedFiles_StagedRenamed(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "old.txt", "content\n")
 	run(t, dir, "git", "add", ".")
@@ -355,6 +368,7 @@ func TestStagedFiles_StagedRenamed(t *testing.T) {
 }
 
 func TestStagedFiles_EmptyRepo(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 
 	// No commits yet, staging a file
@@ -375,6 +389,7 @@ func TestStagedFiles_EmptyRepo(t *testing.T) {
 }
 
 func TestUntrackedFiles_None(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", ".")
@@ -390,6 +405,7 @@ func TestUntrackedFiles_None(t *testing.T) {
 }
 
 func TestUntrackedFiles_NewFile(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "first.txt", "first\n")
 	run(t, dir, "git", "add", ".")
@@ -419,6 +435,7 @@ func TestUntrackedFiles_NewFile(t *testing.T) {
 }
 
 func TestUntrackedFiles_RespectsGitignore(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, ".gitignore", "*.log\n")
 	run(t, dir, "git", "add", ".")
@@ -440,6 +457,7 @@ func TestUntrackedFiles_RespectsGitignore(t *testing.T) {
 }
 
 func TestBranchDiff(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", ".")
@@ -496,6 +514,7 @@ func TestBranchDiff(t *testing.T) {
 }
 
 func TestBranchDiff_MissingBaseRef(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", ".")
@@ -508,6 +527,7 @@ func TestBranchDiff_MissingBaseRef(t *testing.T) {
 }
 
 func TestDefaultBranch(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", ".")
@@ -528,6 +548,7 @@ func TestDefaultBranch(t *testing.T) {
 }
 
 func TestMergeBase(t *testing.T) {
+	t.Parallel()
 	dir := initRepo(t)
 	writeFile(t, dir, "hello.txt", "hello\n")
 	run(t, dir, "git", "add", ".")

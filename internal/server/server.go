@@ -158,6 +158,8 @@ func (s *Server) Listen() error {
 
 	log.Printf("Lock file created: %s", s.lockFile.Path())
 	log.Printf("Listening on %s", s.getAddr())
+
+	s.httpSrv = &http.Server{Handler: s.mux}
 	return nil
 }
 
@@ -165,7 +167,6 @@ func (s *Server) Listen() error {
 // Listen must be called before Serve.
 // Call Stop from another goroutine to shut down.
 func (s *Server) Serve() {
-	s.httpSrv = &http.Server{Handler: s.mux}
 	if err := s.httpSrv.Serve(s.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Printf("Server error: %v", err)
 	}

@@ -7,6 +7,7 @@ import (
 )
 
 func TestPanelLabel(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		p    panel
 		want string
@@ -22,6 +23,7 @@ func TestPanelLabel(t *testing.T) {
 }
 
 func TestSwitchPanel(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	if m.activePanel != panelFiles {
@@ -41,6 +43,7 @@ func TestSwitchPanel(t *testing.T) {
 }
 
 func TestToggleSidebar(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 
 	if !m.sidebarVisible {
@@ -60,6 +63,7 @@ func TestToggleSidebar(t *testing.T) {
 }
 
 func TestToggleSidebar_ForcesEditorFocus(t *testing.T) {
+	t.Parallel()
 	m := newTestModelWithFile(t, "line1\nline2")
 	m.focusPane = paneTree
 
@@ -74,39 +78,61 @@ func TestToggleSidebar_ForcesEditorFocus(t *testing.T) {
 	}
 }
 
-func TestComputeLayout_SidebarHidden(t *testing.T) {
-	m := newTestModel(t)
-	m.sidebarVisible = false
+func TestComputeLayout_Sidebar(t *testing.T) {
+	t.Parallel()
 
-	lo := m.computeLayout()
-	if lo.treeWidth != 0 {
-		t.Errorf("treeWidth = %d, want 0", lo.treeWidth)
+	tests := []struct {
+		name    string
+		visible bool
+		verify  func(t *testing.T, m *Model, lo layout)
+	}{
+		{
+			name:    "Hidden",
+			visible: false,
+			verify: func(t *testing.T, m *Model, lo layout) {
+				t.Helper()
+				if lo.treeWidth != 0 {
+					t.Errorf("treeWidth = %d, want 0", lo.treeWidth)
+				}
+				if lo.editorStartX != 0 {
+					t.Errorf("editorStartX = %d, want 0", lo.editorStartX)
+				}
+				if lo.editorWidth != m.width {
+					t.Errorf("editorWidth = %d, want %d", lo.editorWidth, m.width)
+				}
+			},
+		},
+		{
+			name:    "Visible",
+			visible: true,
+			verify: func(t *testing.T, m *Model, lo layout) {
+				t.Helper()
+				if lo.treeWidth == 0 {
+					t.Error("treeWidth should be > 0 when sidebar visible")
+				}
+				if lo.editorStartX != lo.treeWidth+separatorWidth {
+					t.Errorf("editorStartX = %d, want %d", lo.editorStartX, lo.treeWidth+separatorWidth)
+				}
+				if lo.editorWidth != m.width-lo.treeWidth-separatorWidth {
+					t.Errorf("editorWidth = %d, want %d", lo.editorWidth, m.width-lo.treeWidth-separatorWidth)
+				}
+			},
+		},
 	}
-	if lo.editorStartX != 0 {
-		t.Errorf("editorStartX = %d, want 0", lo.editorStartX)
-	}
-	if lo.editorWidth != m.width {
-		t.Errorf("editorWidth = %d, want %d", lo.editorWidth, m.width)
-	}
-}
 
-func TestComputeLayout_SidebarVisible(t *testing.T) {
-	m := newTestModel(t)
-	m.sidebarVisible = true
-
-	lo := m.computeLayout()
-	if lo.treeWidth == 0 {
-		t.Error("treeWidth should be > 0 when sidebar visible")
-	}
-	if lo.editorStartX != lo.treeWidth+separatorWidth {
-		t.Errorf("editorStartX = %d, want %d", lo.editorStartX, lo.treeWidth+separatorWidth)
-	}
-	if lo.editorWidth != m.width-lo.treeWidth-separatorWidth {
-		t.Errorf("editorWidth = %d, want %d", lo.editorWidth, m.width-lo.treeWidth-separatorWidth)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			m := newTestModel(t)
+			m.sidebarVisible = tt.visible
+			lo := m.computeLayout()
+			tt.verify(t, m, lo)
+		})
 	}
 }
 
 func TestSwitchPane_DisabledWhenHidden(t *testing.T) {
+	t.Parallel()
 	m := newTestModelWithFile(t, "line1\nline2")
 	m.sidebarVisible = false
 	m.focusPane = paneEditor
@@ -120,6 +146,7 @@ func TestSwitchPane_DisabledWhenHidden(t *testing.T) {
 }
 
 func TestRenderLeftPane_LineCount(t *testing.T) {
+	t.Parallel()
 	m := newTestModel(t)
 	m.sidebarVisible = true
 

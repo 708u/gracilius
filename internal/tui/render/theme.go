@@ -36,11 +36,21 @@ func (t Theme) SearchCurrentBgSeq() string {
 	return termenv.CSI + termenv.RGBColor(t.SearchCurrentBg).Sequence(true) + "m"
 }
 
+// ListSelectionBgSeq returns the ANSI SGR sequence for list selection background.
+func (t Theme) ListSelectionBgSeq() string {
+	return termenv.CSI + termenv.RGBColor(t.ListSelectionBg).Sequence(true) + "m"
+}
+
+// ActiveFileBgSeq returns the ANSI SGR sequence for active file background.
+func (t Theme) ActiveFileBgSeq() string {
+	return termenv.CSI + termenv.RGBColor(t.ActiveFileBg).Sequence(true) + "m"
+}
+
 // Dark is the dark theme configuration.
 var Dark = Theme{
 	Name:                "github-dark",
 	SelectionBg:         "#264F78",
-	ListSelectionBg:     "#37373D",
+	ListSelectionBg:     "#505050",
 	ActiveFileBg:        "#2A2D2E",
 	TabActiveFg:         "#FFFFFF",
 	TabActiveBorder:     "#E8AB53",

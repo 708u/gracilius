@@ -19,6 +19,7 @@ func collectSend() (func(*Response), <-chan *Response) {
 }
 
 func TestHandleInitialize_Capabilities(t *testing.T) {
+	t.Parallel()
 	h := NewHandler([]string{"/workspace"})
 	req := &Request{
 		JSONRPC: "2.0",
@@ -60,6 +61,7 @@ func TestHandleInitialize_Capabilities(t *testing.T) {
 }
 
 func TestHandleOpenDiff_Blocking(t *testing.T) {
+	t.Parallel()
 	h := NewHandler([]string{"/workspace"})
 
 	var cbCalled bool
@@ -100,6 +102,7 @@ func TestHandleOpenDiff_Blocking(t *testing.T) {
 }
 
 func TestDiffResponder_Accept(t *testing.T) {
+	t.Parallel()
 	send, ch := collectSend()
 	r := &DiffResponder{
 		send: send,
@@ -133,6 +136,7 @@ func TestDiffResponder_Accept(t *testing.T) {
 }
 
 func TestDiffResponder_Reject(t *testing.T) {
+	t.Parallel()
 	send, ch := collectSend()
 	r := &DiffResponder{
 		send:    send,
@@ -167,6 +171,7 @@ func TestDiffResponder_Reject(t *testing.T) {
 }
 
 func TestDiffResponder_DoubleCall(t *testing.T) {
+	t.Parallel()
 	send, ch := collectSend()
 	r := &DiffResponder{
 		send: send,
@@ -199,6 +204,7 @@ func TestDiffResponder_DoubleCall(t *testing.T) {
 }
 
 func TestPendingDiffs_RejectAll(t *testing.T) {
+	t.Parallel()
 	h := NewHandler([]string{"/workspace"})
 
 	var chs []<-chan *Response
@@ -247,6 +253,7 @@ func TestPendingDiffs_RejectAll(t *testing.T) {
 }
 
 func TestCloseTab_RejectsPending(t *testing.T) {
+	t.Parallel()
 	h := NewHandler([]string{"/workspace"})
 
 	h.SetOpenDiffCallback(func(filePath, contents, tabName string, accept func(string), reject func()) {
@@ -308,6 +315,7 @@ func TestCloseTab_RejectsPending(t *testing.T) {
 }
 
 func TestCloseAllDiffTabs_RejectsPending(t *testing.T) {
+	t.Parallel()
 	h := NewHandler([]string{"/workspace"})
 
 	h.SetOpenDiffCallback(func(filePath, contents, tabName string, accept func(string), reject func()) {
@@ -366,6 +374,7 @@ func TestCloseAllDiffTabs_RejectsPending(t *testing.T) {
 }
 
 func TestToolsList_IncludesSelectionTools(t *testing.T) {
+	t.Parallel()
 	h := NewHandler([]string{"/workspace"})
 	req := &Request{
 		JSONRPC: "2.0",
@@ -404,6 +413,7 @@ func TestToolsList_IncludesSelectionTools(t *testing.T) {
 }
 
 func TestGetCurrentSelection_NoCallback(t *testing.T) {
+	t.Parallel()
 	h := NewHandler([]string{"/workspace"})
 
 	params, _ := json.Marshal(ToolCallParams{Name: "getCurrentSelection"})
@@ -440,6 +450,7 @@ func TestGetCurrentSelection_NoCallback(t *testing.T) {
 }
 
 func TestGetCurrentSelection_WithSelection(t *testing.T) {
+	t.Parallel()
 	h := NewHandler([]string{"/workspace"})
 
 	expected := &SelectionResult{
@@ -496,6 +507,7 @@ func TestGetCurrentSelection_WithSelection(t *testing.T) {
 }
 
 func TestGetLatestSelection_NoSelection(t *testing.T) {
+	t.Parallel()
 	h := NewHandler([]string{"/workspace"})
 
 	h.SetGetSelectionCallback(func() *SelectionResult {
@@ -533,6 +545,7 @@ func TestGetLatestSelection_NoSelection(t *testing.T) {
 }
 
 func TestDiffResponder_ConcurrentSafety(t *testing.T) {
+	t.Parallel()
 	send, ch := collectSend()
 	r := &DiffResponder{
 		send: send,
