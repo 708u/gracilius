@@ -67,8 +67,9 @@ var (
 			BorderStyle(separatorBorder)
 )
 
-func styleTreeCursor(theme render.Theme) lipgloss.Style {
-	return lipgloss.NewStyle().Background(lipgloss.Color(theme.ListSelectionBg))
+func renderTreeCursor(line string, width int, theme render.Theme) string {
+	truncated := ansi.Truncate(line, width, "...")
+	return render.PadRightWithBg(truncated, width, theme.ListSelectionBgSeq())
 }
 
 // newView returns a tea.View with the base terminal settings.
@@ -93,21 +94,18 @@ func (m *Model) View() tea.View {
 
 	t, hasTab := m.activeTabState()
 
-	// header
-	header := m.renderHeader(t)
-	// content
 	lo := m.computeLayout()
 
 	var editorLines []string
 	switch {
 	case !hasTab && !m.initialDiffAutoOpened:
 		// Auto-open pending: show blank pane to avoid welcome flicker.
-		editorLines = make([]string, lo.contentHeight)
+		editorLines = make([]string, lo.paneBodyHeight)
 		for i := range editorLines {
 			editorLines[i] = render.PadRight("", lo.editorWidth)
 		}
 	case !hasTab:
-		editorLines = renderWelcome(lo.editorWidth, lo.contentHeight, m.theme)
+		editorLines = renderWelcome(lo.editorWidth, lo.paneBodyHeight, m.theme)
 	default:
 		editorLines = m.renderEditor(lo)
 	}
@@ -129,6 +127,10 @@ func (m *Model) View() tea.View {
 		}
 	}
 
+	// Build right pane: tab bar (2 lines) + editor.
+	rightLines := m.renderTabBarLines(lo.editorWidth)
+	rightLines = append(rightLines, editorLines...)
+
 	var content string
 	if m.sidebarVisible {
 		panelLines := m.renderLeftPane(lo.treeWidth, lo.contentHeight)
@@ -142,10 +144,10 @@ func (m *Model) View() tea.View {
 			lipgloss.Top,
 			strings.Join(panelLines, "\n"),
 			strings.Join(sepLines, "\n"),
-			strings.Join(editorLines, "\n"),
+			strings.Join(rightLines, "\n"),
 		)
 	} else {
-		content = strings.Join(editorLines, "\n")
+		content = strings.Join(rightLines, "\n")
 	}
 
 	// footer
@@ -155,12 +157,8 @@ func (m *Model) View() tea.View {
 		Width(m.width).
 		Render(footer)
 
-	tabBar := m.renderTabBar(lo.editorStartX)
-
 	base := lipgloss.JoinVertical(
 		lipgloss.Left,
-		header,
-		tabBar,
 		content,
 		footerRendered,
 	)
@@ -251,7 +249,7 @@ func (m *Model) cursorScreenPos(lo layout) cursorPosition {
 				m.lastMapping[visualRow].wrapOffset,
 				t.cursorChar,
 			),
-		y: contentStartY + visualRow,
+		y: paneHeaderRows + visualRow,
 	}
 }
 
@@ -292,54 +290,14 @@ func (m *Model) commentCursorScreenPos(lo layout) cursorPosition {
 
 	return cursorPosition{
 		x: lo.editorStartX + xOffset + c.X,
-		y: contentStartY + blockStart + blockBorderTop + c.Y,
+		y: paneHeaderRows + blockStart + blockBorderTop + c.Y,
 	}
 }
 
-// renderHeader generates the header line.
-// For diff tabs it shows diff stats (+N -N ~N); otherwise an empty line.
-func (m *Model) renderHeader(t *tab) string {
-	if t == nil || t.diffViewData == nil {
-		return ""
-	}
-
-	s := t.diffViewData.Summary
-	if s.Additions == 0 && s.Deletions == 0 && s.Modified == 0 {
-		return ""
-	}
-
-	isDark := m.theme.Name == "github-dark"
-	var addHex, delHex, modHex string
-	if isDark {
-		addHex, delHex, modHex = "#3fb950", "#f85149", "#d29922"
-	} else {
-		addHex, delHex, modHex = "#1a7f37", "#cf222e", "#9a6700"
-	}
-
-	coloredStat := func(hex, prefix string, count int) string {
-		return lipgloss.NewStyle().Foreground(lipgloss.Color(hex)).
-			Render(fmt.Sprintf("%s%d", prefix, count))
-	}
-
-	parts := make([]string, 0, 3)
-	if s.Additions > 0 {
-		parts = append(parts, coloredStat(addHex, "+", s.Additions))
-	}
-	if s.Deletions > 0 {
-		parts = append(parts, coloredStat(delHex, "-", s.Deletions))
-	}
-	if s.Modified > 0 {
-		parts = append(parts, coloredStat(modHex, "~", s.Modified))
-	}
-
-	return strings.Join(parts, " ")
-}
-
-// renderTabBar generates the tab bar (2 lines: labels + underline).
-// offset is the left padding to align with the editor pane.
-func (m *Model) renderTabBar(offset int) string {
+// renderTabBarLines generates the tab bar as 2 lines (labels + underline).
+func (m *Model) renderTabBarLines(width int) []string {
 	if len(m.tabs) == 0 {
-		return "\n"
+		return []string{"", ""}
 	}
 
 	styleActive := lipgloss.NewStyle().
@@ -348,8 +306,6 @@ func (m *Model) renderTabBar(offset int) string {
 		Foreground(lipgloss.Color(m.theme.TabInactiveFg))
 	styleBorder := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(m.theme.TabActiveBorder))
-
-	padding := strings.Repeat(" ", offset)
 
 	var labels []string
 	var borders []string
@@ -372,9 +328,10 @@ func (m *Model) renderTabBar(offset int) string {
 	labelLine := strings.Join(labels, sep)
 	borderLine := strings.Join(borders, borderSep)
 
-	return ansi.Truncate(padding+labelLine, m.width, "...") +
-		"\n" +
-		ansi.Truncate(padding+borderLine, m.width, "")
+	return []string{
+		ansi.Truncate(labelLine, width, "..."),
+		ansi.Truncate(borderLine, width, ""),
+	}
 }
 
 // renderFooter generates the footer area (help hints + status).
@@ -458,15 +415,14 @@ func (m *Model) renderFooter() string {
 
 // renderLeftPane generates the left pane lines with a header and panel body.
 func (m *Model) renderLeftPane(width, height int) []string {
-	var header string
-	if m.activePanel == panelGitDiff {
-		label := m.activePanel.label() + " \u276e" + m.gitDiffMode.label(m.gitDefaultBranch) + "\u276f"
-		header = renderPanelHeader(label, width, m.theme)
-	} else {
-		header = renderPanelHeader(m.activePanel.label(), width, m.theme)
-	}
-	bodyHeight := height - 1
+	header := []string{renderPanelHeader(m.activePanel.label(), width, m.theme)}
 
+	if m.activePanel == panelGitDiff {
+		modeStr := renderModeSelector(m.gitDiffMode, m.gitDefaultBranch, m.theme)
+		header = append(header, render.PadRight(modeStr, width))
+	}
+
+	bodyHeight := height - m.leftPaneHeaderRows()
 	var body []string
 	switch m.activePanel {
 	case panelGitDiff:
@@ -475,7 +431,7 @@ func (m *Model) renderLeftPane(width, height int) []string {
 		body = m.renderTree(width, bodyHeight)
 	}
 
-	return append([]string{header}, body...)
+	return append(header, body...)
 }
 
 // renderTree generates the tree pane lines.
@@ -508,16 +464,16 @@ func (m *Model) renderTree(width, height int) []string {
 		icon := iconFor(m.iconMode, entry)
 
 		line := indent + arrow + icon.prefix() + entry.name
-		displayLine := ansi.Truncate(line, width, "...")
-		displayLine = render.PadRight(displayLine, width)
 
+		var displayLine string
 		switch {
 		case isCursor:
-			displayLine = styleTreeCursor(m.theme).Render(displayLine)
+			displayLine = renderTreeCursor(line, width, m.theme)
 		case isActiveFile:
-			displayLine = lipgloss.NewStyle().
-				Background(lipgloss.Color(m.theme.ActiveFileBg)).
-				Render(displayLine)
+			truncated := ansi.Truncate(line, width, "...")
+			displayLine = render.PadRightWithBg(truncated, width, m.theme.ActiveFileBgSeq())
+		default:
+			displayLine = render.PadRight(ansi.Truncate(line, width, "..."), width)
 		}
 
 		displayLine = icon.colorize(displayLine)
@@ -538,7 +494,7 @@ func (m *Model) renderTree(width, height int) []string {
 // Active textarea (inputMode) is overlaid after viewport slicing.
 func (m *Model) renderDiffEditor(t *tab, lo layout) []string {
 	width := lo.editorWidth
-	height := lo.contentHeight
+	height := lo.paneBodyHeight
 
 	t.ensureDiffContent(m.theme, width, m.search.gen)
 	m.lastMapping = nil
@@ -623,51 +579,47 @@ func (m *Model) overlayDiffTextarea(t *tab, diffLines []string, viewOff, width, 
 	m.lastMapping = mapping
 }
 
-// applyDiffGutterHighlights re-renders diff rows that need cursor or selection
-// gutter highlighting within the visible window.
-func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, width int) {
+// applyDiffGutterHighlights applies cursor/selection gutter highlights to
+// visible diff rows by splicing the gutter portion of pre-rendered cached
+// lines. This avoids the expensive renderSingleDiffRow call entirely.
+func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, _ int) {
 	if t.diffViewData == nil || len(t.diffRowVisualStarts) == 0 || t.diffCachedCtx == nil {
 		return
 	}
-
-	ctx := *t.diffCachedCtx
-	highlightBg := m.theme.SelectionBgSeq()
 
 	startRow, endRow := t.diffCursor, t.diffCursor
 	if t.diffSelecting {
 		startRow, endRow = t.diffNormalizedSelection()
 	}
 
+	ctx := *t.diffCachedCtx
+	highlightBg := m.theme.SelectionBgSeq()
 	viewEnd := viewOff + len(diffLines)
 
-	// Only iterate cursor/selection rows instead of all rows.
 	for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.Rows); rowIdx++ {
 		rowVisStart := t.diffRowVisualStarts[rowIdx]
+		if rowVisStart >= viewEnd {
+			break
+		}
 		rowVisEnd := len(t.diffCachedLines)
 		if rowIdx+1 < len(t.diffRowVisualStarts) {
 			rowVisEnd = t.diffRowVisualStarts[rowIdx+1]
 		}
-
-		// Skip if entirely outside visible window.
-		if rowVisEnd <= viewOff || rowVisStart >= viewEnd {
+		if rowVisEnd <= viewOff {
 			continue
 		}
 
 		row := t.diffViewData.Rows[rowIdx]
 		activeSide := diffRowAvailableSide(row, t.diffSide)
-		oldCtx, newCtx := ctx, ctx
-		if activeSide == diffSideOld {
-			oldCtx.gutterHighlight = highlightBg
-		} else {
-			newCtx.gutterHighlight = highlightBg
-		}
-		reRendered := renderSingleDiffRow(row, t.diffOldHighlights, t.diffNewHighlights, oldCtx, newCtx, width, nil, nil)
 
-		for j, line := range reRendered {
+		for j := 0; j < rowVisEnd-rowVisStart; j++ {
 			visIdx := rowVisStart + j - viewOff
-			if visIdx >= 0 && visIdx < len(diffLines) {
-				diffLines[visIdx] = line
+			if visIdx < 0 || visIdx >= len(diffLines) {
+				continue
 			}
+			diffLines[visIdx] = spliceGutter(
+				diffLines[visIdx], activeSide, row, j, ctx, highlightBg,
+			)
 		}
 	}
 }
@@ -682,7 +634,7 @@ func (m *Model) renderEditor(lo layout) []string {
 	}
 
 	width := lo.editorWidth
-	height := lo.contentHeight
+	height := lo.paneBodyHeight
 	lnw := lo.lineNumWidth
 	textWidth := lo.textWidth
 

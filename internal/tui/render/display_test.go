@@ -68,6 +68,96 @@ func TestPadRight(t *testing.T) {
 	}
 }
 
+func TestPadRightWithBg_PlainText(t *testing.T) {
+	t.Parallel()
+	bgSeq := "\033[48;2;80;80;80m"
+	reset := "\033[0m"
+
+	result := PadRightWithBg("hello", 10, bgSeq)
+
+	// Must start with bgSeq and end with reset.
+	if !strings.HasPrefix(result, bgSeq) {
+		t.Errorf("expected prefix %q, got %q", bgSeq, result)
+	}
+	if !strings.HasSuffix(result, reset) {
+		t.Errorf("expected suffix %q, got %q", reset, result)
+	}
+	// Content preserved.
+	if !strings.Contains(result, "hello") {
+		t.Error("content 'hello' not found in output")
+	}
+}
+
+func TestPadRightWithBg_InternalResetReappliesBg(t *testing.T) {
+	t.Parallel()
+	bgSeq := "\033[48;2;80;80;80m"
+
+	// SGR full-reset has multiple forms. All must be handled.
+	tests := []struct {
+		name  string
+		reset string
+	}{
+		{"explicit_reset_0m", "\033[0m"},
+		{"short_reset_m", "\033[m"},
+		{"double_zero_00m", "\033[00m"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			content := "\033[33mM" + tc.reset + " theme.go"
+			result := PadRightWithBg(content, 20, bgSeq)
+
+			reapplied := tc.reset + bgSeq
+			if !strings.Contains(result, reapplied) {
+				t.Errorf(
+					"background must be re-applied after internal %q;\n"+
+						"expected %q in output,\n"+
+						"got %q",
+					tc.reset, reapplied, result,
+				)
+			}
+		})
+	}
+}
+
+func TestPadRightWithBg_MultipleInternalResets(t *testing.T) {
+	t.Parallel()
+	bgSeq := "\033[48;2;80;80;80m"
+
+	// Content with mixed reset formats (both \033[0m and \033[m).
+	content := "\033[33mA\033[0m mid \033[32mB\033[m end"
+	result := PadRightWithBg(content, 30, bgSeq)
+
+	reapply0m := "\033[0m" + bgSeq
+	reapplyM := "\033[m" + bgSeq
+	total := strings.Count(result, reapply0m) + strings.Count(result, reapplyM)
+	if total < 2 {
+		t.Errorf(
+			"expected bgSeq re-applied at least 2 times after internal resets, got %d;\nresult: %q",
+			total, result,
+		)
+	}
+}
+
+func TestPadRightWithBg_NoInternalReset(t *testing.T) {
+	t.Parallel()
+	bgSeq := "\033[48;2;80;80;80m"
+	reset := "\033[0m"
+
+	// Content with only foreground color, no full reset.
+	content := "\033[33mhello"
+	result := PadRightWithBg(content, 10, bgSeq)
+
+	// Should start with bgSeq and end with reset,
+	// with no unnecessary re-application.
+	if !strings.HasPrefix(result, bgSeq) {
+		t.Errorf("expected prefix %q, got %q", bgSeq, result)
+	}
+	if !strings.HasSuffix(result, reset) {
+		t.Errorf("expected suffix %q, got %q", reset, result)
+	}
+}
+
 func TestExpandTabs(t *testing.T) {
 	t.Parallel()
 
@@ -382,6 +472,69 @@ func TestSplitRunsAtBreakpoints(t *testing.T) {
 			segments := SplitRunsAtBreakpoints(tt.runs, tt.bp)
 			tt.verify(t, segments)
 		})
+	}
+}
+
+func TestPadBetween(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		left  string
+		right string
+		width int
+		want  string
+	}{
+		{
+			name:  "Normal",
+			left:  "ABC",
+			right: "XY",
+			width: 10,
+			want:  "ABC     XY",
+		},
+		{
+			name:  "ExactFit",
+			left:  "ABC",
+			right: "XY",
+			width: 6,
+			want:  "ABC XY",
+		},
+		{
+			name:  "EmptyRight",
+			left:  "hello",
+			right: "",
+			width: 10,
+			want:  "hello     ",
+		},
+		{
+			name:  "EmptyLeft",
+			left:  "",
+			right: "end",
+			width: 10,
+			want:  "       end",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := PadBetween(tt.left, tt.right, tt.width)
+			if got != tt.want {
+				t.Errorf("PadBetween(%q, %q, %d) = %q, want %q",
+					tt.left, tt.right, tt.width, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPadBetween_Overflow(t *testing.T) {
+	t.Parallel()
+	// Left is too long: should be truncated to make room for right.
+	got := PadBetween("very long left text", "R", 10)
+	if !strings.Contains(got, "R") {
+		t.Errorf("expected right part 'R' preserved, got %q", got)
+	}
+	if len(got) < 10 {
+		t.Errorf("expected at least width 10, got %d: %q", len(got), got)
 	}
 }
 

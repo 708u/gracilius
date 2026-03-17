@@ -187,8 +187,8 @@ func TestComputeLayout_WideTerminal(t *testing.T) {
 	if g.startX != expectedX {
 		t.Errorf("startX: expected %d, got %d", expectedX, g.startX)
 	}
-	if g.startY != contentStartY {
-		t.Errorf("startY: expected %d, got %d", contentStartY, g.startY)
+	if g.startY != paneHeaderRows {
+		t.Errorf("startY: expected %d, got %d", paneHeaderRows, g.startY)
 	}
 }
 
@@ -218,7 +218,7 @@ func TestComputeLayout_ShortTerminal(t *testing.T) {
 	s := newTestOverlay(items)
 
 	// Very short terminal: height = 12
-	// contentStartY=3, footerHeight=4, borderH=2 => available=3
+	// paneHeaderRows=2, footerHeight=4, borderH=2 => available=4
 	g := s.computeLayout(100, 12)
 
 	if g.listH < overlayMinItems {

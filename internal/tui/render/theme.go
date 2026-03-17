@@ -19,6 +19,9 @@ type Theme struct {
 	LogoTrunk           string // Welcome logo bottom color (brown/trunk)
 	SearchMatchBg       string // Search match background hex color
 	SearchCurrentBg     string // Current search match background hex color
+	DiffAddFg           string // Diff additions foreground hex color
+	DiffDelFg           string // Diff deletions foreground hex color
+	DiffModFg           string // Diff modifications foreground hex color
 }
 
 // SelectionBgSeq returns the ANSI SGR sequence for editor selection background.
@@ -36,11 +39,21 @@ func (t Theme) SearchCurrentBgSeq() string {
 	return termenv.CSI + termenv.RGBColor(t.SearchCurrentBg).Sequence(true) + "m"
 }
 
+// ListSelectionBgSeq returns the ANSI SGR sequence for list selection background.
+func (t Theme) ListSelectionBgSeq() string {
+	return termenv.CSI + termenv.RGBColor(t.ListSelectionBg).Sequence(true) + "m"
+}
+
+// ActiveFileBgSeq returns the ANSI SGR sequence for active file background.
+func (t Theme) ActiveFileBgSeq() string {
+	return termenv.CSI + termenv.RGBColor(t.ActiveFileBg).Sequence(true) + "m"
+}
+
 // Dark is the dark theme configuration.
 var Dark = Theme{
 	Name:                "github-dark",
 	SelectionBg:         "#264F78",
-	ListSelectionBg:     "#37373D",
+	ListSelectionBg:     "#505050",
 	ActiveFileBg:        "#2A2D2E",
 	TabActiveFg:         "#FFFFFF",
 	TabActiveBorder:     "#E8AB53",
@@ -51,6 +64,9 @@ var Dark = Theme{
 	LogoTrunk:           "#CE9178",
 	SearchMatchBg:       "#613214",
 	SearchCurrentBg:     "#9E6A03",
+	DiffAddFg:           "#3fb950",
+	DiffDelFg:           "#f85149",
+	DiffModFg:           "#d29922",
 }
 
 // Light is the light theme configuration.
@@ -68,4 +84,7 @@ var Light = Theme{
 	LogoTrunk:           "#795E26",
 	SearchMatchBg:       "#FFF2CC",
 	SearchCurrentBg:     "#FFD700",
+	DiffAddFg:           "#1a7f37",
+	DiffDelFg:           "#cf222e",
+	DiffModFg:           "#9a6700",
 }

@@ -250,7 +250,7 @@ func (s *projectSearchOverlay) computeLayout(width, height int) openFileLayout {
 	overlayW := min(width*overlayWidthRatio/4, overlayMaxW)
 	innerW := overlayW - overlayBorderW - overlayPaddingW
 
-	startY := contentStartY
+	startY := paneHeaderRows
 	available := height - startY - footerHeight - overlayBorderH
 	maxInnerH := max(available, overlayMinInnerH)
 
@@ -291,7 +291,7 @@ func (s *projectSearchOverlay) cursorPos(width, height int) cursorPosition {
 	// Match placeOverlay's startY calculation using actual box height.
 	fgH := g.innerH + overlayBorderH
 	maxBottom := height - footerHeight
-	startY := headerHeight + tabBarHeight
+	startY := paneHeaderRows
 	if startY+fgH > maxBottom {
 		startY = max(maxBottom-fgH, 0)
 	}
