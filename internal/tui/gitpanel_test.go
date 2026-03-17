@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/diff"
 	"github.com/708u/gracilius/internal/git"
 	"github.com/708u/gracilius/internal/tui/render"
 )
@@ -863,24 +864,24 @@ func TestGitDiffModeTabPrefix(t *testing.T) {
 func TestCategoryStats(t *testing.T) {
 	t.Parallel()
 	entries := []changedFileEntry{
-		{category: categoryStaged, additions: 5, deletions: 2, modified: 1},
-		{category: categoryStaged, additions: 3, deletions: 0, modified: 0},
-		{category: categoryUnstaged, additions: 10, deletions: 1, modified: 2},
+		{category: categoryStaged, stats: diff.Stats{Additions: 5, Deletions: 2, Modified: 1}},
+		{category: categoryStaged, stats: diff.Stats{Additions: 3}},
+		{category: categoryUnstaged, stats: diff.Stats{Additions: 10, Deletions: 1, Modified: 2}},
 	}
 
-	add, del, mod := categoryStats(entries, categoryStaged)
-	if add != 8 || del != 2 || mod != 1 {
-		t.Errorf("staged: got +%d -%d ~%d, want +8 -2 ~1", add, del, mod)
+	s := categoryStats(entries, categoryStaged)
+	if s.Additions != 8 || s.Deletions != 2 || s.Modified != 1 {
+		t.Errorf("staged: got +%d -%d ~%d, want +8 -2 ~1", s.Additions, s.Deletions, s.Modified)
 	}
 
-	add, del, mod = categoryStats(entries, categoryUnstaged)
-	if add != 10 || del != 1 || mod != 2 {
-		t.Errorf("unstaged: got +%d -%d ~%d, want +10 -1 ~2", add, del, mod)
+	s = categoryStats(entries, categoryUnstaged)
+	if s.Additions != 10 || s.Deletions != 1 || s.Modified != 2 {
+		t.Errorf("unstaged: got +%d -%d ~%d, want +10 -1 ~2", s.Additions, s.Deletions, s.Modified)
 	}
 
-	add, del, mod = categoryStats(entries, categoryUntracked)
-	if add != 0 || del != 0 || mod != 0 {
-		t.Errorf("untracked: got +%d -%d ~%d, want all zero", add, del, mod)
+	s = categoryStats(entries, categoryUntracked)
+	if s.Additions != 0 || s.Deletions != 0 || s.Modified != 0 {
+		t.Errorf("untracked: got +%d -%d ~%d, want all zero", s.Additions, s.Deletions, s.Modified)
 	}
 }
 

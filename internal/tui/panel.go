@@ -27,22 +27,17 @@ type changedFileEntry struct {
 	newContent []string
 	binary     bool
 	category   fileCategory
-	additions  int
-	deletions  int
-	modified   int
+	stats      diff.Stats // per-file diff summary
 	diffData   *diff.Data // cached diff result (nil if not computed)
 }
 
 // gitVisualRow represents a visual row in the git panel.
 type gitVisualRow struct {
-	isHeader    bool   // category header (e.g., "Staged Changes (2)")
-	isDirHeader bool   // directory header (e.g., "internal/tui/")
-	label       string // header text (header/dir header rows only)
-	entryIdx    int    // index into gitChangedFiles (file rows only)
-	// Category stats (header rows only).
-	catAdd int
-	catDel int
-	catMod int
+	isHeader    bool       // category header (e.g., "Staged Changes (2)")
+	isDirHeader bool       // directory header (e.g., "internal/tui/")
+	label       string     // header text (header/dir header rows only)
+	entryIdx    int        // index into gitChangedFiles (file rows only)
+	catStats    diff.Stats // category-level stats (header rows only)
 }
 
 // isFileRow returns true if this row represents an actual file entry.

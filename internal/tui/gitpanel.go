@@ -31,9 +31,7 @@ func toEntries(dir string, files []git.ChangedFile, cat fileCategory) []changedF
 		}
 		if !f.Binary && (len(f.OldContent) > 0 || len(f.NewContent) > 0) {
 			d := diff.Build(f.OldContent, f.NewContent)
-			entries[i].additions = d.Summary.Additions
-			entries[i].deletions = d.Summary.Deletions
-			entries[i].modified = d.Summary.Modified
+			entries[i].stats = d.Summary
 			entries[i].diffData = d
 		}
 	}
@@ -216,14 +214,11 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 		}
 
 		// Category header.
-		add, del, mod := categoryStats(entries, sec.cat)
 		headerLabel := fmt.Sprintf("%s (%d)", sec.label, len(sec.indices))
 		rows = append(rows, gitVisualRow{
 			isHeader: true,
 			label:    headerLabel,
-			catAdd:   add,
-			catDel:   del,
-			catMod:   mod,
+			catStats: categoryStats(entries, sec.cat),
 		})
 
 		// Group entries by directory, preserving order of first appearance.
@@ -358,37 +353,37 @@ var styleDirHeader = lipgloss.NewStyle().Faint(true)
 
 // formatDiffStats returns a colored "+N -N ~N" string.
 // Parts with zero count are omitted. Returns "" if all zero.
-func formatDiffStats(add, del, mod int, theme render.Theme) string {
+func formatDiffStats(s diff.Stats, theme render.Theme) string {
 	coloredStat := func(hex, prefix string, count int) string {
 		return lipgloss.NewStyle().Foreground(lipgloss.Color(hex)).
 			Render(fmt.Sprintf("%s%d", prefix, count))
 	}
 
 	var parts []string
-	if add > 0 {
-		parts = append(parts, coloredStat(theme.DiffAddFg, "+", add))
+	if s.Additions > 0 {
+		parts = append(parts, coloredStat(theme.DiffAddFg, "+", s.Additions))
 	}
-	if del > 0 {
-		parts = append(parts, coloredStat(theme.DiffDelFg, "-", del))
+	if s.Deletions > 0 {
+		parts = append(parts, coloredStat(theme.DiffDelFg, "-", s.Deletions))
 	}
-	if mod > 0 {
-		parts = append(parts, coloredStat(theme.DiffModFg, "~", mod))
+	if s.Modified > 0 {
+		parts = append(parts, coloredStat(theme.DiffModFg, "~", s.Modified))
 	}
 	return strings.Join(parts, " ")
 }
 
-// categoryStats returns the sum of additions, deletions, and modified
-// counts for entries matching the given category.
-func categoryStats(entries []changedFileEntry, cat fileCategory) (int, int, int) {
-	var add, del, mod int
+// categoryStats returns the sum of diff stats for entries matching
+// the given category.
+func categoryStats(entries []changedFileEntry, cat fileCategory) diff.Stats {
+	var s diff.Stats
 	for i := range entries {
 		if entries[i].category == cat {
-			add += entries[i].additions
-			del += entries[i].deletions
-			mod += entries[i].modified
+			s.Additions += entries[i].stats.Additions
+			s.Deletions += entries[i].stats.Deletions
+			s.Modified += entries[i].stats.Modified
 		}
 	}
-	return add, del, mod
+	return s
 }
 
 // renderGitPanel renders the git changed files list.
@@ -417,7 +412,7 @@ func (m *Model) renderGitPanel(width, height int) []string {
 
 		if row.isHeader {
 			headerLabel := styleCategoryHeader.Render(row.label)
-			statsStr := formatDiffStats(row.catAdd, row.catDel, row.catMod, m.theme)
+			statsStr := formatDiffStats(row.catStats, m.theme)
 			headerLine := render.PadBetween(headerLabel, statsStr, width)
 			lines = append(lines, headerLine)
 			continue
