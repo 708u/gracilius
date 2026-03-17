@@ -237,6 +237,9 @@ func (s *projectSearchOverlay) update(msg tea.Msg) tea.Cmd {
 			s.list, cmd = s.list.Update(msg)
 			return cmd
 		default:
+			if !s.input.Focused() {
+				s.input.Focus()
+			}
 			var cmd tea.Cmd
 			s.input, cmd = s.input.Update(msg)
 			return cmd
