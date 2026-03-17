@@ -331,7 +331,7 @@ func (m *Model) openGitDiffEntry() {
 
 	if entry.diffData != nil {
 		dt.diffViewData = entry.diffData
-		entry.diffData = nil // release reference after handoff
+		gs.entries[gs.cursor].diffData = nil // release reference after handoff
 	} else {
 		dt.diffViewData = diff.Build(oldContent, newContent)
 	}
@@ -387,18 +387,6 @@ func categoryStats(entries []changedFileEntry, cat fileCategory) (int, int, int)
 			del += entries[i].deletions
 			mod += entries[i].modified
 		}
-	}
-	return add, del, mod
-}
-
-// totalStats returns the sum of additions, deletions, and modified
-// counts across all entries.
-func totalStats(entries []changedFileEntry) (int, int, int) {
-	var add, del, mod int
-	for i := range entries {
-		add += entries[i].additions
-		del += entries[i].deletions
-		mod += entries[i].modified
 	}
 	return add, del, mod
 }

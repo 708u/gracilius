@@ -121,8 +121,7 @@ func PadBetween(left, right string, width int) string {
 	gap := width - leftW - rightW
 	if gap < 1 {
 		left = ansi.Truncate(left, width-rightW-1, "...")
-		leftW = ansi.StringWidth(left)
-		gap = max(width-leftW-rightW, 1)
+		gap = 1
 	}
 	return left + strings.Repeat(" ", gap) + right
 }

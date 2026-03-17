@@ -53,9 +53,6 @@ func renderModeSelector(
 	styleActive := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(theme.TabActiveFg))
-	styleInactive := lipgloss.NewStyle().
-		Faint(true)
-
 	styleFaint := lipgloss.NewStyle().Faint(true)
 
 	var parts []string
@@ -66,7 +63,7 @@ func renderModeSelector(
 			activeIdx = i
 			parts = append(parts, styleActive.Render(label))
 		} else {
-			parts = append(parts, styleInactive.Render(label))
+			parts = append(parts, styleFaint.Render(label))
 		}
 	}
 

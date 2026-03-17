@@ -884,26 +884,6 @@ func TestCategoryStats(t *testing.T) {
 	}
 }
 
-func TestTotalStats(t *testing.T) {
-	t.Parallel()
-	entries := []changedFileEntry{
-		{additions: 5, deletions: 2, modified: 1},
-		{additions: 3, deletions: 0, modified: 0},
-	}
-	add, del, mod := totalStats(entries)
-	if add != 8 || del != 2 || mod != 1 {
-		t.Errorf("got +%d -%d ~%d, want +8 -2 ~1", add, del, mod)
-	}
-}
-
-func TestTotalStats_Empty(t *testing.T) {
-	t.Parallel()
-	add, del, mod := totalStats(nil)
-	if add != 0 || del != 0 || mod != 0 {
-		t.Errorf("got +%d -%d ~%d, want all zero", add, del, mod)
-	}
-}
-
 func TestRenderModeSelector(t *testing.T) {
 	t.Parallel()
 	result := renderModeSelector(gitModeWorking, "main", render.Dark)
