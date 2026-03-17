@@ -161,12 +161,8 @@ func (s *projectSearchOverlay) updateTheme(theme render.Theme) {
 // open activates the project search overlay.
 func (s *projectSearchOverlay) open() tea.Cmd {
 	s.active = true
-	if s.query != "" {
-		s.input.SetValue(s.query)
-		s.input.CursorEnd()
-	} else {
-		s.input.Reset()
-	}
+	s.query = ""
+	s.input.Reset()
 	return s.input.Focus()
 }
 
