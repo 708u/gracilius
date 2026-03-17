@@ -1,13 +1,8 @@
 package render
 
 import (
-	"fmt"
 	"strings"
 	"testing"
-
-	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 )
 
 func TestPadRight(t *testing.T) {
@@ -568,59 +563,5 @@ func TestClampHighlightsToSegment(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-// TestDiag_LipglossResetFormat inspects the exact ANSI sequences
-// lipgloss v2 emits, so we know what PadRightWithBg must handle.
-func TestDiag_LipglossResetFormat(t *testing.T) {
-	styled := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#D19A66")).Render("M")
-	t.Logf("lipgloss output bytes: %q", styled)
-	t.Logf("visual width: %d", ansi.StringWidth(styled))
-
-	reset0m := termenv.CSI + "0m"
-	resetM := termenv.CSI + "m"
-	t.Logf("contains \\033[0m: %v", strings.Contains(styled, reset0m))
-	t.Logf("contains \\033[m:  %v", strings.Contains(styled, resetM))
-
-	// Dump each byte for inspection.
-	var buf strings.Builder
-	for i, b := range []byte(styled) {
-		if i > 0 {
-			buf.WriteByte(' ')
-		}
-		_, _ = fmt.Fprintf(&buf, "%02x", b)
-	}
-	t.Logf("hex: %s", buf.String())
-}
-
-func TestDiag_PadRightWithBg_VisualWidth(t *testing.T) {
-	bgSeq := "\033[48;2;80;80;80m"
-	width := 30
-
-	// Build content exactly like the git panel does.
-	styledM := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#D19A66")).Render("M")
-	line := "      " + styledM + " " + "theme.go"
-
-	truncated := ansi.Truncate(line, width, "...")
-
-	padRight := PadRight(truncated, width)
-	withBg := PadRightWithBg(truncated, width, bgSeq)
-
-	padRightW := ansi.StringWidth(padRight)
-	withBgW := ansi.StringWidth(withBg)
-
-	t.Logf("line:      %q (vis=%d)", line, ansi.StringWidth(line))
-	t.Logf("truncated: %q (vis=%d)", truncated, ansi.StringWidth(truncated))
-	t.Logf("PadRight:      vis=%d, bytes=%q", padRightW, padRight)
-	t.Logf("PadRightWithBg: vis=%d, bytes=%q", withBgW, withBg)
-
-	if padRightW != width {
-		t.Errorf("PadRight visual width = %d, want %d", padRightW, width)
-	}
-	if withBgW != width {
-		t.Errorf("PadRightWithBg visual width = %d, want %d", withBgW, width)
 	}
 }
