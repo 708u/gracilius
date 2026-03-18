@@ -708,7 +708,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if len(m.fileTree) > 0 {
 				entry := m.fileTree[m.treeCursor]
 				if entry.isDir && !entry.expanded {
-					m.fileTree = expandDir(m.fileTree, m.treeCursor)
+					m.fileTree = expandDir(m.fileTree, m.treeCursor, m.excludeFunc)
 				}
 			}
 		case hasTab:
