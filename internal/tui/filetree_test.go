@@ -50,7 +50,7 @@ func TestScanDir_SymlinkToDirectory(t *testing.T) {
 		}
 	}
 
-	expanded := expandDir(entries, symlinkIdx)
+	expanded := expandDir(entries, symlinkIdx, nil)
 	found := false
 	for _, e := range expanded {
 		if e.name == "hello.txt" {
@@ -143,7 +143,7 @@ func TestBuildFileTree_SymlinkLoop(t *testing.T) {
 	}
 
 	// This should not hang or crash.
-	entries := buildFileTree(tmp)
+	entries := buildFileTree(tmp, nil)
 
 	// Both symlinks should be skipped (broken: loop).
 	if len(entries) != 0 {
