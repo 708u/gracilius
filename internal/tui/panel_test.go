@@ -145,6 +145,35 @@ func TestSwitchPane_DisabledWhenHidden(t *testing.T) {
 	}
 }
 
+func TestSwitchPane_DeleteOnlyDiff(t *testing.T) {
+	t.Parallel()
+	m := newTestModelWithDiff(t,
+		[]string{"deleted1", "deleted2"}, []string{})
+
+	// Preconditions: delete-only diff has no lines but has diffViewData.
+	tab := m.tabs[m.activeTab]
+	if len(tab.lines) != 0 {
+		t.Fatalf("precondition: len(lines) = %d, want 0", len(tab.lines))
+	}
+	if tab.diffViewData == nil {
+		t.Fatal("precondition: diffViewData should not be nil")
+	}
+	if m.focusPane != paneEditor {
+		t.Fatalf("precondition: focusPane = %d, want paneEditor", m.focusPane)
+	}
+
+	msg := tea.KeyPressMsg{Code: tea.KeyTab}
+	m.Update(msg)
+	if m.focusPane != paneTree {
+		t.Errorf("after 1st Tab: focusPane = %d, want paneTree", m.focusPane)
+	}
+
+	m.Update(msg)
+	if m.focusPane != paneEditor {
+		t.Errorf("after 2nd Tab: focusPane = %d, want paneEditor", m.focusPane)
+	}
+}
+
 func TestRenderLeftPane_LineCount(t *testing.T) {
 	t.Parallel()
 	m := newTestModel(t)
