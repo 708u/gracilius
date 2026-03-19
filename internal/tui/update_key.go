@@ -650,7 +650,7 @@ func (m *Model) handleKeyNormal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case key.Matches(msg, m.keys.SwitchPane):
-		if hasTab && len(t.lines) > 0 && m.sidebarVisible {
+		if hasTab && (len(t.lines) > 0 || t.diffViewData != nil) && m.sidebarVisible {
 			if m.focusPane == paneEditor {
 				m.notifyClearSelection()
 			}
