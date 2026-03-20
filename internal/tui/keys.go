@@ -37,6 +37,7 @@ type keyMap struct {
 	Search        key.Binding
 	SearchNext    key.Binding
 	SearchPrev    key.Binding
+	ProjectSearch key.Binding
 }
 
 func newKeyMap() keyMap {
@@ -164,6 +165,10 @@ func newKeyMap() keyMap {
 			key.WithKeys("N"),
 			key.WithHelp("N", "prev match"),
 		),
+		ProjectSearch: key.NewBinding(
+			key.WithKeys("f"),
+			key.WithHelp("f", "find in project"),
+		),
 	}
 }
 
@@ -172,7 +177,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.SwitchPane, k.SwitchPanel, k.ToggleSidebar,
 		k.PrevTab, k.NextTab, k.CloseTab,
-		k.Select, k.Copy, k.OpenFile, k.Search,
+		k.Select, k.Copy, k.OpenFile, k.Search, k.ProjectSearch,
 		k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit,
 	}
 }
@@ -182,7 +187,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right, k.GoTop, k.GoBottom, k.BlockUp, k.BlockDown, k.ChangeUp, k.ChangeDown},
 		{k.Enter, k.SwitchPane, k.SwitchPanel, k.ToggleSidebar, k.PrevTab, k.NextTab, k.CloseTab},
-		{k.Select, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.Search, k.SearchNext, k.SearchPrev, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
+		{k.Select, k.Copy, k.Comment, k.ClearAll, k.OpenFile, k.Search, k.SearchNext, k.SearchPrev, k.ProjectSearch, k.AcceptDiff, k.RejectDiff, k.Cancel, k.Quit},
 	}
 }
 
@@ -213,5 +218,6 @@ func (m *Model) contextKeyMap() help.KeyMap {
 	km.Search.SetEnabled(hasTab)
 	km.SearchNext.SetEnabled(m.search.query != "")
 	km.SearchPrev.SetEnabled(m.search.query != "")
+	km.ProjectSearch.SetEnabled(true)
 	return km
 }

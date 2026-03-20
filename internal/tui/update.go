@@ -94,6 +94,22 @@ func clampScroll(scrollOffset, cursor, totalItems, contentHeight int) int {
 
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Route non-key messages to the project search overlay when active.
+	if m.projectSearch.active {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.MouseClickMsg,
+			tea.WindowSizeMsg, tea.FocusMsg,
+			fileChangedMsg, treeChangedMsg, commentsChangedMsg,
+			OpenDiffMsg, CloseDiffMsg,
+			quitTimeoutMsg, statusClearMsg, IdeConnectedMsg,
+			projectSearchResultMsg:
+			// Fall through to normal handling below.
+		default:
+			cmd := m.projectSearch.update(msg)
+			return m, cmd
+		}
+	}
+
 	// Route non-key messages (e.g. cursor blink) to the open-file overlay
 	// when it is active.
 	if m.openFile.active {
@@ -142,6 +158,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.help.Styles = help.DefaultStyles(m.isDark)
 		m.openFile.updateTheme(m.theme)
+		m.projectSearch.updateTheme(m.theme)
 		for _, tab := range m.tabs {
 			if tab.filePath != "" && len(tab.lines) > 0 {
 				tab.highlightedLines = render.HighlightFile(
@@ -178,6 +195,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.gen == m.selectionGen {
 			m.notifySelectionChanged()
 		}
+		return m, nil
+	case projectSearchResultMsg:
+		m.projectSearch.applyResults(msg)
 		return m, nil
 	case gitSyncMsg:
 		return m.handleGitSync(msg)

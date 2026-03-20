@@ -163,6 +163,14 @@ func (m *Model) View() tea.View {
 		footerRendered,
 	)
 
+	if m.projectSearch.active {
+		v := newView(m.projectSearch.overlay(base, m.width, m.height))
+		if cp := m.projectSearch.cursorPos(m.width, m.height); !cp.isZero() {
+			v.Cursor = tea.NewCursor(cp.XY())
+		}
+		return v
+	}
+
 	if m.openFile.active {
 		v := newView(m.openFile.overlay(base, m.width, m.height))
 		if cp := m.openFile.cursorPos(m.width, m.height); !cp.isZero() {
