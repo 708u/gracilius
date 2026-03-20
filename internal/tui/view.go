@@ -579,51 +579,47 @@ func (m *Model) overlayDiffTextarea(t *tab, diffLines []string, viewOff, width, 
 	m.lastMapping = mapping
 }
 
-// applyDiffGutterHighlights re-renders diff rows that need cursor or selection
-// gutter highlighting within the visible window.
-func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, width int) {
+// applyDiffGutterHighlights applies cursor/selection gutter highlights to
+// visible diff rows by splicing the gutter portion of pre-rendered cached
+// lines. This avoids the expensive renderSingleDiffRow call entirely.
+func (m *Model) applyDiffGutterHighlights(t *tab, diffLines []string, viewOff, _ int) {
 	if t.diffViewData == nil || len(t.diffRowVisualStarts) == 0 || t.diffCachedCtx == nil {
 		return
 	}
-
-	ctx := *t.diffCachedCtx
-	highlightBg := m.theme.SelectionBgSeq()
 
 	startRow, endRow := t.diffCursor, t.diffCursor
 	if t.diffSelecting {
 		startRow, endRow = t.diffNormalizedSelection()
 	}
 
+	ctx := *t.diffCachedCtx
+	highlightBg := m.theme.SelectionBgSeq()
 	viewEnd := viewOff + len(diffLines)
 
-	// Only iterate cursor/selection rows instead of all rows.
 	for rowIdx := startRow; rowIdx <= endRow && rowIdx < len(t.diffViewData.Rows); rowIdx++ {
 		rowVisStart := t.diffRowVisualStarts[rowIdx]
+		if rowVisStart >= viewEnd {
+			break
+		}
 		rowVisEnd := len(t.diffCachedLines)
 		if rowIdx+1 < len(t.diffRowVisualStarts) {
 			rowVisEnd = t.diffRowVisualStarts[rowIdx+1]
 		}
-
-		// Skip if entirely outside visible window.
-		if rowVisEnd <= viewOff || rowVisStart >= viewEnd {
+		if rowVisEnd <= viewOff {
 			continue
 		}
 
 		row := t.diffViewData.Rows[rowIdx]
 		activeSide := diffRowAvailableSide(row, t.diffSide)
-		oldCtx, newCtx := ctx, ctx
-		if activeSide == diffSideOld {
-			oldCtx.gutterHighlight = highlightBg
-		} else {
-			newCtx.gutterHighlight = highlightBg
-		}
-		reRendered := renderSingleDiffRow(row, t.diffOldHighlights, t.diffNewHighlights, oldCtx, newCtx, width, nil, nil)
 
-		for j, line := range reRendered {
+		for j := 0; j < rowVisEnd-rowVisStart; j++ {
 			visIdx := rowVisStart + j - viewOff
-			if visIdx >= 0 && visIdx < len(diffLines) {
-				diffLines[visIdx] = line
+			if visIdx < 0 || visIdx >= len(diffLines) {
+				continue
 			}
+			diffLines[visIdx] = spliceGutter(
+				diffLines[visIdx], activeSide, row, j, ctx, highlightBg,
+			)
 		}
 	}
 }
