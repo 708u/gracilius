@@ -249,6 +249,10 @@ func (m *Model) closeTab(idx int) {
 	t := m.tabs[idx]
 	if t.kind == diffTab && t.diff != nil {
 		t.rejectAndClear()
+		// Clean up review scope comments on accept/reject.
+		if t.diffScope.Kind == "review" {
+			_ = m.commentRepo.DeleteByScope(t.diffScope)
+		}
 	}
 	filePath := t.filePath
 	m.tabs = slices.Delete(m.tabs, idx, idx+1)

@@ -7,9 +7,11 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/708u/gracilius/internal/comment"
 	"github.com/708u/gracilius/internal/diff"
 	"github.com/708u/gracilius/internal/fileutil"
 	"github.com/708u/gracilius/internal/tui/render"
+	"github.com/google/uuid"
 )
 
 // handleFileChanged processes file change notifications.
@@ -60,15 +62,26 @@ func (m *Model) handleFileChanged(msg fileChangedMsg) (tea.Model, tea.Cmd) {
 // handleCommentsChanged reloads comments from the store for all open tabs.
 func (m *Model) handleCommentsChanged() (tea.Model, tea.Cmd) {
 	for _, t := range m.tabs {
-		if t.filePath == "" || t.kind != fileTab {
+		if t.filePath == "" {
 			continue
 		}
-		stored, err := m.commentRepo.List(t.filePath, false)
-		if err != nil {
-			log.Printf("Failed to reload comments for %s: %v", t.filePath, err)
-			continue
+		switch t.kind {
+		case fileTab:
+			stored, err := m.commentRepo.List(t.filePath, false)
+			if err != nil {
+				log.Printf("Failed to reload comments for %s: %v", t.filePath, err)
+				continue
+			}
+			t.comments = stored
+		case diffTab:
+			stored, err := m.commentRepo.ListByScope(t.diffScope, t.filePath, false)
+			if err != nil {
+				log.Printf("Failed to reload diff comments for %s: %v", t.filePath, err)
+				continue
+			}
+			t.comments = stored
+			t.diffCacheWidth = 0 // force re-render
 		}
-		t.comments = stored
 	}
 	cmd := m.watchComments()
 	return m, cmd
@@ -140,6 +153,13 @@ func (m *Model) handleGitSync(msg gitSyncMsg) (tea.Model, tea.Cmd) {
 func (m *Model) handleOpenDiff(msg OpenDiffMsg) (tea.Model, tea.Cmd) {
 	newLines := fileutil.SplitLines([]byte(msg.Contents))
 	dt := newDiffTab(msg.FilePath, newLines, msg.Accept, msg.Reject)
+
+	// Set review context with a unique session ID.
+	sessionID, err := uuid.NewV7()
+	if err != nil {
+		log.Printf("Failed to generate session UUID: %v", err)
+	}
+	dt.diffScope = comment.DiffScope{Kind: "review", SessionID: sessionID.String()}
 	dt.syncContent(newLines)
 	dt.highlightedLines = render.HighlightFile(msg.FilePath, msg.Contents, m.theme)
 

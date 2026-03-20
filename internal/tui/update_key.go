@@ -32,8 +32,10 @@ func (m *Model) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.clearAllPending = false
 		if key.Matches(msg, m.keys.Confirm) {
 			if hasTab && t.kind == diffTab {
+				if err := m.commentRepo.DeleteByFileAndScope(t.diffScope, t.filePath); err != nil {
+					log.Printf("Failed to clear diff comments from store: %v", err)
+				}
 				t.comments = nil
-				t.diffCommentSides = nil
 				t.diffCacheWidth = 0
 			} else if hasTab && t.filePath != "" {
 				if err := m.commentRepo.DeleteByFile(t.filePath); err != nil {
@@ -174,15 +176,17 @@ func (m *Model) submitComment(t *tab) {
 	}
 }
 
-// submitDiffComment handles comment submission for diff tabs (in-memory only).
+// submitDiffComment handles comment submission for diff tabs with persistence.
 func (m *Model) submitDiffComment(t *tab) {
 	val := t.commentInput.Value()
 	side := t.diffInputSide
 	idx := t.findDiffComment(t.inputStart, side)
 
 	if val == "" && idx >= 0 {
+		if err := m.commentRepo.Delete(t.comments[idx].ID); err != nil {
+			log.Printf("Failed to delete diff comment: %v", err)
+		}
 		t.comments = append(t.comments[:idx], t.comments[idx+1:]...)
-		t.diffCommentSides = append(t.diffCommentSides[:idx], t.diffCommentSides[idx+1:]...)
 		t.diffCacheWidth = 0
 		return
 	}
@@ -195,20 +199,27 @@ func (m *Model) submitDiffComment(t *tab) {
 		log.Printf("Failed to generate UUID: %v", err)
 	}
 	m.notifyDiffComment(side, t.inputStart, t.inputEnd, val)
-	sc := comment.Entry{
+	entry := comment.Entry{
 		ID:        id.String(),
 		FilePath:  t.filePath,
 		StartLine: t.inputStart,
 		EndLine:   t.inputEnd,
 		Text:      val,
 		Snippet:   t.diffCaptureSnippet(t.inputStart, t.inputEnd, side),
+		Side:      side.String(),
+		Scope:     t.diffScope,
 		CreatedAt: time.Now(),
 	}
 	if idx >= 0 {
-		t.comments[idx] = sc
+		if err := m.commentRepo.Replace(t.comments[idx].ID, entry); err != nil {
+			log.Printf("Failed to update diff comment: %v", err)
+		}
+		t.comments[idx] = entry
 	} else {
-		t.comments = append(t.comments, sc)
-		t.diffCommentSides = append(t.diffCommentSides, side)
+		if err := m.commentRepo.Add(entry); err != nil {
+			log.Printf("Failed to persist diff comment: %v", err)
+		}
+		t.comments = append(t.comments, entry)
 	}
 	t.diffCacheWidth = 0
 }

@@ -41,7 +41,44 @@ func (s *mockCommentRepository) Delete(id string) error {
 	return nil
 }
 func (s *mockCommentRepository) DeleteByFile(string) error { s.comments = nil; return nil }
-func (s *mockCommentRepository) DataPath() string          { return "" }
+func (s *mockCommentRepository) ListAll(_ string, _ bool) ([]comment.Entry, error) {
+	return s.comments, nil
+}
+func (s *mockCommentRepository) ListByScope(sc comment.DiffScope, filePath string, _ bool) ([]comment.Entry, error) {
+	var result []comment.Entry
+	for _, c := range s.comments {
+		if c.Scope != sc {
+			continue
+		}
+		if filePath != "" && c.FilePath != filePath {
+			continue
+		}
+		result = append(result, c)
+	}
+	return result, nil
+}
+func (s *mockCommentRepository) DeleteByScope(sc comment.DiffScope) error {
+	var kept []comment.Entry
+	for _, c := range s.comments {
+		if c.Scope != sc {
+			kept = append(kept, c)
+		}
+	}
+	s.comments = kept
+	return nil
+}
+func (s *mockCommentRepository) DeleteByFileAndScope(sc comment.DiffScope, filePath string) error {
+	var kept []comment.Entry
+	for _, c := range s.comments {
+		if c.Scope == sc && c.FilePath == filePath {
+			continue
+		}
+		kept = append(kept, c)
+	}
+	s.comments = kept
+	return nil
+}
+func (s *mockCommentRepository) DataPath() string { return "" }
 
 // newTestModel creates a minimal Model with mock server and temp directory.
 func newTestModel(t *testing.T) *Model {
