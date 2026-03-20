@@ -50,7 +50,7 @@ func TestScanDir_SymlinkToDirectory(t *testing.T) {
 		}
 	}
 
-	expanded := expandDir(entries, symlinkIdx)
+	expanded := expandDir(entries, symlinkIdx, nil)
 	found := false
 	for _, e := range expanded {
 		if e.name == "hello.txt" {
@@ -143,7 +143,7 @@ func TestBuildFileTree_SymlinkLoop(t *testing.T) {
 	}
 
 	// This should not hang or crash.
-	entries := buildFileTree(tmp)
+	entries := buildFileTree(tmp, nil)
 
 	// Both symlinks should be skipped (broken: loop).
 	if len(entries) != 0 {
@@ -326,7 +326,7 @@ func TestExpandDir_CompactedEntry(t *testing.T) {
 	touch(t, filepath.Join(tmp, "a", "b", "c", "file.txt"))
 
 	entries := scanDir(tmp, 0, nil, nil)
-	entries = expandDir(entries, 0)
+	entries = expandDir(entries, 0, nil)
 
 	// Should show: a/b/c (expanded), file.txt
 	if len(entries) != 2 {
@@ -351,7 +351,7 @@ func TestCollapseDir_CompactedEntry(t *testing.T) {
 	touch(t, filepath.Join(tmp, "a", "b", "c", "file.txt"))
 
 	entries := scanDir(tmp, 0, nil, nil)
-	entries = expandDir(entries, 0)
+	entries = expandDir(entries, 0, nil)
 	entries = collapseDir(entries, 0)
 
 	if len(entries) != 1 {
@@ -374,7 +374,7 @@ func TestRestoreExpanded_ChainBreaks(t *testing.T) {
 	touch(t, filepath.Join(tmp, "a", "b", "c", "file.txt"))
 
 	entries := scanDir(tmp, 0, nil, nil)
-	entries = expandDir(entries, 0)
+	entries = expandDir(entries, 0, nil)
 	paths := expandedPaths(entries)
 
 	// Break the chain: add a file to a/ so a won't compact anymore
@@ -383,7 +383,7 @@ func TestRestoreExpanded_ChainBreaks(t *testing.T) {
 	// Rebuild and restore
 	var newEntries []fileEntry
 	newEntries = scanDir(tmp, 0, newEntries, nil)
-	newEntries = restoreExpanded(newEntries, paths)
+	newEntries = restoreExpanded(newEntries, paths, nil)
 
 	// "a" should now be expanded (it was in compactedPaths)
 	if len(newEntries) == 0 {
@@ -408,11 +408,11 @@ func TestRestoreExpanded_ChainForms(t *testing.T) {
 
 	entries := scanDir(tmp, 0, nil, nil)
 	// Expand "a" (not compacted)
-	entries = expandDir(entries, 0)
+	entries = expandDir(entries, 0, nil)
 	// Expand "b/c" (compacted inside a)
 	for i, e := range entries {
 		if e.name == "b/c" {
-			entries = expandDir(entries, i)
+			entries = expandDir(entries, i, nil)
 			break
 		}
 	}
@@ -426,7 +426,7 @@ func TestRestoreExpanded_ChainForms(t *testing.T) {
 	// Rebuild and restore
 	var newEntries []fileEntry
 	newEntries = scanDir(tmp, 0, newEntries, nil)
-	newEntries = restoreExpanded(newEntries, paths)
+	newEntries = restoreExpanded(newEntries, paths, nil)
 
 	// "a/b/c" should be expanded (restored via intermediate path match)
 	if len(newEntries) == 0 {

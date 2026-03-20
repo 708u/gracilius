@@ -93,6 +93,59 @@ func newDiffSideCtx(data *diff.Data, theme render.Theme, width int) diffSideCtx 
 	}
 }
 
+// spliceGutter replaces the gutter (first gutterW display columns) of one side
+// within a pre-rendered diff line. side selects old (offset 0) or new
+// (offset sideWidth+separatorWidth). highlightBg is the ANSI background
+// sequence to apply; row/isOld determine the line-level background that
+// must be restored after the gutter.
+func spliceGutter(
+	line string,
+	side diffSide,
+	row diff.Row,
+	lineIdx int, // 0 = first visual line, >0 = continuation
+	ctx diffSideCtx,
+	highlightBg string,
+) string {
+	sideOff := 0
+	lineNum := row.OldLineNum
+	isOld := true
+	if side == diffSideNew {
+		sideOff = ctx.sideWidth + diffSeparatorWidth
+		lineNum = row.NewLineNum
+		isOld = false
+	}
+
+	// Filler sides (lineNum==0) have no gutter to highlight.
+	if lineNum == 0 {
+		return line
+	}
+
+	gutterW := ctx.gutterW
+
+	// Build the highlighted gutter string.
+	gutterStyle := highlightBg + render.AnsiFaint
+	var gb strings.Builder
+	if lineIdx == 0 {
+		digits := gutterW - 1
+		numStr := fmt.Sprintf("%*d ", digits, lineNum)
+		render.WriteStyledText(&gb, gutterStyle, numStr)
+	} else {
+		render.WriteStyledText(&gb, gutterStyle, ctx.gutterPad)
+	}
+
+	// Restore the line-level background after the gutter so that
+	// subsequent content retains its original styling.
+	lineBg, _ := diffSideBg(row.Type, isOld, ctx.colors)
+	if lineBg != "" {
+		gb.WriteString(lineBg)
+	}
+
+	// Splice: [before sideOff] + [new gutter] + [after sideOff+gutterW]
+	before := ansi.Truncate(line, sideOff, "")
+	after := ansi.TruncateLeft(line, sideOff+gutterW, "")
+	return before + gb.String() + after
+}
+
 // renderSingleDiffRow renders one diff row into visual lines.
 // oldCtx/newCtx control the gutter background color independently for each side.
 // oldSearchHL/newSearchHL are search match highlights for this row (may be nil).

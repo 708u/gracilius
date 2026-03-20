@@ -124,10 +124,11 @@ func watchDirLevel(watcher *fsnotify.Watcher, dir string, exclude ExcludeFunc) e
 }
 
 // buildFileTree scans rootDir recursively and returns a flat list of entries.
-// Uses isHiddenEntry filtering (no gitignore).
-func buildFileTree(rootDir string) []fileEntry {
+// When exclude is non-nil, gitignore-based filtering is used;
+// otherwise isHiddenEntry is used as fallback.
+func buildFileTree(rootDir string, exclude ExcludeFunc) []fileEntry {
 	var entries []fileEntry
-	entries = scanDir(rootDir, 0, entries, nil)
+	entries = scanDir(rootDir, 0, entries, exclude)
 	return entries
 }
 
@@ -301,11 +302,11 @@ func expandedPaths(entries []fileEntry) map[string]bool {
 
 // restoreExpanded expands directories whose paths are in the given set.
 func restoreExpanded(
-	entries []fileEntry, paths map[string]bool,
+	entries []fileEntry, paths map[string]bool, exclude ExcludeFunc,
 ) []fileEntry {
 	for i := 0; i < len(entries); i++ {
 		if entries[i].isDir && shouldRestore(entries[i], paths) {
-			entries = expandDir(entries, i)
+			entries = expandDir(entries, i, exclude)
 		}
 	}
 	return entries
@@ -326,7 +327,7 @@ func shouldRestore(e fileEntry, paths map[string]bool) bool {
 }
 
 // expandDir expands a directory entry and inserts its children.
-func expandDir(entries []fileEntry, index int) []fileEntry {
+func expandDir(entries []fileEntry, index int, exclude ExcludeFunc) []fileEntry {
 	if index < 0 || index >= len(entries) || !entries[index].isDir {
 		return entries
 	}
@@ -335,7 +336,7 @@ func expandDir(entries []fileEntry, index int) []fileEntry {
 	entry.expanded = true
 
 	var children []fileEntry
-	children = scanDir(entry.path, entry.depth+1, children, nil)
+	children = scanDir(entry.path, entry.depth+1, children, exclude)
 
 	result := make([]fileEntry, 0, len(entries)+len(children))
 	result = append(result, entries[:index+1]...)

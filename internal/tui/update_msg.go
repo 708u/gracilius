@@ -77,8 +77,8 @@ func (m *Model) handleCommentsChanged() (tea.Model, tea.Cmd) {
 // handleTreeChanged processes directory tree change notifications.
 func (m *Model) handleTreeChanged() (tea.Model, tea.Cmd) {
 	expanded := expandedPaths(m.fileTree)
-	m.fileTree = buildFileTree(m.rootDir)
-	m.fileTree = restoreExpanded(m.fileTree, expanded)
+	m.fileTree = buildFileTree(m.rootDir, m.excludeFunc)
+	m.fileTree = restoreExpanded(m.fileTree, expanded, m.excludeFunc)
 	if m.treeCursor >= len(m.fileTree) {
 		m.treeCursor = max(0, len(m.fileTree)-1)
 	}
