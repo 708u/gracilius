@@ -17,13 +17,14 @@ type ExcludeFunc func(paths []string) map[string]bool
 
 // fileEntry represents a single entry in the file tree.
 type fileEntry struct {
-	path         string
-	name         string
-	isDir        bool
-	isBinary     bool
-	depth        int
-	expanded     bool
-	resolvedPath string // symlink target path (empty if not a symlink)
+	path           string
+	name           string
+	isDir          bool
+	isBinary       bool
+	depth          int
+	expanded       bool
+	resolvedPath   string   // symlink target path (empty if not a symlink)
+	compactedPaths []string // intermediate directory paths (shallow→deep) for compact folders
 }
 
 // TODO: make configurable (e.g. .gitignore or config file)
@@ -131,20 +132,26 @@ func buildFileTree(rootDir string, exclude ExcludeFunc) []fileEntry {
 	return entries
 }
 
-// scanDir scans a single directory level and returns entries.
-// When exclude is non-nil, it is used for batch gitignore filtering.
-// When exclude is nil, isHiddenEntry is used as fallback.
-func scanDir(dir string, depth int, entries []fileEntry, exclude ExcludeFunc) []fileEntry {
+// dirEntryInfo holds resolved metadata for a single directory entry.
+type dirEntryInfo struct {
+	entry        os.DirEntry
+	fullPath     string
+	resolvedPath string // non-empty for symlinks
+	isDir        bool
+}
+
+// dirContents holds the partitioned and sorted contents of a directory.
+type dirContents struct {
+	dirs         []dirEntryInfo
+	regularFiles []dirEntryInfo
+}
+
+// listDirContents reads a directory, resolves symlinks, applies exclusion
+// filtering, and returns the contents partitioned into dirs and files.
+func listDirContents(dir string, exclude ExcludeFunc) dirContents {
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		return entries
-	}
-
-	type dirEntryInfo struct {
-		entry        os.DirEntry
-		fullPath     string
-		resolvedPath string // non-empty for symlinks
-		isDir        bool
+		return dirContents{}
 	}
 
 	// Collect all entries, resolve symlinks, compute fullPath.
@@ -189,7 +196,7 @@ func scanDir(dir string, depth int, entries []fileEntry, exclude ExcludeFunc) []
 	}
 
 	// Partition into dirs and files, skipping excluded.
-	var dirs, regularFiles []dirEntryInfo
+	var dc dirContents
 	for i := range allEntries {
 		e := &allEntries[i]
 		if exclude != nil {
@@ -204,31 +211,66 @@ func scanDir(dir string, depth int, entries []fileEntry, exclude ExcludeFunc) []
 			continue
 		}
 		if e.isDir {
-			dirs = append(dirs, *e)
+			dc.dirs = append(dc.dirs, *e)
 		} else {
-			regularFiles = append(regularFiles, *e)
+			dc.regularFiles = append(dc.regularFiles, *e)
 		}
 	}
 
-	slices.SortFunc(dirs, func(a, b dirEntryInfo) int {
+	slices.SortFunc(dc.dirs, func(a, b dirEntryInfo) int {
 		return strings.Compare(a.entry.Name(), b.entry.Name())
 	})
-	slices.SortFunc(regularFiles, func(a, b dirEntryInfo) int {
+	slices.SortFunc(dc.regularFiles, func(a, b dirEntryInfo) int {
 		return strings.Compare(a.entry.Name(), b.entry.Name())
 	})
 
-	for _, d := range dirs {
+	return dc
+}
+
+// compactSingleChildDirs follows a chain of directories where each has
+// exactly one subdirectory and no files, returning the compacted display
+// name (e.g. "a/b/c"), the leaf directory path, and intermediate paths.
+func compactSingleChildDirs(
+	dirPath, name string, exclude ExcludeFunc,
+) (compactedName, leafPath string, intermediates []string) {
+	compactedName = name
+	leafPath = dirPath
+
+	for {
+		dc := listDirContents(leafPath, exclude)
+		if len(dc.dirs) != 1 || len(dc.regularFiles) != 0 {
+			break
+		}
+		intermediates = append(intermediates, leafPath)
+		child := dc.dirs[0]
+		leafPath = child.fullPath
+		compactedName += "/" + child.entry.Name()
+	}
+
+	return compactedName, leafPath, intermediates
+}
+
+// scanDir scans a single directory level and returns entries.
+// When exclude is non-nil, it is used for batch gitignore filtering.
+// When exclude is nil, isHiddenEntry is used as fallback.
+func scanDir(dir string, depth int, entries []fileEntry, exclude ExcludeFunc) []fileEntry {
+	dc := listDirContents(dir, exclude)
+
+	for _, d := range dc.dirs {
+		cName, leafPath, intermediates := compactSingleChildDirs(
+			d.fullPath, d.entry.Name(), exclude)
 		entries = append(entries, fileEntry{
-			path:         d.fullPath,
-			name:         d.entry.Name(),
-			isDir:        true,
-			depth:        depth,
-			expanded:     false,
-			resolvedPath: d.resolvedPath,
+			path:           leafPath,
+			name:           cName,
+			isDir:          true,
+			depth:          depth,
+			expanded:       false,
+			resolvedPath:   d.resolvedPath,
+			compactedPaths: intermediates,
 		})
 	}
 
-	for _, f := range regularFiles {
+	for _, f := range dc.regularFiles {
 		entries = append(entries, fileEntry{
 			path:         f.fullPath,
 			name:         f.entry.Name(),
@@ -243,11 +285,16 @@ func scanDir(dir string, depth int, entries []fileEntry, exclude ExcludeFunc) []
 }
 
 // expandedPaths returns the set of currently expanded directory paths.
+// Intermediate paths from compacted entries are included so that
+// restore works correctly when the chain structure changes.
 func expandedPaths(entries []fileEntry) map[string]bool {
 	paths := make(map[string]bool)
 	for _, e := range entries {
 		if e.isDir && e.expanded {
 			paths[e.path] = true
+			for _, cp := range e.compactedPaths {
+				paths[cp] = true
+			}
 		}
 	}
 	return paths
@@ -258,11 +305,25 @@ func restoreExpanded(
 	entries []fileEntry, paths map[string]bool, exclude ExcludeFunc,
 ) []fileEntry {
 	for i := 0; i < len(entries); i++ {
-		if entries[i].isDir && paths[entries[i].path] {
+		if entries[i].isDir && shouldRestore(entries[i], paths) {
 			entries = expandDir(entries, i, exclude)
 		}
 	}
 	return entries
+}
+
+// shouldRestore returns true if the entry's path or any of its
+// compacted intermediate paths appear in the expanded set.
+func shouldRestore(e fileEntry, paths map[string]bool) bool {
+	if paths[e.path] {
+		return true
+	}
+	for _, cp := range e.compactedPaths {
+		if paths[cp] {
+			return true
+		}
+	}
+	return false
 }
 
 // expandDir expands a directory entry and inserts its children.
