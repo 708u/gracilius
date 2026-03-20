@@ -156,7 +156,8 @@ func (m *Model) handleGitChangedFiles(msg gitChangedFilesMsg) (tea.Model, tea.Cm
 		return m, statusTickCmd()
 	}
 	gs.entries = msg.entries
-	gs.visualRows, gs.entryToVisualIdx = buildGitVisualRows(msg.entries)
+	gs.recomputeViewedCount()
+	gs.visualRows, gs.entryToVisualIdx = buildGitVisualRows(msg.entries, gs.viewed)
 	gs.loaded = true
 	gs.stale = false
 	m.gitAnyLoaded = true
@@ -176,7 +177,7 @@ func (m *Model) handleGitChangedFiles(msg gitChangedFilesMsg) (tea.Model, tea.Cm
 // with category headers and directory grouping.
 // Hierarchy: Category > Directory > File.
 // Also returns a reverse map from entryIdx to visual row index.
-func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int) {
+func buildGitVisualRows(entries []changedFileEntry, viewed map[string]bool) ([]gitVisualRow, map[int]int) {
 	type section struct {
 		cat     fileCategory
 		label   string
@@ -213,8 +214,14 @@ func buildGitVisualRows(entries []changedFileEntry) ([]gitVisualRow, map[int]int
 			continue
 		}
 
-		// Category header.
-		headerLabel := fmt.Sprintf("%s (%d)", sec.label, len(sec.indices))
+		// Category header with viewed count.
+		viewedInCat := 0
+		for _, idx := range sec.indices {
+			if viewed[entries[idx].name] {
+				viewedInCat++
+			}
+		}
+		headerLabel := fmt.Sprintf("%s (%d/%d)", sec.label, viewedInCat, len(sec.indices))
 		rows = append(rows, gitVisualRow{
 			isHeader: true,
 			label:    headerLabel,
@@ -427,6 +434,7 @@ func (m *Model) renderGitPanel(width, height int) []string {
 
 		e := gs.entries[row.entryIdx]
 		isCursor := row.entryIdx == gs.cursor && m.focusPane == paneTree
+		isViewed := gs.viewed[e.name]
 
 		style := gitStatusStyles[e.status]
 		statusIcon := style.Render(e.status.String())
@@ -437,6 +445,9 @@ func (m *Model) renderGitPanel(width, height int) []string {
 			displayLine = renderTreeCursor(line, width, m.theme)
 		} else {
 			displayLine = render.PadRight(ansi.Truncate(line, width, "..."), width)
+			if isViewed {
+				displayLine = styleDirHeader.Render(displayLine)
+			}
 		}
 
 		lines = append(lines, displayLine)
@@ -496,6 +507,62 @@ func firstGitEntryIdx(rows []gitVisualRow) int {
 		}
 	}
 	return 0
+}
+
+// findUnviewedEntry searches for the nearest unviewed entry in the given
+// direction (1 for next, -1 for previous). Wraps around.
+// Returns -1 if all entries are viewed.
+func (gs *gitPanelState) findUnviewedEntry(from, dir int) int {
+	n := len(gs.entries)
+	if n == 0 {
+		return -1
+	}
+	for i := 1; i <= n; i++ {
+		idx := (from + i*dir%n + n) % n
+		if !gs.viewed[gs.entries[idx].name] {
+			return idx
+		}
+	}
+	return -1
+}
+
+// navigateUnviewed jumps to the next/prev unviewed file and opens its diff tab.
+func (m *Model) navigateUnviewed(dir int) (tea.Model, tea.Cmd) {
+	gs := m.gitState()
+	if len(gs.entries) == 0 {
+		return m, nil
+	}
+
+	// Determine starting position.
+	from := gs.cursor
+	if t, ok := m.activeTabState(); ok && t.hasGitDiffModeTag {
+		for i := range gs.entries {
+			if gs.entries[i].absPath == t.filePath {
+				from = i
+				break
+			}
+		}
+	}
+
+	target := gs.findUnviewedEntry(from, dir)
+	if target < 0 {
+		m.statusMsg = "All files viewed"
+		return m, statusTickCmd()
+	}
+
+	gs.cursor = target
+	m.openGitDiffEntry()
+	// Adjust git panel scroll for the new cursor.
+	if idx, ok := gs.entryToVisualIdx[gs.cursor]; ok {
+		lo := m.computeLayout()
+		panelHeight := lo.contentHeight - 1
+		if panelHeight > 0 && idx >= gs.scrollOffset+panelHeight {
+			gs.scrollOffset = idx - panelHeight + 1
+		} else if idx < gs.scrollOffset {
+			gs.scrollOffset = idx
+		}
+	}
+	return m, nil
 }
 
 // lastGitEntryIdx returns the entryIdx of the last file row.

@@ -407,7 +407,15 @@ func (m *Model) renderFooter() string {
 
 // renderLeftPane generates the left pane lines with a header and panel body.
 func (m *Model) renderLeftPane(width, height int) []string {
-	header := []string{renderPanelHeader(m.activePanel.label(), width, m.theme)}
+	panelLabel := m.activePanel.label()
+	if m.activePanel == panelGitDiff {
+		gs := m.gitState()
+		v, total := gs.viewedCountTotal()
+		if total > 0 {
+			panelLabel = fmt.Sprintf("%s %d/%d", panelLabel, v, total)
+		}
+	}
+	header := []string{renderPanelHeader(panelLabel, width, m.theme)}
 
 	if m.activePanel == panelGitDiff {
 		modeStr := renderModeSelector(m.gitDiffMode, m.gitDefaultBranch, m.theme)
